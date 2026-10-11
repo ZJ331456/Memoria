@@ -57,7 +57,7 @@ database="{(tmp_path / "b.db").as_posix()}"
 
 
 def test_local_openai_server_health_and_chat_with_stub(monkeypatch):
-    async def fake_chat(self, messages, tools, max_tokens, timeout):
+    async def fake_chat(self, messages, tools, max_tokens, timeout, **options):
         return {
             "content": "pong",
             "tool_calls": [],

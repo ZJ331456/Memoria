@@ -41,13 +41,15 @@ def apply_overrides(settings: Settings, data: dict[str, Any] | None = None) -> S
         if not isinstance(section, dict) or not section:
             continue
         current = getattr(settings, slot)
-        api_key = str(section.get("api_key", "")).strip()
+        # A key explicitly empty in a file clears inherited credentials. The UI
+        # still omits blank keys when saving, preserving its "keep old key" rule.
+        api_key = str(section.get("api_key", current.api_key)).strip()
         setattr(
             settings,
             slot,
             ModelConfig(
                 model=str(section.get("model", current.model) or current.model),
-                api_key=api_key if api_key else current.api_key,
+                api_key=api_key,
                 base_url=str(section.get("base_url", current.base_url) or current.base_url).rstrip("/"),
             ),
         )
@@ -63,7 +65,7 @@ def public_models(settings: Settings) -> dict[str, Any]:
             "base_url": value.base_url,
             "configured": value.is_ready(role=role),
             "api_key_set": bool(value.api_key),
-            "local": value.is_local_process() or (role == "llm" and value.is_local_http()),
+            "local": value.is_local_process() or value.is_local_http(),
         }
         if role == "llm":
             payload["backend"] = backend_public_label(value) if value.base_url else ""
@@ -184,7 +186,7 @@ async def test_model_slot(settings: Settings, slot: str) -> dict[str, Any]:
         return {"ok": False, "slot": slot, "message": "模型未完整配置（需要 model、base_url；远程还需 api_key）"}
     headers = config.auth_headers()
     timeout = httpx.Timeout(min(settings.request_timeout_seconds, 30))
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout, trust_env=not config.is_local_http()) as client:
         if slot == "embedding":
             response = await client.post(
                 f"{config.base_url}/embeddings",

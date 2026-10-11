@@ -26,11 +26,12 @@ api_key = ""
 base_url = "http://127.0.0.1:8080/v1"
 multimodal = false
 
-# [llm.fast] 仍可走远程轻量模型；也可同样改成另一个本地端点。
+# 本地模式 fast 复用同一服务，避免记忆提取/检索规划意外请求远程 API。
+# 如需远程 fast，可另填远程模型、base_url 与环境变量 Key。
 [llm.fast]
-model = "qwen3.6-flash"
-api_key = "${DASHSCOPE_API_KEY}"
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model = "model/Qwen3.5-2B"
+api_key = ""
+base_url = "http://127.0.0.1:8080/v1"
 
 [llm.vl]
 model = "qwen3.7-plus"
@@ -39,7 +40,8 @@ base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 [agent]
 system_prompt = "你是 Memoria，用户的长期 AI 伙伴。用与用户相同的语言回答。"
-max_tokens = 8192
+# 本地服务默认总上下文 8192；输出预算须留出输入空间。
+max_tokens = 1024
 max_iterations = 20
 
 [agent.context]
@@ -83,7 +85,7 @@ enabled = true
 directory = "data/markdown"
 
 # ---------------------------------------------------------------------------
-# [memory.embedding] 样例：二选一（下面默认启用「本地」）
+# [memory.embedding] 样例：默认与 LLM 共用本地 OpenAI 兼容 HTTP 服务
 #
 # A) 远程 Embedding API
 # [memory.embedding]
@@ -91,13 +93,15 @@ directory = "data/markdown"
 # api_key = "${DASHSCOPE_API_KEY}"
 # base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 #
-# B) 进程内本地 BGE（无需 API Key；设备可用 local://cuda | local://cpu | local://auto）
+# B) 本地 HTTP BGE（无需 API Key），serve_local_llm.py 默认提供 /v1/embeddings。
+# C) 进程内本地 BGE：model = "model/bge-small-zh-v1.5"，base_url = "local://cuda"
+#    设备也可用 local://cpu | local://auto。
 #    下载与环境见 docs/本地Embedding配置.md
 # ---------------------------------------------------------------------------
 [memory.embedding]
-model = "model/bge-small-zh-v1.5"
+model = "bge-small-zh-v1.5"
 api_key = ""
-base_url = "local://cuda"
+base_url = "http://127.0.0.1:8080/v1"
 
 [memory.retrieval]
 # auto 会优先使用可选 sqlite-vec，未安装时回退 JSON 向量扫描。

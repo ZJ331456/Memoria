@@ -103,6 +103,11 @@ class LocalBgeEncoder:
         return {"device": self._actual_device or self.device, "dimension": 512,
                 "max_length": MAX_LENGTH, "loaded": self._model is not None}
 
+    def count_tokens(self, texts: list[str]) -> int:
+        """Number of tokens actually encoded, including special tokens and truncation."""
+        encoded = self._tokenizer(texts, truncation=True, max_length=MAX_LENGTH, padding=False)
+        return sum(len(ids) for ids in encoded["input_ids"])
+
 
 @lru_cache(maxsize=2)
 def get_encoder(path: str, device: str, fingerprint: str) -> LocalBgeEncoder:

@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ...config import ModelConfig
-from ..types import ChatResult, ProviderError
+from ..types import ChatResult, ContextLengthError, ProviderError
 from .process_engine import get_local_llm, model_path
 
 
@@ -27,25 +27,31 @@ class ProcessLocalBackend:
         on_delta: Callable[[str], Awaitable[None]] | None = None,
         stream: bool = False,
     ) -> ChatResult:
-        del stream  # transformers path generates fully; stream emits once via on_delta
         device = selected.base_url.removeprefix("local://").rstrip("/")
         if device not in {"cuda", "cpu", "auto"}:
             raise ProviderError("本地 LLM 地址应为 local://cuda、local://cpu 或 local://auto")
         started = time.perf_counter()
         try:
             engine = get_local_llm(str(model_path(selected.model)), device)
-            data = await engine.chat(
-                messages,
-                tools,
-                max_tokens,
-                max(self.timeout_seconds, 120),
-            )
+            streamed = False
+            if stream:
+                async for event in engine.stream_chat(messages, tools, max_tokens, max(self.timeout_seconds, 120)):
+                    if "delta" in event:
+                        streamed = True
+                        if on_delta:
+                            await on_delta(event["delta"])
+                    else:
+                        data = event["result"]
+            else:
+                data = await engine.chat(messages, tools, max_tokens, max(self.timeout_seconds, 120))
+        except ContextLengthError:
+            raise
         except asyncio.TimeoutError as exc:
             raise ProviderError("本地 LLM 推理超时") from exc
         except Exception as exc:
             raise ProviderError(f"本地 LLM 推理失败: {type(exc).__name__}: {exc}") from exc
         content = str(data.get("content") or "")
-        if on_delta and content:
+        if on_delta and content and not streamed:
             await on_delta(content)
         return ChatResult(
             content,

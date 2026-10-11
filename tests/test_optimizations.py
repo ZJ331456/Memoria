@@ -127,7 +127,7 @@ def test_memory_review_staging_is_idempotent_and_decisions_are_final(tmp_path: P
 
 def test_sse_chat_endpoint_emits_delta_and_complete(tmp_path: Path):
     config = tmp_path / "config.toml"
-    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n[storage]\ndatabase="{tmp_path / 'stream.db'}"\n''', encoding="utf-8")
+    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n[storage]\ndatabase="{(tmp_path / 'stream.db').as_posix()}"\n[memory.markdown]\nenabled=false\n''', encoding="utf-8")
     app = create_app(config)
 
     async def fake_chat(session_id, content, on_event=None, request_id=None):
@@ -197,7 +197,7 @@ def test_sqlite_vec_optional_backend_knn(tmp_path: Path):
 
 def test_stream_options_compatibility_fallback(tmp_path: Path):
     config = tmp_path / "llm.toml"
-    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://model.test/v1"\n[storage]\ndatabase="{tmp_path / 'llm.db'}"\n''', encoding="utf-8")
+    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://model.test/v1"\n[storage]\ndatabase="{(tmp_path / 'llm.db').as_posix()}"\n''', encoding="utf-8")
     requests = []
     async def handler(request: httpx.Request):
         payload = json.loads(request.content)
@@ -212,7 +212,7 @@ def test_stream_options_compatibility_fallback(tmp_path: Path):
 
 def test_optional_api_auth_origin_metrics_and_body_limit(tmp_path: Path):
     config = tmp_path / "secure.toml"
-    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n[server.security]\napi_token="secret-token"\nallowed_origins=["http://trusted.test"]\nmax_request_bytes=1024\n[storage]\ndatabase="{tmp_path / 'secure.db'}"\n''', encoding="utf-8")
+    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n[server.security]\napi_token="secret-token"\nallowed_origins=["http://trusted.test"]\nmax_request_bytes=1024\n[storage]\ndatabase="{(tmp_path / 'secure.db').as_posix()}"\n[memory.markdown]\nenabled=false\n''', encoding="utf-8")
     with TestClient(create_app(config)) as client:
         assert client.get("/api/health").status_code == 200
         assert client.get("/api/sessions").status_code == 401
@@ -228,7 +228,7 @@ def test_optional_api_auth_origin_metrics_and_body_limit(tmp_path: Path):
 
 def test_settings_accept_single_origin_and_reject_unknown_vector_backend(tmp_path: Path):
     config = tmp_path / "settings.toml"
-    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n[server.security]\nallowed_origins="http://trusted.test/"\n[storage]\ndatabase="{tmp_path / 'settings.db'}"\n''', encoding="utf-8")
+    config.write_text(f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n[server.security]\nallowed_origins="http://trusted.test/"\n[storage]\ndatabase="{(tmp_path / 'settings.db').as_posix()}"\n''', encoding="utf-8")
     assert Settings.load(config).allowed_origins == ("http://trusted.test",)
     config.write_text(config.read_text(encoding="utf-8") + '\n[memory.retrieval]\nvector_backend="typo"\n', encoding="utf-8")
     with pytest.raises(ValueError, match="vector_backend"):

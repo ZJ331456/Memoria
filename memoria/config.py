@@ -87,7 +87,7 @@ class ModelConfig:
             return True
         if self.is_local_process() and role in {"embedding", "llm"}:
             return True
-        if role == "llm" and self.is_local_http():
+        if self.is_local_http():
             return True
         return False
 

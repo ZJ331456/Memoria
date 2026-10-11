@@ -26,6 +26,9 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--served-model-name", default=None, help="Optional id exposed in /v1/models")
+    parser.add_argument("--embedding-model", default="model/bge-small-zh-v1.5", help="BGE directory; empty string disables /embeddings")
+    parser.add_argument("--max-context-tokens", type=int, default=8192, help="Input plus output token budget (hardware limit)")
+    parser.add_argument("--request-timeout", type=float, default=300)
     parser.add_argument("--warmup", action="store_true", help="Load weights before accepting traffic")
     args = parser.parse_args()
 
@@ -38,10 +41,13 @@ def main() -> None:
         model=args.model,
         device=args.device,
         served_model_name=args.served_model_name,
+        embedding_model=args.embedding_model or None,
+        max_context_tokens=args.max_context_tokens,
+        request_timeout=args.request_timeout,
     )
     if args.warmup:
         print(f"Warming up {args.model} on {args.device} ...", flush=True)
-        engine = get_local_llm(str(model_path(args.model)), args.device)
+        engine = get_local_llm(str(model_path(args.model)), args.device, args.max_context_tokens)
         import asyncio
 
         asyncio.run(engine.chat([{"role": "user", "content": "ping"}], None, 8, timeout=300))

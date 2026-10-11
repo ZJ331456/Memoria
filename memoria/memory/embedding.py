@@ -31,6 +31,11 @@ class EmbeddingClient:
     def is_local(self) -> bool:
         return self.config.base_url.startswith("local://")
 
+    @property
+    def uses_bge_instruction(self) -> bool:
+        name = self.config.model.replace("\\", "/").rstrip("/").split("/")[-1]
+        return self.is_local or (self.config.is_local_http() and name == "bge-small-zh-v1.5")
+
     @cached_property
     def namespace(self) -> str:
         if self.is_local:
@@ -38,11 +43,14 @@ class EmbeddingClient:
             return "embedding-local:" + model_fingerprint(model_path(self.config.model))
         # Provider endpoint and model identify the vector space. Keys are excluded.
         identity = f"{self.config.base_url.rstrip('/')}|{self.config.model}"
+        if self.uses_bge_instruction:
+            from .local_bge import POLICY
+            identity += "|" + POLICY
         return "embedding:" + hashlib.sha256(identity.encode()).hexdigest()
 
     @property
     def enabled(self) -> bool:
-        return bool(self.config.model and self.config.base_url and (self.is_local or self.config.api_key))
+        return self.config.is_ready(role="embedding")
 
     async def warmup(self) -> None:
         """Load local weights before serving; remote providers are never called."""
@@ -51,7 +59,7 @@ class EmbeddingClient:
             await startup_client.embed("本地记忆模型预热")
 
     async def embed_query(self, text: str) -> list[float] | None:
-        if self.is_local:
+        if self.uses_bge_instruction:
             from .local_bge import QUERY_INSTRUCTION
             text = QUERY_INSTRUCTION + text
         return await self.embed(text)
@@ -82,13 +90,13 @@ class EmbeddingClient:
                     for i, vector in enumerate(vectors)]}, len(texts))
             except (RuntimeError, ValueError, OSError, ImportError, asyncio.TimeoutError) as exc:
                 raise EmbeddingError(f"本地 Embedding 失败：{exc}") from exc
-        headers = {"Authorization": f"Bearer {self.config.api_key}", "Content-Type": "application/json"}
+        headers = self.config.auth_headers()
         payload = {"model": self.config.model, "input": texts, "encoding_format": "float"}
         last_error: Exception | None = None
-        async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds), trust_env=not self.config.is_local_http()) as client:
             for attempt in range(self.max_retries + 1):
                 try:
-                    response = await client.post(f"{self.config.base_url}/embeddings", headers=headers, json=payload)
+                    response = await client.post(f"{self.config.base_url.rstrip('/')}/embeddings", headers=headers, json=payload)
                     if response.status_code >= 400:
                         raise EmbeddingError(f"embedding 服务返回 HTTP {response.status_code}: {response.text[:300]}")
                     return self._vectors(response.json(), len(texts))

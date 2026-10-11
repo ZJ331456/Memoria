@@ -122,6 +122,15 @@ def test_remote_with_key_still_ready(tmp_path: Path):
     assert settings.main.auth_headers()["Authorization"] == "Bearer sk-test"
 
 
+def test_keyless_override_clears_inherited_remote_credentials(tmp_path: Path):
+    settings = _settings(tmp_path, ModelConfig("remote", "old-cloud-key", "https://api.example.test/v1"))
+    (settings.database.parent / "models.override.toml").write_text(
+        '[llm.main]\nmodel="Qwen3.5-2B"\nbase_url="http://127.0.0.1:8080/v1"\napi_key=""\n', encoding="utf-8")
+    reloaded = Settings.load(settings.source)
+    assert reloaded.main.api_key == "" and reloaded.main.is_ready()
+    assert reloaded.main.auth_headers()["Authorization"] == "Bearer local"
+
+
 def test_preferred_chat_model_uses_keyless_local_fast(tmp_path: Path):
     settings = _settings(
         tmp_path,

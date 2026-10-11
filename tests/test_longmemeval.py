@@ -31,7 +31,7 @@ def fixture_case(qid="example"):
 def configured(tmp_path: Path):
     config = tmp_path / "config.toml"
     config.write_text(f'''[storage]
-database="{tmp_path / 'isolated.db'}"
+database="{(tmp_path / 'isolated.db').as_posix()}"
 [llm.main]
 model="reader-test"
 api_key="test-key"

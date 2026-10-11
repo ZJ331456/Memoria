@@ -81,24 +81,31 @@ class OpenAICompatBackend:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
         data, metrics = await self._post(selected, selected.auth_headers(), payload)
-        message = data["choices"][0]["message"]
-        calls = []
-        for call in message.get("tool_calls") or []:
-            fn = call.get("function") or {}
-            try:
-                arguments = json.loads(fn.get("arguments") or "{}")
-            except json.JSONDecodeError:
-                arguments = {}
-            calls.append({"id": call.get("id", ""), "name": fn.get("name", ""), "arguments": arguments})
+        try:
+            choice = data["choices"][0]
+            if not isinstance(choice, dict):
+                raise ValueError("choice must be an object")
+            message = choice["message"]
+            if not isinstance(message, dict):
+                raise ValueError("message must be an object")
+            calls = []
+            for call in (message.get("tool_calls") or []) if choice.get("finish_reason") != "length" else []:
+                fn = call["function"]
+                arguments = self._tool_arguments(fn.get("arguments"))
+                calls.append({"id": call["id"], "name": fn["name"], "arguments": arguments})
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ProviderError("模型返回了无效的 Chat Completions 响应") from exc
+        if choice.get("finish_reason") == "content_filter":
+            raise ContentSafetyError("模型供应商拒绝了不安全内容")
         usage = {key: int(value) for key, value in (data.get("usage") or {}).items() if isinstance(value, int)}
         return ChatResult(
-            str(message.get("content") or message.get("reasoning_content") or ""),
+            str(message.get("content") or ""),
             calls,
             message,
             usage,
             metrics["duration_ms"],
             metrics["retries"],
-            data["choices"][0].get("finish_reason"),
+            choice.get("finish_reason"),
         )
 
     async def _post(
@@ -110,7 +117,7 @@ class OpenAICompatBackend:
         last_error: Exception | None = None
         started = time.perf_counter()
         timeout = httpx.Timeout(self.timeout_seconds)
-        async with httpx.AsyncClient(timeout=timeout, transport=self.transport) as client:
+        async with httpx.AsyncClient(timeout=timeout, transport=self.transport, trust_env=not selected.is_local_http()) as client:
             for attempt in range(self.max_retries + 1):
                 try:
                     response = await client.post(
@@ -120,7 +127,13 @@ class OpenAICompatBackend:
                     )
                     if response.status_code >= 400:
                         self._raise_response_error(response)
-                    return response.json(), {
+                    try:
+                        data = response.json()
+                        if not isinstance(data, dict):
+                            raise ValueError("response must be an object")
+                    except ValueError as exc:
+                        raise ProviderError("模型返回了无效的 JSON 响应") from exc
+                    return data, {
                         "duration_ms": int((time.perf_counter() - started) * 1000),
                         "retries": attempt,
                     }
@@ -169,10 +182,14 @@ class OpenAICompatBackend:
             call_parts: dict[int, dict[str, Any]] = {}
             usage: dict[str, int] = {}
             emitted = False
+            done = False
+            saw_choice = False
+            finish_reason = None
             try:
                 async with httpx.AsyncClient(
                     timeout=httpx.Timeout(self.timeout_seconds),
                     transport=self.transport,
+                    trust_env=not selected.is_local_http(),
                 ) as client:
                     async with client.stream(
                         "POST",
@@ -195,13 +212,17 @@ class OpenAICompatBackend:
                             if not line.startswith("data:"):
                                 continue
                             raw = line[5:].strip()
-                            if not raw or raw == "[DONE]":
+                            if raw == "[DONE]":
+                                done = True
+                                break
+                            if not raw:
                                 continue
                             try:
                                 event = json.loads(raw)
                             except json.JSONDecodeError:
-                                logger.warning("忽略无法解析的 SSE 行: %s", raw[:120])
-                                continue
+                                raise ProviderError("模型流返回了无效的 JSON") from None
+                            if not isinstance(event, dict):
+                                raise ProviderError("模型流事件必须是 JSON 对象")
                             if event.get("error"):
                                 raise ProviderError(f"模型流返回错误: {str(event['error'])[:300]}")
                             if event.get("usage"):
@@ -213,6 +234,11 @@ class OpenAICompatBackend:
                             choices = event.get("choices") or []
                             if not choices:
                                 continue
+                            saw_choice = True
+                            if choices[0].get("finish_reason"):
+                                finish_reason = choices[0]["finish_reason"]
+                            if finish_reason == "content_filter":
+                                raise ContentSafetyError("模型供应商拒绝了不安全内容")
                             delta = choices[0].get("delta") or {}
                             text = str(delta.get("content") or "")
                             if text:
@@ -222,6 +248,7 @@ class OpenAICompatBackend:
                                     await on_delta(text)
                             reasoning = str(delta.get("reasoning_content") or "")
                             if reasoning:
+                                emitted = True
                                 reasoning_parts.append(reasoning)
                             for fragment in delta.get("tool_calls") or []:
                                 emitted = True
@@ -231,23 +258,25 @@ class OpenAICompatBackend:
                                     target["id"] = fragment["id"]
                                 function = fragment.get("function") or {}
                                 if function.get("name"):
-                                    target["name"] = function["name"]
+                                    target["name"] += function["name"]
                                 target["arguments"] += str(function.get("arguments") or "")
+                if not saw_choice or (not done and finish_reason is None):
+                    raise ProviderError("模型流在完成标记之前中断")
                 calls, raw_calls = [], []
-                for item in call_parts.values():
-                    try:
-                        arguments = json.loads(item["arguments"] or "{}")
-                    except json.JSONDecodeError:
-                        arguments = {}
-                    calls.append({"id": item["id"], "name": item["name"], "arguments": arguments})
+                for _, item in sorted(call_parts.items()):
+                    if finish_reason != "length":
+                        arguments = self._tool_arguments(item["arguments"])
+                        calls.append({"id": item["id"], "name": item["name"], "arguments": arguments})
                     raw_calls.append({
                         "id": item["id"],
                         "type": "function",
                         "function": {"name": item["name"], "arguments": item["arguments"] or "{}"},
                     })
-                content = "".join(content_parts) or "".join(reasoning_parts)
+                content = "".join(content_parts)
                 raw_message = {"role": "assistant", "content": content or None, "tool_calls": raw_calls}
-                return ChatResult(content, calls, raw_message, usage, int((time.perf_counter() - started) * 1000), attempt)
+                if reasoning_parts:
+                    raw_message["reasoning_content"] = "".join(reasoning_parts)
+                return ChatResult(content, calls, raw_message, usage, int((time.perf_counter() - started) * 1000), attempt, finish_reason)
             except (ContextLengthError, ContentSafetyError, asyncio.CancelledError):
                 raise
             except (httpx.TimeoutException, httpx.TransportError, ProviderError) as exc:
@@ -261,6 +290,16 @@ class OpenAICompatBackend:
                 await asyncio.sleep(min(8.0, float(2**attempt)))
                 attempt += 1
         raise ProviderError(str(last_error or "模型流请求失败"))
+
+    @staticmethod
+    def _tool_arguments(value: Any) -> dict[str, Any]:
+        try:
+            arguments = json.loads(value or "{}") if isinstance(value, str) or value is None else value
+        except (TypeError, ValueError) as exc:
+            raise ProviderError("模型工具参数不是有效的 JSON 对象") from exc
+        if not isinstance(arguments, dict):
+            raise ProviderError("模型工具参数必须是 JSON 对象")
+        return arguments
 
     @staticmethod
     def _raise_response_error(response: httpx.Response) -> None:

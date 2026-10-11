@@ -203,7 +203,6 @@ function SetupPage({setup,onSaved,onError}:{setup:SetupStatus|null;onSaved:()=>P
  const isLocalSlot=(slot:Slot)=>{
   const url=draft[slot].base_url.trim().toLowerCase()
   if(url.startsWith('local://')) return true
-  if(slot==='embedding') return false
   try{
    const host=new URL(url.includes('://')?url:`http://${url}`).hostname
    return host==='localhost'||host==='127.0.0.1'||host==='[::1]'||host==='::1'||host.endsWith('.localhost')
