@@ -24,7 +24,7 @@
 | 文件 | 职责 |
 |---|---|
 | [config.py](config.py) | 加载 [config.example.toml](../config.example.toml) 与环境变量占位符 |
-| [llm.py](llm.py)、[models_config.py](models_config.py) | OpenAI-compatible 模型调用、模型配置展示与更新 |
+| [llm/client.py](llm/client.py)、[models_config.py](models_config.py) | OpenAI-compatible 本地/远程调用、模型配置展示与更新 |
 | [service.py](service.py) | 组装个人运行时、抽取与情景维护 worker、Drift、Skills 与 MCP |
 | [store.py](store.py)、[vector_index.py](vector_index.py) | SQLite 数据、FTS、任务租约及可选 sqlite-vec 索引 |
 | [governance.py](governance.py) | 与个人 `memories` 表分离的 Agent 空间、权限和审核记录 |

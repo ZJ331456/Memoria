@@ -34,7 +34,7 @@
 
 ## 自动提取与人工审核
 
-`AgentRuntime` 保存回复后，以用户消息 ID 为 `source_ref` 投递 `memory_jobs`。`MemoryJobWorker` 使用租约与 heartbeat 领取任务，调用 [LLMClient](../llm.py) 提取候选，存入 `memory_reviews`。**任务完成只表示提取完成，候选尚未生效**；未批准内容不参与检索或 prompt。
+`AgentRuntime` 保存回复后，以用户消息 ID 为 `source_ref` 投递 `memory_jobs`。`MemoryJobWorker` 使用租约与 heartbeat 领取任务，调用 [LLMClient](../llm/client.py) 提取候选，存入 `memory_reviews`。**任务完成只表示提取完成，候选尚未生效**；未批准内容不参与检索或 prompt。
 
 用户通过 `GET /api/memory-reviews` 查看候选与来源 ID，再用消息来源接口核对原始对话，可编辑正文、类型和重要度后调用 `POST /api/memory-reviews/{id}/approve`，或拒绝。批准才调用 `MemoryEngine.remember`；审核状态在 `pending → applying → approved` 间推进，失败或重启时恢复待审。`GET /api/messages/{id}/source` 与带 `anchor_id` 的会话消息接口定位来源。撤销已批准来源可先用 `POST /api/memories/undo` 的 dry-run 预览。详见[审核与来源定位](../../docs/自动记忆审核与来源定位.md)。
 

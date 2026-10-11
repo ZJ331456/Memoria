@@ -1,5 +1,7 @@
 # 本地中文 Embedding：BGE small zh v1.5
 
+2026-10-11 更新：本机当前已改为 Qwen/BGE 共用 `http://127.0.0.1:8080/v1`，见[本地与远程 OpenAI 统一接口](本地与远程OpenAI统一接口.md)。下文保留 2026-10-10 的进程内方案与当时测量；`local://cuda` 仍可选，不能把当时配置或耗时当作当前 HTTP 部署的测量。
+
 本机方案使用项目根目录 `model/bge-small-zh-v1.5/` 存储模型，由项目 `.venv` 进程内编码。本地接入属于尚未提交的工作区能力，不能视为远程 main 已有状态。main 保留既有 DeepSeek `deepseek-v4-flash`，fast 保留原有 Qwen `qwen3.6-flash` 配置；本次验证没有调用付费 LLM API。模型文件、环境、私有 override 与原始报告均为 Git 忽略项。
 
 ## 文件与环境

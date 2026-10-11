@@ -91,7 +91,7 @@ cp config.example.toml config.toml   # Windows: Copy-Item config.example.toml co
 | 本地 HTTP（推荐，尤其 Windows） | `model = "model/Qwen3.5-2B"`，`base_url = "http://127.0.0.1:8080/v1"`，可无 Key | 先起本仓库 `serve_local_llm.py`；业务侧与远程同一套 OpenAI 兼容 HTTP |
 | 进程内兜底 | `base_url = "local://cuda"`（或 `cpu` / `auto`） | 无需另起服务；权重进 Memoria 进程 |
 
-Embedding 本地示例：`model = "model/bge-small-zh-v1.5"`，`base_url = "local://cuda"`。未配置 Embedding 时仍可词面检索。
+Embedding 可共用本地服务：`model = "bge-small-zh-v1.5"`，`base_url = "http://127.0.0.1:8080/v1"`；也保留 `model/bge-small-zh-v1.5` + `local://cuda` 进程内方式。未配置 Embedding 时仍可词面检索。具体参数、工具/SSE、上下文预算和实测范围见[本地与远程 OpenAI 统一接口](docs/本地与远程OpenAI统一接口.md)。
 
 > **说明：** vLLM / SGLang 官方不支持原生 Windows；Windows 请用下方本机服务，或 WSL2 / Ollama。Linux 可将 `base_url` 指向已启动的 vLLM/SGLang/Ollama。
 
@@ -106,6 +106,8 @@ Embedding 本地示例：`model = "model/bge-small-zh-v1.5"`，`base_url = "loca
 
 打开 <http://127.0.0.1:2237>，在「设置」填写主模型并测试连通。
 
+示例默认是本地模式；切到远程 API 时也要配置 fast（或在文件中禁用该槽位并清除对应 override），避免后台记忆提取仍连接本机服务。Embedding 可独立选择本地或远程。
+
 #### B. 本地模型 + OpenAI 兼容 HTTP（推荐两终端）
 
 权重放在项目 `model/`（如 `model/Qwen3.5-2B`）。**先起推理服务，再起 Memoria。**
@@ -119,6 +121,8 @@ Embedding 本地示例：`model = "model/bge-small-zh-v1.5"`，`base_url = "loca
 ```
 
 Linux / macOS 将解释器换成 `.venv/bin/python` 即可。确认 `config.toml` 或页面设置中 `base_url` 为 `http://127.0.0.1:8080/v1`。
+
+本机默认 `main`、`fast` 和 Embedding 都走这个服务；`fast` 控制记忆提取/规划，不能只改 main。默认服务总上下文为 8192 token，建议输出预算 1024。已有 override 文件优先于 config.toml，切换时检查三槽位实际值。
 
 #### C. 仅进程内本地 LLM（单终端）
 
