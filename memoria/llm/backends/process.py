@@ -26,6 +26,7 @@ class ProcessLocalBackend:
         tools: list[dict[str, Any]] | None = None,
         on_delta: Callable[[str], Awaitable[None]] | None = None,
         stream: bool = False,
+        temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
         device = selected.base_url.removeprefix("local://").rstrip("/")
         if device not in {"cuda", "cpu", "auto"}:
@@ -33,9 +34,10 @@ class ProcessLocalBackend:
         started = time.perf_counter()
         try:
             engine = get_local_llm(str(model_path(selected.model)), device)
+            options = {k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None}
             streamed = False
             if stream:
-                async for event in engine.stream_chat(messages, tools, max_tokens, max(self.timeout_seconds, 120)):
+                async for event in engine.stream_chat(messages, tools, max_tokens, max(self.timeout_seconds, 120), **options):
                     if "delta" in event:
                         streamed = True
                         if on_delta:
@@ -43,7 +45,7 @@ class ProcessLocalBackend:
                     else:
                         data = event["result"]
             else:
-                data = await engine.chat(messages, tools, max_tokens, max(self.timeout_seconds, 120))
+                data = await engine.chat(messages, tools, max_tokens, max(self.timeout_seconds, 120), **options)
         except ContextLengthError:
             raise
         except asyncio.TimeoutError as exc:

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "scope": "Four hand-authored Chinese diagnostic trajectories, fictional users; not human-reviewed research data.",
+  "trajectories": [
+    {"id": "change", "events": [
+      {"id": "c1", "date": "2026-09-01", "text": "我目前住在北京。", "reviewed": {"content": "用户目前住在北京", "kind": "profile"}},
+      {"id": "c2", "date": "2026-10-01", "text": "我已经搬到上海，请更正之前住在北京的记忆。", "reviewed": {"content": "用户目前住在上海", "kind": "profile", "corrects": "c1"}}
+    ], "probes": [
+      {"id": "c-before", "after": "c1", "question": "我现在住在哪座城市？"},
+      {"id": "c-after", "after": "c2", "question": "我现在住在哪座城市？"}
+    ]},
+    {"id": "temporary", "events": [
+      {"id": "t1", "date": "2026-09-01", "text": "平常我最喜欢喝红茶。", "reviewed": {"content": "用户平常最喜欢喝红茶", "kind": "preference"}},
+      {"id": "t2", "date": "2026-10-01", "text": "今天加班破例喝咖啡，只限今天，平常的喜好没有变。"}
+    ], "probes": [
+      {"id": "t-before", "after": "t1", "question": "平常我最喜欢喝什么？"},
+      {"id": "t-after", "after": "t2", "question": "不考虑今天加班的临时选择，平常我最喜欢喝什么？"}
+    ]},
+    {"id": "subject", "events": [
+      {"id": "s1", "date": "2026-09-01", "text": "我住在北京。", "reviewed": {"content": "用户住在北京", "kind": "profile"}},
+      {"id": "s2", "date": "2026-10-01", "text": "我的朋友小林住在上海，是他住上海，不是我。", "reviewed": {"content": "用户的朋友小林住在上海", "kind": "fact"}}
+    ], "probes": [
+      {"id": "s-self", "after": "s2", "question": "我住在哪座城市？"},
+      {"id": "s-friend", "after": "s2", "question": "我的朋友小林住在哪座城市？"}
+    ]},
+    {"id": "plan", "events": [
+      {"id": "p1", "date": "2026-09-01", "text": "我计划十月去南京旅游，不过现在还没有去过南京。", "reviewed": {"content": "用户计划十月去南京，尚未去过南京", "kind": "goal"}},
+      {"id": "p2", "date": "2026-10-01", "text": "南京旅行取消了，到现在我仍没有去过南京。", "reviewed": {"content": "用户的南京旅行已取消，仍未去过南京", "kind": "goal", "corrects": "p1"}}
+    ], "probes": [
+      {"id": "p-before", "after": "p1", "question": "根据我的记录，我已经去过南京了吗？"},
+      {"id": "p-after", "after": "p2", "question": "根据我的记录，我已经去过南京了吗？"}
+    ]}
+  ]
+}

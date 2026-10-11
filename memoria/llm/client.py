@@ -51,6 +51,7 @@ class LLMClient:
         model: ModelConfig | None = None,
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
+        *, temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
         selected = model or self.settings.main
         if not selected.is_ready(role="llm"):
@@ -59,12 +60,14 @@ class LLMClient:
                 "本地推荐 http://127.0.0.1:8080/v1（OpenAI 兼容服务）或 local://cuda"
             )
         backend = self.backend_for(selected)
+        generation = {k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None}
         return await backend.chat(
             selected,
             messages,
             max_tokens=max_tokens if max_tokens is not None else self.settings.max_tokens,
             tools=tools,
             stream=False,
+            **generation,
         )
 
     async def chat_stream(
@@ -72,21 +75,25 @@ class LLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         on_delta: Callable[[str], Awaitable[None]] | None = None,
+        *, model: ModelConfig | None = None, max_tokens: int | None = None,
+        temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
-        selected = self.settings.main
+        selected = model or self.settings.main
         if not selected.is_ready(role="llm"):
             raise RuntimeError(
                 "主模型未完整配置：远程需 model/base_url/api_key；"
                 "本地推荐 http://127.0.0.1:8080/v1（OpenAI 兼容服务）或 local://cuda"
             )
         backend = self.backend_for(selected)
+        generation = {k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None}
         return await backend.chat(
             selected,
             messages,
-            max_tokens=self.settings.max_tokens,
+            max_tokens=max_tokens if max_tokens is not None else self.settings.max_tokens,
             tools=tools,
             on_delta=on_delta,
             stream=True,
+            **generation,
         )
 
     async def extract_memories(self, user_text: str, assistant_text: str) -> list[dict[str, Any]]:

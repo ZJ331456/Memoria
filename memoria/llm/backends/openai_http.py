@@ -68,9 +68,10 @@ class OpenAICompatBackend:
         tools: list[dict[str, Any]] | None = None,
         on_delta: Callable[[str], Awaitable[None]] | None = None,
         stream: bool = False,
+        temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
         if stream:
-            return await self._chat_stream(selected, messages, max_tokens=max_tokens, tools=tools, on_delta=on_delta)
+            return await self._chat_stream(selected, messages, max_tokens=max_tokens, tools=tools, on_delta=on_delta, temperature=temperature, top_p=top_p)
         payload: dict[str, Any] = {
             "model": selected.model,
             "messages": messages,
@@ -80,6 +81,7 @@ class OpenAICompatBackend:
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
+        payload.update({k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None})
         data, metrics = await self._post(selected, selected.auth_headers(), payload)
         try:
             choice = data["choices"][0]
@@ -162,6 +164,7 @@ class OpenAICompatBackend:
         max_tokens: int,
         tools: list[dict[str, Any]] | None,
         on_delta: Callable[[str], Awaitable[None]] | None,
+        temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
         payload: dict[str, Any] = {
             "model": selected.model,
@@ -172,6 +175,7 @@ class OpenAICompatBackend:
         }
         if tools:
             payload.update({"tools": tools, "tool_choice": "auto"})
+        payload.update({k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None})
         headers = selected.auth_headers()
         started = time.perf_counter()
         last_error: Exception | None = None
