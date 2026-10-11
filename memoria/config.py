@@ -72,6 +72,11 @@ class ModelConfig:
     model: str
     api_key: str
     base_url: str
+    thinking: str | None = None
+
+    def __post_init__(self):
+        if self.thinking not in {None, "enabled", "disabled"}:
+            raise ValueError("thinking must be enabled, disabled or unset")
 
     def is_local_process(self) -> bool:
         return self.base_url.startswith("local://")
@@ -175,6 +180,7 @@ class Settings:
                 model=str(section.get("model", "")),
                 api_key=_resolve(str(section.get("api_key", ""))),
                 base_url=str(section.get("base_url", "")).rstrip("/"),
+                thinking=section.get("thinking"),
             )
 
         main = model(llm.get("main", {}))

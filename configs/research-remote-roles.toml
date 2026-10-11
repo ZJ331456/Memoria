@@ -1,0 +1,18 @@
+# No credentials. Use with an account's private DeepSeek profile and --allow-remote.
+[roles.reader]
+slot = "main"
+max_tokens = 1024
+thinking = "disabled_by_deepseek_api"
+
+[roles.extractor]
+slot = "fast"
+max_tokens = 1024
+thinking = "disabled_by_deepseek_api"
+
+[roles.decider]
+slot = "fast"
+thinking = "disabled_by_deepseek_api"
+
+[roles.judge]
+slot = "main"
+thinking = "disabled_by_deepseek_api"

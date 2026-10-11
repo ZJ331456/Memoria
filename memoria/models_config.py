@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import tomllib
+import re
 from pathlib import Path
 from typing import Any
 
 import httpx
 
 from .config import ModelConfig, Settings, SlotRole, _merge
+from .private_files import load_private_json
 
 
 SLOT_PATHS = {
@@ -44,13 +46,30 @@ def apply_overrides(settings: Settings, data: dict[str, Any] | None = None) -> S
         # A key explicitly empty in a file clears inherited credentials. The UI
         # still omits blank keys when saving, preserving its "keep old key" rule.
         api_key = str(section.get("api_key", current.api_key)).strip()
+        model = str(section.get("model", current.model) or current.model)
+        base_url = str(section.get("base_url", current.base_url) or current.base_url).rstrip("/")
+        thinking = section.get("thinking", current.thinking)
+        profile = section.get("credential_profile")
+        if profile:
+            owner_directory = override_path(settings).parent.parent.resolve()
+            if not re.fullmatch(r"[a-f0-9]{32}", owner_directory.name) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}", str(profile)):
+                raise ValueError("Private model profiles require an account-owned override")
+            secret_path = owner_directory / "secrets" / (str(profile) + ".research-model.dpapi")
+            if not secret_path.resolve().is_relative_to(owner_directory) or secret_path.is_symlink():
+                raise ValueError("Private model profile escapes account storage")
+            saved = load_private_json(secret_path)
+            if saved.get("owner_user_id") != owner_directory.name or saved.get("model") != model or str(saved.get("base_url", "")).rstrip("/") != base_url:
+                raise ValueError("Private credential profile owner/model/endpoint mismatch")
+            api_key = saved["api_key"]
+            thinking = section.get("thinking", saved.get("thinking"))
         setattr(
             settings,
             slot,
             ModelConfig(
-                model=str(section.get("model", current.model) or current.model),
+                model=model,
                 api_key=api_key,
-                base_url=str(section.get("base_url", current.base_url) or current.base_url).rstrip("/"),
+                base_url=base_url,
+                thinking=thinking,
             ),
         )
     return settings
@@ -93,6 +112,8 @@ def save_model_overrides(settings: Settings, updates: dict[str, dict[str, str]])
             section["model"] = str(values.get("model", "")).strip()
         if values.get("base_url") is not None:
             section["base_url"] = str(values.get("base_url", "")).strip().rstrip("/")
+        if values.get("thinking") is not None:
+            section["thinking"] = str(values["thinking"])
         api_key = values.get("api_key")
         if api_key is not None and str(api_key).strip():
             section["api_key"] = str(api_key).strip()
@@ -111,6 +132,7 @@ def save_model_overrides(settings: Settings, updates: dict[str, dict[str, str]])
                 model=section.get("model", current.model) or current.model,
                 api_key=section["api_key"] if "api_key" in section else current.api_key,
                 base_url=(section.get("base_url", current.base_url) or current.base_url).rstrip("/"),
+                thinking=section.get("thinking", current.thinking),
             ),
         )
     merged = _merge(existing, patch)

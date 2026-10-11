@@ -29,7 +29,7 @@ class RoleConfig:
             raise ValueError("invalid experiment role configuration")
         if not 0 <= self.temperature <= 2 or not 0 < self.top_p <= 1:
             raise ValueError("invalid generation parameters")
-        if self.thinking not in {"disabled_by_memoria_local_server", "provider_default_unknown"}:
+        if self.thinking not in {"disabled_by_memoria_local_server", "provider_default_unknown", "disabled_by_deepseek_api"}:
             raise ValueError("unsupported thinking policy; do not assume arbitrary providers support it")
 
 
@@ -59,10 +59,13 @@ class ExperimentLLM(LLMClient):
         settings.request_timeout_seconds, settings.max_retries = cfg.timeout_seconds, cfg.max_retries
         client = LLMClient(settings, self.transport)
         selected = getattr(settings, cfg.slot)
+        selected = copy.copy(selected)
+        if cfg.thinking == "disabled_by_deepseek_api":
+            selected.thinking = "disabled"
         if cfg.thinking == "disabled_by_memoria_local_server" and not (selected.is_local_http() or selected.is_local_process()):
             raise ValueError("remote thinking policy must be explicitly marked provider_default_unknown")
-        # The local policy is a deployment assertion, recorded in the manifest;
-        # it is not an unsupported request field silently sent to other servers.
+        # The local policy is a deployment assertion; the DeepSeek-only policy is
+        # validated by the official HTTP backend and emitted as an explicit field.
         prompt_sha = hashlib.sha256(json.dumps(messages, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         call_id = len(self.calls)
         self.recorder.append("prompts.jsonl", {"call": call_id, "role": role, "sha256": prompt_sha, "messages": messages})
@@ -80,7 +83,7 @@ class ExperimentLLM(LLMClient):
             with self.timings.measure(f"llm.{role}"):
                 kwargs = dict(model=selected, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
                 result = await client.chat_stream(messages, on_delta=delta, **kwargs) if stream else await client.chat(messages, **kwargs)
-            row.update(usage=result.usage, retries=result.retries, finish_reason=result.finish_reason,
+            row.update(usage=result.usage or None, retries=result.retries, finish_reason=result.finish_reason,
                        response=result.content, tool_calls=result.tool_calls)
             if result.finish_reason not in {None, "stop"} or not result.content.strip():
                 raise ValueError(f"incomplete final content: {result.finish_reason}")

@@ -28,6 +28,8 @@ class ProcessLocalBackend:
         stream: bool = False,
         temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
+        if selected.thinking is not None:
+            raise ValueError("Provider thinking options are not supported by the local process backend")
         device = selected.base_url.removeprefix("local://").rstrip("/")
         if device not in {"cuda", "cpu", "auto"}:
             raise ProviderError("本地 LLM 地址应为 local://cuda、local://cpu 或 local://auto")

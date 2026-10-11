@@ -57,3 +57,5 @@ git diff --check
 工程临时输入和故障替身不导入产品、不作为实验数据。旧模拟轨迹、演示服务、合成基准入口与成绩已移除。模块职责见 [核心目录](memoria/README.md)，提交前读取 [GitHub 规范](docs/implemented/github提交规范.md)。
 
 `config.toml`、`data/`、`.mcp/`、`.venv/` 和 `model/` 被忽略；原始语料由固定版本脚本复现，仓库只保存来源与 SHA 清单。
+
+真实历史、人工标注与评测入口为 `scripts/research.py --user qin --help`，见 [研究工具](docs/implemented/真实历史标注与评测.md)。本机已接入 50 段真实公开来源；qin main/fast 已切到独立私密 DeepSeek profile，本地 BGE 保留。公开来源人物/事件时间未知，候选与人工 gold 不自动成为 qin 个人事实。

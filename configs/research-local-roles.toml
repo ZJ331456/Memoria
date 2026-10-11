@@ -1,0 +1,12 @@
+# Matched generation limits for comparison with research-remote-roles.toml.
+[roles.reader]
+slot = "main"
+max_tokens = 1024
+timeout_seconds = 300
+thinking = "disabled_by_memoria_local_server"
+
+[roles.extractor]
+slot = "fast"
+max_tokens = 1024
+timeout_seconds = 300
+thinking = "disabled_by_memoria_local_server"

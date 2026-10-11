@@ -48,6 +48,15 @@ def classify_openai_server(base_url: str) -> str:
 class OpenAICompatBackend:
     name = "openai_http"
 
+    @staticmethod
+    def provider_options(selected):
+        if selected.thinking is None:
+            return {}
+        url = urlparse(selected.base_url)
+        if url.scheme != "https" or url.hostname != "api.deepseek.com":
+            raise ValueError("Explicit thinking switch is supported only for the official DeepSeek API")
+        return {"thinking": {"type": selected.thinking}}
+
     def __init__(
         self,
         *,
@@ -82,6 +91,7 @@ class OpenAICompatBackend:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
         payload.update({k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None})
+        payload.update(self.provider_options(selected))
         data, metrics = await self._post(selected, selected.auth_headers(), payload)
         try:
             choice = data["choices"][0]
@@ -176,6 +186,7 @@ class OpenAICompatBackend:
         if tools:
             payload.update({"tools": tools, "tool_choice": "auto"})
         payload.update({k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None})
+        payload.update(self.provider_options(selected))
         headers = selected.auth_headers()
         started = time.perf_counter()
         last_error: Exception | None = None

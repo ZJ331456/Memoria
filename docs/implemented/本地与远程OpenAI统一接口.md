@@ -1,8 +1,12 @@
 # 本地与远程 OpenAI 兼容接口
 
-更新日期：2026-10-12。当前 Windows 本机使用 Qwen3.5-2B 与 BGE small zh v1.5；依赖安装在项目独立 `.venv`，模型在 Git 忽略的 `model/`。本机推理服务提供业务所需的 Chat Completions / Embeddings 子集，不实现 OpenAI 的全部产品接口。
+更新日期：2026-10-12。Windows 本机保留 Qwen3.5-2B 与 BGE small zh v1.5；qin 的 main/fast 已按真实公开来源开发诊断切到 deepseek-flash，embedding 保留本地 BGE；依赖安装在项目独立 `.venv`，模型在 Git 忽略的 `model/`。本机推理服务提供业务所需的 Chat Completions / Embeddings 子集，不实现 OpenAI 的全部产品接口。
 
-## 推荐运行方式
+## 当前账号配置与 DeepSeek
+
+2026-10-12 本机 qin 已激活账号独立的 DeepSeek main/fast；真实登录读取模型配置通过。Key 保存在 DPAPI 私密 profile，override 仅使用 `credential_profile = "deepseek"`，绑定模型/端点/账号，配 `thinking = "disabled"`。显式思考开关只发给官方 api.deepseek.com HTTPS；其他供应商和 local:// 不接收。其他账号不继承 qin Key；本机管理员默认本地槽位仍可供本地对照。配置与真实调用结果见 [研究工具](真实历史标注与评测.md)。
+
+## 本地对照运行方式
 
 在仓库根目录开两个 PowerShell 终端：
 

@@ -109,7 +109,16 @@ class LLMClient:
             )
             match = re.search(r"\[[\s\S]*\]", raw)
             parsed = json.loads(match.group(0) if match else raw)
-            return [x for x in parsed if isinstance(x, dict) and str(x.get("content", "")).strip()][:3]
+            if not isinstance(parsed, list):
+                raise ValueError("Memory extraction must return a JSON array")
+            for item in parsed:
+                if not isinstance(item, dict) or not isinstance(item.get("content"), str) or not item["content"].strip():
+                    raise ValueError("Invalid extracted memory content")
+                if item.get("kind") not in {"preference", "profile", "fact", "goal"}:
+                    raise ValueError("Invalid extracted memory kind")
+                if type(item.get("importance")) is not int or not 1 <= item["importance"] <= 5:
+                    raise ValueError("Invalid extracted memory importance")
+            return parsed[:3]
         except Exception as exc:
             logger.warning("记忆提取失败，将由后台任务重试: %s", type(exc).__name__)
             raise
