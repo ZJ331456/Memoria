@@ -3,7 +3,7 @@ import sqlite3
 
 from fastapi.testclient import TestClient
 
-from memoria.api import create_app
+from memoria.api.app import _create_tenant_app as create_app
 from memoria.lifecycle import Phase, Pipeline, TurnContext
 from memoria.memory import MemoryEngine
 from memoria.store import Store

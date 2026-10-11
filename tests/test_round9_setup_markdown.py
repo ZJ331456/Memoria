@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from memoria.memory.layer import MarkdownMemoryLayer
 from memoria.models_config import apply_overrides, load_model_overrides, save_model_overrides
-from memoria.api import create_app
+from memoria.api.app import _create_tenant_app as create_app
 from memoria.config import ModelConfig, Settings
 from memoria.store import Store
 
@@ -45,7 +45,7 @@ database="{(tmp_path / 'override.db').as_posix()}"
     reloaded = Settings.load(config)
     assert reloaded.main.model == "new-model"
     assert reloaded.main.api_key == "new-key"
-    data = load_model_overrides(tmp_path / "models.override.toml")
+    data = load_model_overrides(tmp_path / "config/models.override.toml")
     assert data["llm"]["main"]["model"] == "new-model"
 
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from memoria.api import create_app
+from memoria.api.app import _create_tenant_app as create_app
 
 
 def _client(tmp_path: Path) -> TestClient:

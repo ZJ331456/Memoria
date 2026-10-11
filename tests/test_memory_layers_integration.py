@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from memoria.api import create_app
+from memoria.api.app import _create_tenant_app as create_app
 from memoria.llm import ChatResult, ContextLengthError
 from memoria.memory.budget import TurnMemoryBudget
 from memoria.memory.planner import MemoryQueryPlanner

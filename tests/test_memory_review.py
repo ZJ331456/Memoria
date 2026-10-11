@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from memoria.api import create_app
+from memoria.api.app import _create_tenant_app as create_app
 
 
 def test_review_queue_requires_approval_and_links_to_old_source_message(tmp_path: Path):

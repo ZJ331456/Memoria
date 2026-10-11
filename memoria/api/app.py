@@ -298,20 +298,24 @@ class MarkdownWriteBody(StrictModel):
     content: str = Field(min_length=1, max_length=200000)
 
 
-def create_app(config_path: str | Path | None = None) -> FastAPI:
-    settings = Settings.load(config_path)
-    store = Store(settings.database, settings.vector_backend)
-    governance = MemoryGovernance(store)
-    service = AgentService(settings, store, LLMClient(settings))
+def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings: Settings | None = None, schema_only: bool = False) -> FastAPI:
+    """Internal runtime factory. Network entry points use the authenticated gateway."""
+    settings = tenant_settings or Settings.load(config_path)
+    store = None if schema_only else Store(settings.database, settings.vector_backend)
+    governance = None if schema_only else MemoryGovernance(store)
+    service = None if schema_only else AgentService(settings, store, LLMClient(settings))
     session_locks: dict[str, asyncio.Lock] = {}
     active_turns: dict[str, asyncio.Task] = {}
     deleting_sessions: set[str] = set()
     request_gate = RequestGate(settings)
     metrics = MetricRegistry()
-    service.set_busy_check(lambda: bool(active_turns))
+    if service:
+        service.set_busy_check(lambda: bool(active_turns))
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
+        if schema_only:
+            raise RuntimeError("Schema-only application cannot serve requests")
         await service.start_integrations()
         memory_task = asyncio.create_task(service.memory_worker.run(), name="memoria-memory-worker")
         drift_task = asyncio.create_task(service.drift.run_loop(), name="memoria-drift-worker")
@@ -458,6 +462,20 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         if not item:
             raise HTTPException(404, "任务执行记录不存在或已归档")
         return item
+
+    @app.get("/api/datasets", tags=["sessions"], summary="当前用户的真实语料及来源清单")
+    def list_datasets():
+        with store.lock:
+            rows = store.db.execute("SELECT dataset_id,manifest_json,imported_at FROM dataset_imports ORDER BY imported_at DESC").fetchall()
+        return [{"dataset_id": r["dataset_id"], "manifest": json.loads(r["manifest_json"]), "imported_at": r["imported_at"]} for r in rows]
+
+    @app.get("/api/datasets/{dataset_id}", tags=["sessions"], summary="当前用户语料的原文 ID 与消息映射")
+    def dataset_receipt(dataset_id: str):
+        with store.lock:
+            row = store.db.execute("SELECT receipt_json FROM dataset_imports WHERE dataset_id=?", (dataset_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "语料不存在")
+        return json.loads(row["receipt_json"])
 
     @app.get("/api/setup/status", tags=["setup"], summary="Setup 向导状态")
     def setup_status():

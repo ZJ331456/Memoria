@@ -6,7 +6,7 @@
 
 Memoria 的聊天功能用于产生和使用个人记忆；新增加的共享记忆层面向多个 Agent 协作时的**受控事实库**。它把「谁提出、谁审核、谁能读、何时失效、为什么替换或撤销」作为数据模型的一部分。共享层可以独立于聊天调用，不需要模型服务即可运行。
 
-当前实现是单机 SQLite、HTTP API 和API 治理服务。它提供 Agent 独立密钥、空间与角色授权、先提案后发布、同主题版本冲突保护、有效期、撤销、来源指针和审计事件。它尚未将旧聊天运行时的全局 `memories` 检索改成多 Agent 检索。因此**隔离保证只适用于 `/api/shared/*` 与 `MemoryGovernance`**；旧 `/api/memories`、聊天工具、Markdown 导出和时间旅行接口仍是本地单用户数据域，不应用作多租户共享入口。
+当前实现是单机 SQLite、HTTP API 和API 治理服务。它提供 Agent 独立密钥、空间与角色授权、先提案后发布、同主题版本冲突保护、有效期、撤销、来源指针和审计事件。正式登录网关为每个用户建立独立库与个人运行时，个人记忆、工具、Markdown 和历史均按用户隔离。共享层在该用户库中另按 Agent 与空间 ACL 隔离；聊天尚不会自动检索共享治理表，跨登录用户共享尚未实现。见 [用户隔离](用户登录与数据隔离.md)。
 
 ```mermaid
 flowchart LR
@@ -40,11 +40,11 @@ flowchart LR
 
 ## 一次协作流程
 
-以下命令以已配置 `[server.security].api_token` 为例；默认本地部署未配置时，管理员接口只允许回环地址访问。将返回的 Agent key 放在受保护的密钥管理位置。
+以下 USER_TOKEN 是该用户登录返回的 access_token；治理管理员接口仍要求本机回环来源。共享请求同时携带用户令牌与该用户库中的 Agent key。将返回的 Agent key 放在受保护的密钥管理位置。
 
 ```bash
 curl -X POST http://127.0.0.1:2237/api/governance/agents \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
   -d '{"name":"research-agent"}'
 ```
 
@@ -52,19 +52,19 @@ curl -X POST http://127.0.0.1:2237/api/governance/agents \
 
 ```bash
 curl -X POST http://127.0.0.1:2237/api/shared/spaces \
-  -H "X-Agent-Key: $AGENT_KEY" -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $USER_TOKEN" -H "X-Agent-Key: $AGENT_KEY" -H 'Content-Type: application/json' \
   -d '{"name":"项目决策","visibility":"shared"}'
 
 curl -X POST http://127.0.0.1:2237/api/shared/proposals \
-  -H "X-Agent-Key: $AGENT_KEY" -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $USER_TOKEN" -H "X-Agent-Key: $AGENT_KEY" -H 'Content-Type: application/json' \
   -d '{"space_id":"<SPACE_ID>","content":"Alpha 项目使用 PostgreSQL","topic_key":"alpha:database","source_type":"external","source_ref":"ADR-7"}'
 
 curl -X POST http://127.0.0.1:2237/api/shared/proposals/<PROPOSAL_ID>/approve \
-  -H "X-Agent-Key: $OWNER_OR_CURATOR_KEY" -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $USER_TOKEN" -H "X-Agent-Key: $OWNER_OR_CURATOR_KEY" -H 'Content-Type: application/json' \
   -d '{"reason":"已核对 ADR-7"}'
 
 curl 'http://127.0.0.1:2237/api/shared/memories?space_id=<SPACE_ID>&q=PostgreSQL' \
-  -H "X-Agent-Key: $READER_KEY"
+  -H "Authorization: Bearer $USER_TOKEN" -H "X-Agent-Key: $READER_KEY"
 ```
 
 另一个 Agent 必须由 owner 经 `/api/shared/spaces/{id}/grants` 授予 `reader`、`contributor` 或 `curator`。把旧个人记忆移入共享空间时，管理员调用 `/api/governance/spaces/{space_id}/import-memory/{memory_id}` 并提供 owner 的 `actor_id`、`topic_key`；结果仍是待审提案，不会自动公开旧内容。

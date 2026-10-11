@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from memoria.mcp.client import McpClient
 from memoria.mcp.config import load_mcp_servers
+from user_paths import directory_for
 
 
 async def check(server):
@@ -45,9 +46,23 @@ async def check(server):
                 raise ValueError("Feishu wiki space list tool not found")
             result = await client.call(info.name, {"useUAT": True}, timeout=60)
             payload = json.loads(result)
-            if payload.get("code") != 0:
-                raise ValueError("Feishu API did not return code 0")
-            row["api_code"] = payload["code"]
+            # Official MCP unwraps successful API data; explicit API errors
+            # must fail, while an empty but authorized workspace is valid.
+            if "code" in payload:
+                if payload["code"] != 0:
+                    raise ValueError("Feishu API error")
+                payload = payload.get("data", {})
+            if not isinstance(payload.get("items"), list) or not isinstance(payload.get("has_more"), bool):
+                raise ValueError("Feishu did not return a wiki space list")
+            row.update(response_valid=True, space_count=len(payload["items"]))
+            drive = json.loads(await client.call("drive_v1_file_list", {"useUAT": True}, timeout=60))
+            if "code" in drive:
+                if drive["code"] != 0:
+                    raise ValueError("Feishu drive API error")
+                drive = drive.get("data", {})
+            if not isinstance(drive.get("files"), list):
+                raise ValueError("Feishu did not return a drive file list")
+            row["drive_file_count"] = len(drive["files"])
         else:
             raise ValueError("No real business check defined for this server")
         row["business_call_ok"] = True
@@ -62,14 +77,17 @@ async def check(server):
 async def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--server", choices=["search", "github", "feishu"])
+    parser.add_argument("--user", required=True)
+    parser.add_argument("--config")
     args = parser.parse_args()
-    servers = load_mcp_servers(ROOT / "data/mcp_servers.json")
+    directory = directory_for(args.user, args.config)
+    servers = load_mcp_servers(directory / "config/mcp_servers.json")
     targets = [s for s in servers if (s.name == args.server if args.server else s.enabled)]
     if not targets:
         raise SystemExit("No matching servers; run configure_mcp.py first")
     rows = list(await asyncio.gather(*(check(s) for s in targets)))
     report = {"checked_at": datetime.now(timezone.utc).isoformat(), "servers": rows}
-    out = ROOT / "data/reports/mcp-check.json"
+    out = directory / "reports/mcp-check.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))

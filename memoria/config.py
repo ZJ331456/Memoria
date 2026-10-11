@@ -145,6 +145,7 @@ class Settings:
     port: int
     source: Path
     memory_layers: MemoryLayerSettings | None = None
+    model_override_file: Path | None = None
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Settings":
@@ -265,6 +266,7 @@ class Settings:
         from .memory.layer_settings import MemoryLayerSettings
 
         settings.memory_layers = MemoryLayerSettings.from_dict(memory_section.get("layers", {}))
+        settings.model_override_file = db.parent / "config/models.override.toml"
         from .models_config import apply_overrides
 
         return apply_overrides(settings)

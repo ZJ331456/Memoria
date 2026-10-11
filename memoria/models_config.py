@@ -17,7 +17,7 @@ SLOT_PATHS = {
 
 
 def override_path(settings: Settings) -> Path:
-    return settings.database.parent / "models.override.toml"
+    return settings.model_override_file or settings.database.parent / "config/models.override.toml"
 
 
 def load_model_overrides(path: Path) -> dict[str, Any]:

@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | 网页搜索 | [Open-WebSearch](https://github.com/Aas-ee/open-webSearch)，`open-websearch@2.2.0` | 真实初始化、百度搜索返回链接成功 | search、fetchWebContent |
 | GitHub | [GitHub 官方 MCP](https://github.com/github/github-mcp-server)，[v2.0.2](https://github.com/github/github-mcp-server/releases/tag/v2.0.2) | get_me 确认 ZJ331456；读取本仓库 README 成功 | 身份、仓库/代码检索、文件、分支、提交、issue/PR 读取，共 8 个工具 |
-| 飞书 | [飞书官方 MCP](https://github.com/larksuite/lark-openapi-mcp)，`@larksuiteoapi/lark-mcp@0.5.1` | 已安装，OAuth 命令已配置；用户授权尚未完成，默认禁用 | 文档正文、云盘文件列表、知识库空间列表/节点读取，共 4 个工具 |
+| 飞书 | [飞书官方 MCP](https://github.com/larksuite/lark-openapi-mcp)，`@larksuiteoapi/lark-mcp@0.5.1` | qin 已完成 OAuth；知识空间列表与云盘列表真实调用成功，仅 qin 启用 | 文档正文、云盘文件列表、知识库空间列表/节点读取，共 4 个工具 |
 
 搜索无需付费 API key，但依赖搜索站点可访问性及限流。当前网络实测百度返回结果；Bing 相关性不足，早期 DuckDuckGo 方案未取得有效结果，故没有作为默认服务。返回网页链接只证明接线可用，内容仍需核对原始来源。
 
@@ -20,19 +20,19 @@ GitHub 使用 `--read-only` 并限制 toolsets；launcher 从 Git Credential Man
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/install_mcp.py
-.\.venv\Scripts\python.exe scripts/configure_mcp.py
-.\.venv\Scripts\python.exe scripts/check_mcp.py
+.\.venv\Scripts\python.exe scripts/configure_mcp.py --user qin
+.\.venv\Scripts\python.exe scripts/check_mcp.py --user qin
 ```
 
 - npm 依赖仅安装在 `.mcp/node`，版本与完整依赖锁在 `deploy/mcp/`；GitHub exe 位于 `.mcp/github`，下载按官方 release SHA256 校验。
-- 安装清单 `.mcp/installation.json`，实际调用记录 `data/reports/mcp-check.json`；这些本机文件不提交 Git。
-- `configure_mcp.py` 生成带绝对 Python/脚本路径及 cwd 的 `data/mcp_servers.json`，保留已配置开关和自定义服务。模板 `mcp_servers.example.json` 的相对命令仅适用于从仓库根目录启动。
-- 服务随 Memoria-Agent 启动，不另外启动公网监听。修改配置后通过 `POST /api/mcp/reload` 重载，`GET /api/mcp` 查看连接状态；启用 API 认证时携带已配置的管理员认证。
+- 安装清单 `.mcp/installation.json`，实际调用记录 `data/users/<UUID>/reports/mcp-check.json`；这些本机文件不提交 Git。
+- `configure_mcp.py` 生成带绝对 Python/脚本路径及 cwd 的 `data/users/<UUID>/config/mcp_servers.json`，保留已配置开关和自定义服务。模板 `mcp_servers.example.json` 的相对命令仅适用于从仓库根目录启动。
+- 服务随 Memoria-Agent 启动，不另外启动公网监听。修改配置后通过 `POST /api/mcp/reload` 重载，`GET /api/mcp` 查看连接状态；使用该用户的登录 Bearer 或 Cookie。
 - MCP 工具受项目工具注册、风险策略及按需工具搜索限制；工具发现列表可多于实际开放的白名单工具。
 
 ## 飞书详细教程：找到 App Secret 并完成本机授权
 
-核对日期：2026-10-11。以下是本项目已安装的官方 MCP 0.5.1 的授权流程；后台菜单名称可能调整，以页面实际显示为准。本节提供操作步骤，当前仍未完成你的账号授权。
+核对日期：2026-10-11。以下是本项目已安装的官方 MCP 0.5.1 的授权流程；后台菜单名称可能调整，以页面实际显示为准。本节提供操作步骤，当前 qin 已完成本机授权和两项只读业务检查。
 
 ### 1. 先确认你已有的是哪一种“飞书应用”
 
@@ -75,13 +75,7 @@ GitHub 使用 `--read-only` 并限制 toolsets；launcher 从 Git Credential Man
 | Verification Token / Encrypt Key / Webhook 签名密钥 | 用于其他事件/机器人场景，不填到 App Secret |
 | user_access_token | 浏览器 OAuth 后由官方工具取得并管理，用户不需要手动复制 |
 
-如果你问的是“以前是否已经存过本机凭据”，本项目约定的位置是 `C:\Users\zero\Desktop\Memory-Project\Memoria-Agent\.mcp\feishu.credentials.json`。可以只检查是否存在：
-
-```powershell
-Test-Path 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent\.mcp\feishu.credentials.json'
-```
-
-存在只说明文件已保存，不说明 Secret 有效、账号已授权或飞书 API 可用；没有保存过时请去后台获取。
+已存凭据位于该账号的 `data/users/<UUID>/secrets/feishu.credentials.dpapi`，UUID 由服务器生成。仅检查存在性，不打印文件内容；目录定位可参考本机 `data/users/owners.local.json`。旧全局明文凭据路径不再使用。
 
 ### 4. 配置 OAuth 回调地址
 
@@ -124,7 +118,7 @@ http://localhost:3000/callback
 
 ```powershell
 Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent'
-.\.venv\Scripts\python.exe scripts/configure_feishu.py
+.\.venv\Scripts\python.exe scripts/configure_feishu.py --user qin
 ```
 
 按顺序操作：
@@ -137,18 +131,18 @@ Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent'
 
 已安装的 0.5.1 本机授权处理器有约 **60 秒**的回调等待时间。可以先登录飞书浏览器页面、准备好凭据，再执行命令；超时则用后文的重新登录命令再试。
 
-凭据写入被 Git 忽略的 `.mcp/feishu.credentials.json`，应用密钥是本机 JSON 中的明文字段，文件不要分享或上传。launcher 只通过子进程环境传给官方工具；OAuth token 由官方工具另行管理，脚本不把 token 写入服务器配置或检查报告。不要将真实值填到提交用的示例文件或聊天中。[官方 CLI 的 login / 环境变量参数](https://github.com/larksuite/lark-openapi-mcp/blob/main/docs/reference/cli/cli.md)
+凭据写入被 Git 忽略的 `data/users/<UUID>/secrets/feishu.credentials.dpapi`，以当前 Windows 用户 DPAPI 加密，目录仅当前 Windows 用户与 SYSTEM 可读。launcher 只通过子进程环境传给官方工具；OAuth token 由官方 AES 加密存储和系统凭据管理器保护，使用该账号专属 profile，不写入服务器配置或检查报告。不要将真实值填到提交用的示例文件或聊天中。[官方 CLI 的 login / 环境变量参数](https://github.com/larksuite/lark-openapi-mcp/blob/main/docs/reference/cli/cli.md)
 
 如果你原本已有私密 JSON 配置，字段为 app_id、app_secret，可用绝对路径读取；路径需要替换为你的真实文件位置：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/configure_feishu.py --credentials-file 'C:\私密目录\feishu.json'
+.\.venv\Scripts\python.exe scripts/configure_feishu.py --user qin --credentials-file 'C:\私密目录\feishu.json'
 ```
 
 已有本项目凭据，仅重新授权时执行：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/configure_feishu.py --login-only
+.\.venv\Scripts\python.exe scripts/configure_feishu.py --user qin --login-only
 ```
 
 ### 8. 验证真实业务，再让 Memoria-Agent 使用
@@ -156,32 +150,19 @@ Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent'
 授权命令结束后执行：
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/check_mcp.py --server feishu
+.\.venv\Scripts\python.exe scripts/check_mcp.py --user qin --server feishu
 ```
 
-当前检查会初始化官方 MCP，发现工具，并以用户身份调用知识库空间列表 API。成功记录应包含：`initialized: true`、`business_call_ok: true`、`api_code: 0`，命令退出码为 0。返回空列表可能只是该用户没有可见知识库，并不必然是授权失败。
+当前检查会初始化官方 MCP，发现工具，并以用户身份调用知识库空间列表与云盘文件列表 API。成功记录应包含：`initialized: true`、`business_call_ok: true`、`response_valid: true`，命令退出码为 0。返回空列表可能只是该用户没有可见知识库，并不必然是授权失败。
 
-报告保存在 `data/reports/mcp-check.json`；检查脚本不保存文档正文或 token。它只验证该业务调用，不代表已测过所有 4 个工具或所有文档。飞书用户账号尚未完成本机 OAuth 时，本文不能作为成功记录。
+报告保存在 `data/users/<UUID>/reports/mcp-check.json`；检查脚本不保存文档正文或 token。它只验证该业务调用，不代表已测过所有 4 个工具或所有文档。本机检查结果为 0 个可见空间、24 个云盘文件；不保存文件名称或正文。
 
-configure_feishu 在官方登录命令返回成功后会将 `data/mcp_servers.json` 中 feishu 的 enabled 设为 true；**仍需以 check_mcp 结果确认实际访问**。然后：
+configure_feishu 在官方登录命令返回成功后会将 `data/users/<UUID>/config/mcp_servers.json` 中 feishu 的 enabled 设为 true；**仍需以 check_mcp 结果确认实际访问**。然后：
 
 - Memoria-Agent 尚未运行：正常启动服务，启动时加载配置。
-- 服务已经运行：使用默认本机端口调用重载与状态接口：
+- 服务已经运行：登录 qin 后，在 `/docs` 使用当前用户会话，执行 `POST /api/mcp/reload`，再查看 `GET /api/mcp`。不要用 App Secret 或旧全局 API Token 代替登录令牌。
 
-```powershell
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:2237/api/mcp/reload'
-Invoke-RestMethod -Method Get -Uri 'http://127.0.0.1:2237/api/mcp'
-```
-
-如果你启用了项目 API Token，上述请求需添加已配置的 Bearer 或 X-API-Key 认证。以下命令在终端隐藏输入**项目 API Token**，不要在这里输入飞书 App Secret：
-
-```powershell
-$memoriaApiToken = Read-Host 'Memoria API Token' -AsSecureString
-$memoriaHeaders = @{ Authorization = 'Bearer ' + ([System.Net.NetworkCredential]::new('', $memoriaApiToken).Password) }
-Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:2237/api/mcp/reload' -Headers $memoriaHeaders
-Invoke-RestMethod -Method Get -Uri 'http://127.0.0.1:2237/api/mcp' -Headers $memoriaHeaders
-Remove-Variable memoriaApiToken, memoriaHeaders
-```
+具体注册/登录、Bearer 和 qin 密码私密设置见 [用户隔离说明](用户登录与数据隔离.md)。新账号默认不配置 MCP；管理员必须明确指定账号执行 `configure_mcp.py --user USERNAME`，其飞书授权与数据存储独立。
 
 若服务端口已修改，用实际端口。返回的 feishu 状态应 connected 为 true，工具列表含 4 个允许的读取工具。只有之后实际读取目标文档成功，才能证明该文档的权限也已配置正确。
 
@@ -202,7 +183,7 @@ Remove-Variable memoriaApiToken, memoriaHeaders
 | 找不到 Node.js 或官方 CLI 文件 | 确认 node --version 可运行、.mcp 依赖已安装；必要时重新执行 install_mcp.py |
 | 登录后知识库列表为空 | 检查授权账号是否属于目标知识库；空列表不等于 API 调用失败 |
 | 知识库验证通过但目标文档仍读取失败 | 检查该账号对具体文档的分享/访问权限，以及文档类型；本项目正文工具针对 docx |
-| 重载项目 API 返回 401 | 使用项目 API Token 认证；这与飞书 App Secret 是两套凭据 |
+| 重载项目 API 返回 401 | 先登录 Memoria 账号并携带用户 Bearer 或 Cookie；这与飞书 App Secret 是两套凭据 |
 | Token 过期 / 授权撤销 / 新增 scope | 检查 offline_access 及应用权限，再执行 --login-only；Secret 已变则重新输入凭据 |
 
 只读查看端口占用：
@@ -218,7 +199,7 @@ Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
 
 主机最多并行初始化 4 个服务，支持 tools/list 分页、服务端 ping 和 JSON-RPC 请求区分；工具名超长或字符清洗时附加摘要以降低冲突。严格校验开关和超时；超时/取消关闭连接，失效工具移出注册表。Windows 下隐藏服务窗口，并在停止时清理 launcher 所属进程树。
 
-启动日志不打印凭据命令或上游 stderr 正文，检查报告仅保留身份、状态及公开搜索链接。工程验证见 `tests/test_mcp_lifecycle.py`；真实联网验证见 `scripts/check_mcp.py`，两种验证结果分别记录。2026-10-11 本机 Node.js 22.16.0；项目 Host 实际注册搜索 2 个/GitHub 8 个工具，ToolRegistry 中搜索与 get_me 调用成功，停止后注册表清空、没有发现遗留服务进程。飞书仍待用户授权。
+启动日志不打印凭据命令或上游 stderr 正文，检查报告仅保留身份、状态及公开搜索链接。工程验证见 `tests/test_mcp_lifecycle.py`；真实联网验证见 `scripts/check_mcp.py --user qin`，两种验证结果分别记录。2026-10-11 本机 Node.js 22.16.0；项目 Host 实际注册搜索 2 个/GitHub 8 个工具，ToolRegistry 中搜索与 get_me 调用成功，停止后注册表清空、没有发现遗留服务进程。飞书仍待用户授权。
 
 ## 其他免费候选：仅推荐，未部署
 

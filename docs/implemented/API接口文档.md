@@ -4,7 +4,7 @@
 
 ## 1. 文档范围
 
-本文描述 Memoria Agent `0.12.0` 本地 HTTP API（2026-10-09 更新分层记忆接口）。API 覆盖系统状态、会话、Agent 对话、个人分层记忆、共享记忆治理、工具调试、Tool Search、MCP、Drift 和运行追踪，不包含 Telegram、飞书、QQ 等外部通道。
+本文描述 Memoria Agent `0.12.0` 本地 HTTP API（2026-10-11 更新登录、用户隔离和真实数据接口）。API 覆盖系统状态、会话、Agent 对话、个人分层记忆、共享记忆治理、工具调试、Tool Search、MCP、Drift 和运行追踪，不包含 Telegram、飞书、QQ 等外部通道。
 
 共享记忆的数据流、权限边界和评测方法见 [记忆治理与多 Agent 共享记忆](./记忆治理与多Agent共享记忆.md)。
 
@@ -18,11 +18,15 @@
 
 ### 2.1 Request ID
 
-客户端可发送 `X-Request-ID`。没有发送时，服务端会生成 32 位十六进制 ID。所有响应均返回同名 header；错误体也包含 `request_id`，方便对应日志和 trace。
+客户端可发送 `X-Request-ID`。没有发送时，服务端会生成 32 位十六进制 ID。租户业务响应返回同名 header；错误体也包含 `request_id`，方便对应日志和 trace。
 
-### 2.2 可选认证与安全限制
+### 2.2 用户登录与安全限制
 
-配置 `[server.security].api_token` 后，除 `/api/health` 和独立认证的 `/api/shared/*` 外，API 与 `/metrics` 必须携带 `Authorization: Bearer <token>` 或 `X-API-Key`。`/api/shared/*` 始终要求 `X-Agent-Key`，并在存储层按 Agent 与空间角色鉴权；全局 API Token 不能代替 Agent key。治理管理员接口 `/api/governance/*` 使用全局 Token；未配置时仅允许本机回环连接。不安全方法带有 Origin 时必须匹配 `allowed_origins`。还可配置每 IP 每分钟限流和请求体上限。前端使用 `VITE_MEMORIA_API_TOKEN`，不要把真实值提交到 Git。
+正式入口强制登录：POST /api/auth/register、POST /api/auth/login、GET /api/auth/me、POST /api/auth/logout。登录返回 access_token（12 小时有效），业务请求携带用户 Bearer 或 HttpOnly Cookie；旧 X-API-Key 和单独 X-Agent-Key 不能绕过登录。健康与接口文档公开，/metrics 按用户登录隔离。
+
+/api/shared/* 登录后仍需该用户库中的 X-Agent-Key 与空间 ACL；共享治理是该用户内部的 Agent 协作域，不默认跨登录用户共享。模型配置的 PUT 接口仅内部核心可用，公开网关返回 403，由本机管理员维护模型文件。写请求检查 Origin / Sec-Fetch-Site、实际请求体大小及登录频率；远程访问必须 HTTPS。完整字段、目录、密码设置和范围见 [用户登录与隔离](用户登录与数据隔离.md)。
+
+GET /api/datasets 返回当前用户的真实语料 manifest；GET /api/datasets/{dataset_id} 返回该用户的导入来源映射，其他账号返回空列表或 404。
 
 ### 2.3 错误结构
 

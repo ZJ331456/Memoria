@@ -10,7 +10,7 @@
 Memoria-Agent/
 ├─ model/bge-small-zh-v1.5/      # Safetensors、tokenizer、配置与下载校验清单
 ├─ .venv/                      # 独立 Python 环境，不继承 base site-packages
-├─ data/models.override.toml   # 本机模型槽位配置，含凭据，已忽略
+├─ data/config/models.override.toml   # 本机模型槽位配置，含凭据，已忽略
 ├─ scripts/download_embedding.py
 └─ scripts/check_local_embedding.py
 ```
@@ -48,7 +48,7 @@ Get-Content .venv/pyvenv.cfg
 
 ## 配置与启动
 
-本机实际配置通过已有 `data/models.override.toml` 保存，Embedding 槽位为：
+本机实际配置通过已有 `data/config/models.override.toml` 保存，Embedding 槽位为：
 
 ```toml
 [memory.embedding]

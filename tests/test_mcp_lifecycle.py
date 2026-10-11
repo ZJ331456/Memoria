@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 
-from memoria.api import create_app
+from memoria.api.app import _create_tenant_app as create_app
 from memoria.mcp.client import McpClient
 from memoria.mcp.config import McpServerConfig, load_mcp_servers
 from memoria.mcp.host import McpHost, local_tool_name

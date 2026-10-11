@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from memoria.api import create_app
+from memoria.api.app import _create_tenant_app as create_app
 from memoria.memory import export_memories_markdown
 from memoria.observability import EventBus, RequestContext, current_session_id, snapshot
 from memoria.prompting import PromptAssembler

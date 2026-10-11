@@ -4,7 +4,7 @@
 
 A memory management HTTP service for small-model long-term companionship. It provides source-linked review, correction/restoration, validity intervals, hybrid retrieval, token-aware long-document indexing, layered context, independent shared governance, and local/remote OpenAI-compatible model interfaces.
 
-The chatbot frontend has been removed. Use the API, Swagger `/docs`, or experiment tools. Structured Claims, conditional user views and access routing remain research plans. Shared ACL does not yet establish multi-user isolation throughout the personal runtime.
+The chatbot frontend has been removed. Use the API, Swagger `/docs`, or experiment tools. Login selects an independent database, memory runtime, Markdown directory and MCP profile per account. Structured Claims, conditional user views and access routing remain research plans.
 
 ## Run from the repository root
 
@@ -22,14 +22,17 @@ For local BGE/Qwen, follow the [model guide](docs/implemented/本地与远程Ope
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/install_mcp.py
-.\.venv\Scripts\python.exe scripts/configure_mcp.py
-.\.venv\Scripts\python.exe scripts/check_mcp.py
-.\.venv\Scripts\python.exe scripts/prepare_real_dialogues.py --limit 50 --import-corpus
+.\.venv\Scripts\python.exe scripts/manage_users.py reserve qin
+.\scripts\protect_local_data.ps1
+.\.venv\Scripts\python.exe scripts/manage_users.py set-password qin
+.\.venv\Scripts\python.exe scripts/configure_mcp.py --user qin
+.\.venv\Scripts\python.exe scripts/check_mcp.py --user qin
+.\.venv\Scripts\python.exe scripts/prepare_real_dialogues.py --limit 50 --user qin
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
 MCP installs into `.mcp/` using project-local npm dependencies and the official GitHub binary. See [MCP and Feishu OAuth](docs/implemented/MCP部署与授权.md). Feishu needs private credentials and browser authorization; installation alone does not establish account access.
 
-The pinned LCCC-base subset contains 50 authentic public Weibo dialogues / 206 utterances, with an isolated corpus DB, source mappings and checksums. Stable speakers, event times and QA labels are unavailable; it cannot establish longitudinal companion quality. Synthetic trajectories, demo servers, old benchmark adapters and score reports have been removed. Engineering test inputs are not research data.
+The pinned LCCC-base subset contains 50 authentic public Weibo dialogues / 206 utterances in qin's account, with source mappings and checksums. Ownership does not assert authorship. Stable speakers, event times and QA labels are unavailable; it cannot establish longitudinal companion quality. Old personal history remains archived and unimported. Synthetic trajectories, demo servers, old benchmark adapters and score reports have been removed. Engineering test inputs are not research data. See the [login and privacy guide](docs/implemented/用户登录与数据隔离.md); qin is reserved until you privately set its password.
 
 See the [documentation index](docs/README.md) and [GitHub rules](docs/implemented/github提交规范.md). Secrets, weights, databases, raw dialogues and runtime dependencies stay ignored locally.

@@ -12,7 +12,8 @@
 - 独立共享空间 ACL、提案审批、CAS 版本治理与来源核对；共享身份尚未贯穿旧个人聊天运行时。
 - 本地 Qwen/BGE 与远程 OpenAI 兼容接口、SSE、工具循环、取消和租约 worker。
 - 真实 MCP 接入、工具搜索/授权、trace、阶段计时和实验账本。
-- 50 段/206 条真实公开微博对话，保存在独立语料库，不充当个人画像或长期陪伴成绩。
+- 注册登录、按账号独立数据库/Markdown/来源/后台任务和 MCP；旧个人历史单独封存。
+- qin 空间内 50 段/206 条真实公开微博对话，保留未知说话者，不充当个人画像或长期陪伴成绩。
 
 能力和限制见 [架构](docs/implemented/系统架构与实现说明.md)、[API](docs/implemented/API接口文档.md)和 [真实数据](docs/implemented/真实对话数据与实验入口.md)。
 
@@ -29,7 +30,7 @@ Copy-Item config.example.toml config.toml
 .\.venv\Scripts\python.exe main.py --host 127.0.0.1 --port 2237
 ```
 
-服务根路径返回 JSON；`/docs` 为 Swagger，`/api/health` 为存活检查。私人库和公开语料库是独立文件，storage 路径决定使用哪个库。
+服务根路径返回 JSON；`/docs` 为 Swagger，`/api/health` 为存活检查。先注册/登录，业务请求使用用户 Bearer 或 Cookie；所有业务库按账号 UUID 隔离。qin 已预留，用 `scripts/manage_users.py set-password qin` 私密设置登录密码。目录整理、文件保护和登录步骤见 [用户隔离](docs/implemented/用户登录与数据隔离.md)。
 
 本地模型在 `model/bge-small-zh-v1.5` 和 `model/Qwen3.5-2B`。新机器按 [Embedding 配置](docs/implemented/本地Embedding配置.md)与 [统一模型接口](docs/implemented/本地与远程OpenAI统一接口.md)安装依赖和启动。main/fast 可使用 `Qwen3.5-2B`、`http://127.0.0.1:8080/v1`；embedding 可使用 `bge-small-zh-v1.5` 和同一地址。远程 API 通过同一业务接口配置，不默认发起收费调用。
 
@@ -37,9 +38,11 @@ Copy-Item config.example.toml config.toml
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/install_mcp.py
-.\.venv\Scripts\python.exe scripts/configure_mcp.py
-.\.venv\Scripts\python.exe scripts/check_mcp.py
-.\.venv\Scripts\python.exe scripts/prepare_real_dialogues.py --limit 50 --import-corpus
+.\.venv\Scripts\python.exe scripts/manage_users.py reserve qin
+.\scripts\protect_local_data.ps1
+.\.venv\Scripts\python.exe scripts/configure_mcp.py --user qin
+.\.venv\Scripts\python.exe scripts/check_mcp.py --user qin
+.\.venv\Scripts\python.exe scripts/prepare_real_dialogues.py --limit 50 --user qin
 ```
 
 安装位置、验证状态与飞书私密输入/OAuth 见 [MCP 部署](docs/implemented/MCP部署与授权.md)。只部署搜索/GitHub/飞书，其他免费服务由用户选择后再部署。

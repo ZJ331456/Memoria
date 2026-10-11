@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from memoria.private_files import load_private_json
 RUNTIME = ROOT / ".mcp"
 FEISHU_TOOLS = "docx.v1.document.rawContent,drive.v1.file.list,wiki.v2.space.list,wiki.v2.space.getNode"
 FEISHU_SCOPE = "offline_access docx:document:readonly drive:drive:readonly wiki:wiki:readonly"
@@ -36,12 +38,14 @@ def command(server: str, login: bool = False):
             env["GITHUB_PERSONAL_ACCESS_TOKEN"] = fields["password"]
         return [str(RUNTIME / "github/github-mcp-server.exe"), "stdio", "--read-only", "--toolsets", "context,repos,issues,pull_requests"], env
     if server == "feishu":
-        secret_file = RUNTIME / "feishu.credentials.json"
-        if secret_file.exists():
-            secret = json.loads(secret_file.read_text(encoding="utf-8-sig"))
-            env["APP_ID"], env["APP_SECRET"] = secret["app_id"], secret["app_secret"]
-        if not env.get("APP_ID") or not env.get("APP_SECRET"):
+        if not env.get("MEMORIA_FEISHU_CREDENTIALS") or not env.get("MEMORIA_FEISHU_PROFILE"):
             raise ValueError("Feishu credentials missing; run scripts/configure_feishu.py in your terminal")
+        # Never fall back to another account's global credentials or token store.
+        # env-paths uses LOCALAPPDATA on Windows for the official encrypted store.
+        env["LOCALAPPDATA"] = env["MEMORIA_FEISHU_PROFILE"]
+        env["APPDATA"] = env["MEMORIA_FEISHU_PROFILE"]
+        secret = load_private_json(Path(env["MEMORIA_FEISHU_CREDENTIALS"]))
+        env["APP_ID"], env["APP_SECRET"] = secret["app_id"], secret["app_secret"]
         node = shutil.which("node")
         if not node:
             raise ValueError("Node.js is missing")
