@@ -12,8 +12,7 @@ from typing import Any, Literal
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..config import Settings
@@ -843,14 +842,9 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
 
     app.include_router(governance_router(governance, store, settings))
     _register_round13(app)
-    dist = settings.root / "frontend" / "dist"
-    if dist.exists():
-        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
-        @app.get("/{path:path}", include_in_schema=False)
-        def spa(path: str):
-            candidate = (dist / path).resolve()
-            if path and candidate.is_relative_to(dist.resolve()) and candidate.is_file(): return FileResponse(candidate)
-            return FileResponse(dist / "index.html")
+    @app.get("/", include_in_schema=False)
+    def service_index():
+        return {"service": "Memoria-Agent", "docs": "/docs", "health": "/api/health", "memories": "/api/memories"}
     return app
 
 

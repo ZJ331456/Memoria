@@ -70,9 +70,11 @@ api_key="x"
 base_url="http://example.test/v1"
 [agent.skills]
 enabled=true
-directory="{skills_root}"
+directory="{skills_root.as_posix()}"
+[agent.mcp]
+enabled=false
 [storage]
-database="{tmp_path / 'skills.db'}"
+database="{(tmp_path / 'skills.db').as_posix()}"
 ''',
         encoding="utf-8",
     )

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import logging
+import asyncio
+import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,7 +20,11 @@ _SAFE = re.compile(r"[^a-zA-Z0-9_]+")
 def local_tool_name(server: str, remote: str) -> str:
     safe_server = _SAFE.sub("_", server).strip("_") or "mcp"
     safe_tool = _SAFE.sub("_", remote).strip("_") or "tool"
-    return f"mcp_{safe_server}_{safe_tool}"
+    value = f"mcp_{safe_server}_{safe_tool}"
+    if len(value) > 64 or safe_server != server or safe_tool != remote:
+        suffix = hashlib.sha256(f"{server}\0{remote}".encode()).hexdigest()[:10]
+        return f"{value[:53]}_{suffix}"
+    return value
 
 
 @dataclass(slots=True)
@@ -75,10 +81,19 @@ class McpHost:
         return await self.connect_all()
 
     async def connect_all(self) -> list[McpServerStatus]:
-        statuses: list[McpServerStatus] = []
-        for config in self._configs.values():
-            statuses.append(await self._connect_one(config))
-        return statuses
+        semaphore = asyncio.Semaphore(4)
+        async def connect(config):
+            async with semaphore:
+                return await self._connect_one(config)
+        tasks = [asyncio.create_task(connect(c)) for c in self._configs.values()]
+        try:
+            return list(await asyncio.gather(*tasks))
+        except BaseException:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await self.stop()
+            raise
 
     async def reload(self) -> list[McpServerStatus]:
         await self.stop()
@@ -118,6 +133,8 @@ class McpHost:
             status.tools = registered
             status.error = ""
         except Exception as exc:
+            self._clients.pop(config.name, None)
+            self._unregister_server(config.name)
             status.error = f"{type(exc).__name__}: {exc}"
             logger.warning("[mcp] 连接 %s 失败: %s", config.name, status.error)
             try:
@@ -182,6 +199,12 @@ class McpHost:
         self._registered.pop(name, None)
 
     def status(self) -> dict[str, Any]:
+        for name, client in self._clients.items():
+            if not client.connected:
+                self._status[name].connected = False
+                self._status[name].error = "process stopped; reload required"
+                self._status[name].tools = []
+                self._unregister_server(name)
         return {
             "enabled": self.enabled,
             "config_path": str(self.config_path),

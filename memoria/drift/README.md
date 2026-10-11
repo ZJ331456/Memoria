@@ -17,7 +17,7 @@ Drift 将 `skip_memory_enqueue=True`，不触发普通聊天的自动提取任�
 
 ## 配置与边界
 
-[config.example.toml](../../config.example.toml) 的 `[agent.drift]` 默认 `enabled=false`；可配置 `min_idle_seconds`、`interval_seconds`、`max_steps`、`daily_budget`、`quiet_hours`、`allowed_skills`、`allow_write_tools` 和 `timezone`。配置兼容旧 `[proactive.drift]` 字段。执行仍依赖模型与可用技能；Drift 不会自动向独立的 [多 Agent 共享记忆](../../docs/记忆治理与多Agent共享记忆.md)写提议。
+[config.example.toml](../../config.example.toml) 的 `[agent.drift]` 默认 `enabled=false`；可配置 `min_idle_seconds`、`interval_seconds`、`max_steps`、`daily_budget`、`quiet_hours`、`allowed_skills`、`allow_write_tools` 和 `timezone`。配置兼容旧 `[proactive.drift]` 字段。执行仍依赖模型与可用技能；Drift 不会自动向独立的 [多 Agent 共享记忆](../../docs/implemented/记忆治理与多Agent共享记忆.md)写提议。
 
 ## 从仓库根目录验证
 

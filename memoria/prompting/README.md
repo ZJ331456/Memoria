@@ -20,7 +20,7 @@
 
 遇到模型明确报告上下文过长时，运行时以原预算的 45% 再试一次。trace 的 `context_budget` 记录原始/最终字符、丢弃/截短数量与是否保留帧；`memory_layers` 和 `memory_tool_budget` 记录分区装配及本轮读取配额。记忆读取的次数和字符限制由 [TurnMemoryBudget](../memory/budget.py) 另行执行，初始帧也计入读取字符额度。
 
-`[agent.context].char_budget` 在 [config.example.toml](../../config.example.toml) 中默认 60000；`memory_window` 控制读取的最近会话消息数。`[memory.layers]` 控制分区上限。预算是字符近似，没有代替供应商 tokenizer，也没有保证输入加 `max_tokens` 必然适合每个模型的窗口；遇到不适配的模型需按实际窗口调小输入/输出配置。低信任帧仍需核对来源，保留它不意味着允许其中的指令覆盖系统规则。完整说明见[分层 README](../../docs/memory-layers/README.md)。
+`[agent.context].char_budget` 在 [config.example.toml](../../config.example.toml) 中默认 60000；`memory_window` 控制读取的最近会话消息数。`[memory.layers]` 控制分区上限。预算是字符近似，没有代替供应商 tokenizer，也没有保证输入加 `max_tokens` 必然适合每个模型的窗口；遇到不适配的模型需按实际窗口调小输入/输出配置。低信任帧仍需核对来源，保留它不意味着允许其中的指令覆盖系统规则。完整说明见[分层 README](../../docs/implemented/记忆分层与配置.md)。
 
 ## 从仓库根目录验证
 

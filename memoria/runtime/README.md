@@ -1,6 +1,6 @@
 # Runtime：个人 Agent 对话编排
 
-[返回核心包](../README.md) · [生命周期](../lifecycle/README.md) · [Prompting](../prompting/README.md) · [共享治理](../../docs/记忆治理与多Agent共享记忆.md)
+[返回核心包](../README.md) · [生命周期](../lifecycle/README.md) · [Prompting](../prompting/README.md) · [共享治理](../../docs/implemented/记忆治理与多Agent共享记忆.md)
 
 ## 文件映射
 

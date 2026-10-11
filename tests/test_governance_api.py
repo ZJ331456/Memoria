@@ -11,7 +11,7 @@ def _client(tmp_path: Path) -> TestClient:
         f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n'''
         f'''[server.security]\napi_token="admin-secret"\n'''
         f'''[agent.mcp]\nenabled=false\n'''
-        f'''[storage]\ndatabase="{tmp_path / 'governance.db'}"\n''',
+        f'''[storage]\ndatabase="{(tmp_path / 'governance.db').as_posix()}"\n''',
         encoding="utf-8",
     )
     return TestClient(create_app(config))

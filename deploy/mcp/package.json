@@ -1,0 +1,5 @@
+{
+  "name": "memoria-local-mcp",
+  "private": true,
+  "dependencies": {"@larksuiteoapi/lark-mcp": "0.5.1", "open-websearch": "2.2.0"}
+}

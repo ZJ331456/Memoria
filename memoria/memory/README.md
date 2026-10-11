@@ -1,12 +1,12 @@
 # Memory：个人分层记忆与治理
 
-[返回核心包](../README.md) · [运行时](../runtime/README.md) · [共享治理](../../docs/记忆治理与多Agent共享记忆.md)
+[返回核心包](../README.md) · [运行时](../runtime/README.md) · [共享治理](../../docs/implemented/记忆治理与多Agent共享记忆.md)
 
 本模块服务**个人对话运行时**。共享 Agent 空间另由 [../governance.py](../governance.py) 管理，尚未接入 `MemoryEngine.retrieve` 或个人 `memorize` 工具。
 
 ## 分层总览
 
-参考用户提供的 *Agent Memory - The 5-Layer Playbook*，并核对 CoALA、MemGPT、LangGraph、Letta 等一手资料，采用以下职责分工。**遗忘是跨层治理机制**，不是再复制一份记忆。完整中文解释、PDF 思想改写和来源核验见[记忆分层 README](../../docs/memory-layers/README.md)。
+参考用户提供的 *Agent Memory - The 5-Layer Playbook*，并核对 CoALA、MemGPT、LangGraph、Letta 等一手资料，采用以下职责分工。**遗忘是跨层治理机制**，不是再复制一份记忆。完整中文解释、PDF 思想改写和来源核验见[记忆分层 README](../../docs/implemented/记忆分层与配置.md)。
 
 | 层 | 本项目的实现 | 读取与治理 |
 | --- | --- | --- |
@@ -23,7 +23,7 @@
 | [planner.py](planner.py) | `MemoryQueryPlanner` 门控、可选 fast 模型改写查询/类型/数量 |
 | [engine.py](engine.py) | `MemoryEngine` 写入去重、替代、纠正、关键词/BM25/可选向量检索、图扩展和时间查询 |
 | [embedding.py](embedding.py) | 远程 `/embeddings` 或本地 BGE 分派，区分查询与文档编码、分批与超时 |
-| [local_bge.py](local_bge.py) | 中文 BGE small v1.5 的离线 CUDA/CPU 编码、模型指纹和有界串行队列；[配置说明](../../docs/本地Embedding配置.md) |
+| [local_bge.py](local_bge.py) | 中文 BGE small v1.5 的离线 CUDA/CPU 编码、模型指纹和有界串行队列；[配置说明](../../docs/implemented/本地Embedding配置.md) |
 | [worker.py](worker.py) | 会话结束后领取持久任务，提取候选并写入审核队列 |
 | [episodic.py](episodic.py) | `EpisodicMemory` 记录真实来源任务、相关性召回、固定保留、归档和事件 |
 | [forgetting.py](forgetting.py) | 后台情景 TTL/容量维护；取消后再关闭数据库 |
@@ -36,7 +36,7 @@
 
 `AgentRuntime` 保存回复后，以用户消息 ID 为 `source_ref` 投递 `memory_jobs`。`MemoryJobWorker` 使用租约与 heartbeat 领取任务，调用 [LLMClient](../llm/client.py) 提取候选，存入 `memory_reviews`。**任务完成只表示提取完成，候选尚未生效**；未批准内容不参与检索或 prompt。
 
-用户通过 `GET /api/memory-reviews` 查看候选与来源 ID，再用消息来源接口核对原始对话，可编辑正文、类型和重要度后调用 `POST /api/memory-reviews/{id}/approve`，或拒绝。批准才调用 `MemoryEngine.remember`；审核状态在 `pending → applying → approved` 间推进，失败或重启时恢复待审。`GET /api/messages/{id}/source` 与带 `anchor_id` 的会话消息接口定位来源。撤销已批准来源可先用 `POST /api/memories/undo` 的 dry-run 预览。详见[审核与来源定位](../../docs/自动记忆审核与来源定位.md)。
+用户通过 `GET /api/memory-reviews` 查看候选与来源 ID，再用消息来源接口核对原始对话，可编辑正文、类型和重要度后调用 `POST /api/memory-reviews/{id}/approve`，或拒绝。批准才调用 `MemoryEngine.remember`；审核状态在 `pending → applying → approved` 间推进，失败或重启时恢复待审。`GET /api/messages/{id}/source` 与带 `anchor_id` 的会话消息接口定位来源。撤销已批准来源可先用 `POST /api/memories/undo` 的 dry-run 预览。详见[审核与来源定位](../../docs/implemented/自动记忆审核与来源定位.md)。
 
 ## 写入、检索和版本
 
@@ -46,7 +46,7 @@
 
 创建、替代、纠正和来源撤销在 Store 事务内维护 `memory_validity_intervals`。区间采用 `[valid_at,invalid_at)`；撤销后恢复旧记忆会新增区间，不抹掉中间版本曾生效的历史。指定 `as_of` 后，FTS/词面、BM25、向量和图扩展都受时间约束；历史 Dense 在候选内扫描，图扩展按边权累计后重排。BM25 使用真实词频和词元长度。用户显式 `evolve` 会生成替代版本，自动规则只保守识别同一语句的否定或数值变化。
 
-`memory_embeddings` 按模型命名空间和维度保留向量；切换模型不清空旧向量，同维度不同模型也隔离。本地 BGE 的长记忆按 tokenizer 分块，在 `memory_embedding_chunks` 保存完整原文 span 与独立向量，按父版本最大块相似度检索；父版本的更正、撤销、删除和时间查询同时约束块索引。Prompt 和 recall 工具优先使用命中片段。重索引除缺失/维度不符外，也会补旧单向量记忆缺失的块索引；批次校验失败不会部分保存，延迟回填校验父版本仍活动且正文一致。详情见[分块与实验记录](../../docs/实验记录与长记忆分块索引.md)。模型热切换后旧回填批次跳过，原模型向量不会误入新索引。迁移、召回窗口和完整双时态的边界见[一致性与检索审查](../../docs/记忆一致性与检索审查.md)。
+`memory_embeddings` 按模型命名空间和维度保留向量；切换模型不清空旧向量，同维度不同模型也隔离。本地 BGE 的长记忆按 tokenizer 分块，在 `memory_embedding_chunks` 保存完整原文 span 与独立向量，按父版本最大块相似度检索；父版本的更正、撤销、删除和时间查询同时约束块索引。Prompt 和 recall 工具优先使用命中片段。重索引除缺失/维度不符外，也会补旧单向量记忆缺失的块索引；批次校验失败不会部分保存，延迟回填校验父版本仍活动且正文一致。详情见[分块与实验记录](../../docs/implemented/实验记录与长记忆分块索引.md)。模型热切换后旧回填批次跳过，原模型向量不会误入新索引。迁移、召回窗口和完整双时态的边界见[一致性与检索审查](../../docs/implemented/记忆一致性与检索审查.md)。
 
 `MEMORY.md` 从有效结构化记忆重建，不是独立写入源；`SELF.md` 可作为 prompt 上下文。`PENDING.md` 是历史 Markdown 层及 Drift 摘要容器，**自动提取审核队列以 SQLite 为准**。
 
@@ -58,11 +58,10 @@
 
 删除会话时，原始消息、对应情景、压缩摘要、抽取任务和审核候选一并清理。**已批准语义记忆与来源操作账本仍保留**，删除会话不代表已完成所有事实的遗忘；要移除事实需使用记忆删除/撤销 API。来源丢失的候选不能继续批准。
 
-`GET /api/memory-layers` 查看配置与统计，`GET /api/episodes` 管理记录，`GET /api/episodes/{id}` 取得来源指针，`PATCH /api/episodes/{id}` 固定或归档，`POST /api/episodes/maintenance` 预览或执行维护。详细请求见[API 文档](../../docs/API接口文档.md)。这些接口属于个人数据域，使用全局 API Token；共享 `X-Agent-Key` 不授予访问权限。
+`GET /api/memory-layers` 查看配置与统计，`GET /api/episodes` 管理记录，`GET /api/episodes/{id}` 取得来源指针，`PATCH /api/episodes/{id}` 固定或归档，`POST /api/episodes/maintenance` 预览或执行维护。详细请求见[API 文档](../../docs/implemented/API接口文档.md)。这些接口属于个人数据域，使用全局 API Token；共享 `X-Agent-Key` 不授予访问权限。
 
 ## 配置与边界
 
-[config.example.toml](../../config.example.toml) 中 `[memory.embedding]` 配置模型；`[memory.retrieval]` 控制 `vector_backend`（`auto/sqlite-vec/json`）与 JSON 扫描上限；`[memory.worker]` 控制租约、重试和退避；`[memory.markdown]` 控制文件投影。`sqlite-vec` 是可选依赖，未启用时使用有限范围的 JSON 向量扫描。Embedding 客户端默认单批 10 条，兼容当前百炼 text-embedding-v3 的限制。工程回归的小型种子集已移至 `tests/regression/`；[公开评测](../../eval/README.md)采用 LongMemEval、LoCoMo 与 GateMem 的固定五条样本，支持实际问答、分层来源与治理指标，仍不能代表真实长期使用的准确率。
 
 `[memory.layers]` 默认为语义 3000、情景 1800、程序 2400、摘要 2000、目录 1200、SELF 1200 字符，整体帧 12000 字符。每轮 `recall_memory/recall_episodes/search_history/load_skill` 最多 6 次，初始帧和读取返回共享 12000 字符配额；这些都是近似成本控制，不是精确 token。`enabled=false` 关闭新增分层装配与配额，`episodic_enabled=false` 只关闭新情景记录/召回/维护；既有个人事实审核保持可用。
 
@@ -71,6 +70,4 @@
 ```bash
 python -m pytest -q tests/test_memory_review.py tests/test_memory_retrieval_scale.py tests/test_core.py
 python -m pytest -q tests/test_episodic_memory.py tests/test_layered_context_budget.py tests/test_memory_layers_integration.py
-python -m tests.regression.run_seeded --min-recall 0.75
-python -m tests.regression.run_memory_layers --min-pass-rate 1
 ```

@@ -110,8 +110,10 @@ def test_markdown_export_and_api(tmp_path: Path):
 model="test"
 api_key="x"
 base_url="http://example.test/v1"
+[agent.mcp]
+enabled=false
 [storage]
-database="{tmp_path / 'api-md.db'}"
+database="{(tmp_path / 'api-md.db').as_posix()}"
 ''',
         encoding="utf-8",
     )

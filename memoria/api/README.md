@@ -1,12 +1,12 @@
 # API：HTTP 与治理边界
 
-[返回核心包](../README.md) · [个人运行时](../runtime/README.md) · [共享治理](../../docs/记忆治理与多Agent共享记忆.md) · [完整接口](../../docs/API接口文档.md)
+[返回核心包](../README.md) · [个人运行时](../runtime/README.md) · [共享治理](../../docs/implemented/记忆治理与多Agent共享记忆.md) · [完整接口](../../docs/implemented/API接口文档.md)
 
 ## 文件映射
 
 | 文件 | 职责 |
 |---|---|
-| [app.py](app.py) | `create_app`、Pydantic 契约、中间件、系统/会话/聊天/个人记忆/工具/Drift/MCP/Skills 路由、静态前端托管 |
+| [app.py](app.py) | `create_app`、Pydantic 契约、中间件、系统/会话/聊天/个人记忆/工具/Drift/MCP/Skills 路由、JSON 服务入口 |
 | [governance.py](governance.py) | Agent 注册与密钥管理、空间授权、共享记忆提议/审批/检索/撤回及审计路由 |
 | [__init__.py](__init__.py) | 稳定导出 `create_app` |
 | [../security.py](../security.py) | 请求体上限、Origin、可选服务 Token 和限流 |
@@ -17,7 +17,7 @@
 2. 中间件分配 `X-Request-ID`、执行 `RequestGate` 并记录 HTTP 指标。请求体用 Pydantic 校验；校验错误与显式业务异常返回 `{code, message, request_id}`。
 3. 聊天路由调用 `AgentService.chat_with_trace`；流式路由发送 SSE。每个会话用独立锁限制并发 turn，取消路由停止活动任务。
 4. 个人记忆路由使用 [MemoryEngine](../memory/README.md) 和审核队列；共享路由由 `X-Agent-Key` 认证，再由治理层在每次操作时执行空间 ACL。管理员创建/禁用/轮换 Agent key 及导入旧记忆走 `/api/governance`。
-5. 生命周期启动/停止 MCP、自动记忆 worker、情景归档维护和 Drift worker；取消后台任务后关闭数据库，存在 `frontend/dist` 时托管构建产物。
+5. 生命周期启动/停止 MCP、自动记忆 worker、情景归档维护和 Drift worker；取消后台任务后关闭数据库；根路径返回 JSON 导航。
 
 ## 主要路径与边界
 

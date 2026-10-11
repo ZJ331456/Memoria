@@ -17,7 +17,7 @@
 
 `EventBus` 派发 `turn.before`、`turn.after_step`、`turn.failed` 等事件；监听器异常会记录日志，不使 turn 失败。它仅在当前进程内运行，不是持久化消息队列。
 
-trace metadata 新增 `stage_timings` 与 `ttft`：压缩/planner、检索/编码/候选/融合、prompt、reader 和工具执行按实际路径计时。TTFT 只观察非空可见流式文本，排除 reasoning/tool delta，非流式为 null。实验的抽取/决策/回答角色及写入分块耗时另见[实验记录](../../docs/实验记录与长记忆分块索引.md)，未执行阶段不伪造零耗时结果。
+trace metadata 新增 `stage_timings` 与 `ttft`：压缩/planner、检索/编码/候选/融合、prompt、reader 和工具执行按实际路径计时。TTFT 只观察非空可见流式文本，排除 reasoning/tool delta，非流式为 null。实验的抽取/决策/回答角色及写入分块耗时另见[实验记录](../../docs/implemented/实验记录与长记忆分块索引.md)，未执行阶段不伪造零耗时结果。
 
 API 中间件写入请求 ID 与 HTTP 计数；`GET /metrics` 根据进程计数和 Store 的统计生成文本指标。HTTP 计数随进程重启清零，trace 保存在 SQLite。`[observability].metrics_enabled` 控制指标端点是否开放；服务 Token 启用时端点受同一认证保护。
 

@@ -1,6 +1,4 @@
 import asyncio
-import argparse
-import copy
 import json
 import subprocess
 from contextlib import closing
@@ -14,7 +12,6 @@ from memoria.experiments.roles import ExperimentLLM, load_roles
 from memoria.observability.timing import StageTimings
 from memoria.observability.tracing import TurnTracer
 from memoria.store import Store
-from tests.regression.run_companion import DIRECTORY, run, score_predictions, system_trajectories
 
 
 def test_nested_timers_count_failures_and_do_not_share_state(monkeypatch):
@@ -71,53 +68,10 @@ def test_manifest_hashes_actual_files_and_retains_failed_denominator(tmp_path):
     assert safe_endpoint("https://user:password@host.test/v1?key=secret#secret") == "https://host.test/v1"
 
 
-def test_extraction_inputs_do_not_contain_reviewed_writes_or_labels():
-    data = json.loads((DIRECTORY / "companion_inputs.json").read_text(encoding="utf-8"))
-    data["trajectories"][0]["events"][0]["expected_answer"] = "hidden"
-    supplied = system_trajectories(data, "extracted")
-    assert "reviewed" not in json.dumps(supplied) and "hidden" not in json.dumps(supplied)
-    assert len(supplied) == 4
-    broken = copy.deepcopy(data)
-    broken["trajectories"][0]["probes"][0]["after"] = "future_missing_event"
-    with pytest.raises(ValueError, match="checkpoint"):
-        system_trajectories(broken, "extracted")
-    broken = copy.deepcopy(data)
-    broken["trajectories"][0]["id"] = "../outside"
-    with pytest.raises(ValueError, match="safe file"):
-        system_trajectories(broken, "reviewed")
 
 
-def test_failed_cases_remain_in_metrics_and_duplicate_ids_rejected():
-    label = {"required_sources": ["source"], "forbidden_sources": [], "answer_any": ["北京"], "answer_forbidden": []}
-    rows = [{"id": "one", "retrieved_sources": ["source"], "answer": "北京", "error": None},
-            {"id": "two", "retrieved_sources": [], "answer": None, "error": "timeout"}]
-    metrics = score_predictions(rows, {"cases": {"one": label, "two": label}}, True)
-    assert metrics["requested_cases"] == 2 and metrics["errors"] == 1
-    assert metrics["source_check_rate_all_requested"] == .5 and metrics["semantic_qa_accuracy"] is None
-    with pytest.raises(ValueError):
-        score_predictions([rows[0], rows[0], rows[1]], {"cases": {"one": label, "two": label}}, True)
 
 
-def test_aborted_run_records_every_unattempted_case(tmp_path, monkeypatch):
-    config = tmp_path / "config.toml"
-    config.write_text(f'[storage]\ndatabase="{(tmp_path / "unused.db").as_posix()}"\n', encoding="utf-8")
-    params = argparse.Namespace(config=config, roles=DIRECTORY / "companion_roles.toml",
-        inputs=DIRECTORY / "companion_inputs.json", gold=DIRECTORY / "companion_gold.json",
-        mode="reviewed", reader=False, embedding=False, allow_remote=False, out=tmp_path / "runs",
-        vector_backend="json", seed=17)
-
-    def fail_store(*args):
-        raise RuntimeError("database unavailable")
-
-    monkeypatch.setattr("tests.regression.run_companion.Store", fail_store)
-    with pytest.raises(RuntimeError, match="database unavailable"):
-        asyncio.run(run(params))
-    path = next(params.out.iterdir())
-    metrics = json.loads((path / "metrics.json").read_text())
-    assert metrics["requested_cases"] == metrics["errors"] == 8
-    assert metrics["completed_cases"] == 0 and not metrics["scoring_complete"]
-    cases = [json.loads(line) for line in (path / "cases.jsonl").read_text(encoding="utf-8").splitlines()]
-    assert len(cases) == len({row["id"] for row in cases}) == 8
 
 
 @pytest.mark.parametrize("stream", [False, True])
@@ -126,7 +80,7 @@ def test_roles_send_explicit_generation_settings_and_record_actual_usage(tmp_pat
     config.write_text(f'[storage]\ndatabase="{(tmp_path / "isolated.db").as_posix()}"\n'
                       '[llm.main]\nmodel="reader-model"\nbase_url="http://127.0.0.1:8080/v1"\n'
                       '[llm.fast]\nmodel="fast-model"\nbase_url="http://127.0.0.1:8080/v1"\n', encoding="utf-8")
-    roles = load_roles(DIRECTORY / "companion_roles.toml")
+    roles = load_roles(None)
     recorded = []
 
     class Recorder:

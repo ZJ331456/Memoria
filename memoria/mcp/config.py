@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -80,16 +81,22 @@ def load_mcp_servers(path: Path) -> list[McpServerConfig]:
         risk = str(item.get("risk", "write"))
         if risk not in {"read-only", "write", "external-side-effect"}:
             raise ValueError(f"mcp server {name}: risk 无效")
+        enabled = item.get("enabled", True)
+        timeout = float(item.get("timeout_seconds", 30))
+        if not isinstance(enabled, bool):
+            raise ValueError(f"mcp server {name}: enabled 必须是布尔值")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError(f"mcp server {name}: timeout_seconds 必须为有限正数")
         result.append(
             McpServerConfig(
                 name=name,
                 command=tuple(str(part) for part in command),
                 cwd=cwd,
                 env=env,
-                enabled=bool(item.get("enabled", True)),
+                enabled=enabled,
                 allowed_tools=tuple(str(value) for value in allowed),
                 risk=risk,
-                timeout_seconds=float(item.get("timeout_seconds", 30)),
+                timeout_seconds=timeout,
             )
         )
     return result

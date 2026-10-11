@@ -1,228 +1,56 @@
-<p align="right"><strong>简体中文</strong> · <a href="./README.en.md">English</a></p>
+# Memoria-Agent
 
-# Memoria Agent
+[English](README.en.md) · [功能说明与研究计划](docs/README.md) · [AI 项目指令](AGENTS.md)
 
-**一个可审核、可追溯、可授权给多个 Agent 使用的本地记忆系统。** 它让人决定哪些事实能成为共享记忆、谁能读取，以及何时纠正或撤销。个人 Agent 工作台仍可用来产生和检查记忆。
+面向小模型长期陪伴的记忆管理服务。核心工作是保存可追溯的来源、审核候选、纠正与恢复版本、理解变化并快速访问证据。当前以 HTTP API 和实验工具为入口，聊天前端已移除；待验证的 Claim、用户视图和路由见 [研究计划](docs/plans/长期陪伴记忆研究与实验计划书.md)。
 
-> Agent 提案 → 人工审核 → 按空间授权共享 → 冲突版本确认 → 撤销与审计
+## 已实现
 
-Memoria 默认本地运行，数据保存在 SQLite；只有聊天和自动提取等模型能力会请求你配置的 OpenAI 兼容服务。共享记忆治理 API 不依赖模型即可运行。
+- 个人记忆的来源定位、审核、去重强化、纠正、撤销、历史有效区间和 Markdown 投影。
+- FTS/中文 BM25/Dense/RRF、图扩展与独立模型空间；BGE 长文分块、事务索引和命中片段。
+- 工作/情景/语义/程序层与上下文预算、来源清理和情景维护。
+- 独立共享空间 ACL、提案审批、CAS 版本治理与来源核对；共享身份尚未贯穿旧个人聊天运行时。
+- 本地 Qwen/BGE 与远程 OpenAI 兼容接口、SSE、工具循环、取消和租约 worker。
+- 真实 MCP 接入、工具搜索/授权、trace、阶段计时和实验账本。
+- 50 段/206 条真实公开微博对话，保存在独立语料库，不充当个人画像或长期陪伴成绩。
 
-## 核心流程
+能力和限制见 [架构](docs/implemented/系统架构与实现说明.md)、[API](docs/implemented/API接口文档.md)和 [真实数据](docs/implemented/真实对话数据与实验入口.md)。
 
-```mermaid
-flowchart LR
-    A[Agent 提交事实与来源] --> B[空间内待审提案]
-    B --> C[Owner / Curator 审核]
-    C --> D[有效共享记忆]
-    D --> E[有权限的 Agent 检索]
-    D --> F[纠正 / 过期 / 撤销]
-    F --> G[版本链与审计事件]
-```
+## 本机启动
 
-共享层在检索与已知 ID 查询前检查空间权限；同主题变更必须确认当前版本，避免并发审批覆盖。个人对话产生的记忆使用独立审核队列，管理员可将有效个人记忆显式导入为共享提案。
-
-## 你能做什么
-
-- **治理共享记忆**：为 Agent 创建独立密钥和私有/共享空间；按 reader、contributor、curator 授权；提案须审核，批准前不会进入共享检索。
-- **控制版本与生命周期**：同主题冲突需要显式确认被替代版本；过期、撤销与授权变更会立即影响共享检索，保留可审计的来源和事件。
-- **审核长期记忆**：对话提取的事实和偏好先进入审核队列；查看原始消息、修改候选，再批准或拒绝。批准前不会参与召回。
-- **检查并纠正**：在记忆库点击后立即打开独立编辑窗口；从来源 ID 跳回原始对话，查看版本链，填写原因后生成纠正版。旧版本保留，只有当前有效版本参与召回。
-- **分层使用记忆**：工作上下文按层分配预算；任务情景可检索并回查来源；事实经过审核，技能有版本指纹；过期经历软归档，重要经历可固定保留。
-- **持续对话与工具**：多会话、流式回复、记忆召回、工具循环与 MCP；Dashboard 展示任务和 trace，Drift 可在空闲时运行限定技能。
-
-## 记忆架构
-
-| 职责 | 实现 |
-| --- | --- |
-| 工作记忆 | 最近消息与增量摘要，保护最新请求，按分区裁剪上下文 |
-| 情景记忆 | 跨会话任务/执行结果、来源消息与 trace；相关性召回 |
-| 语义记忆 | 经确认的事实、偏好与目标；来源、纠正和版本治理 |
-| 程序性记忆 | 按需加载 `SKILL.md`，记录内容版本指纹 |
-| 遗忘与治理 | TTL、软归档、固定保留、版本替代及共享权限/撤销 |
-
-遗忘贯穿各层；任务结束不会自动升级成事实或技能。默认情景保留 90 天、召回 top 3，整体记忆帧上限 12000 字符，可在 `[memory.layers]` 调整。完整中文分层解释与调研入口见[记忆模块 README](memoria/memory/README.md)。这些配置是本地调优起点，字符预算不等于精确 token 预算。
-
-个人记忆的创建、替代、纠正和来源撤销统一使用事务维护有效区间；撤销恢复会保留中间版本的历史。指定时间的查询也使用混合检索，图扩展按边权累计后重排。Embedding 按模型和维度隔离，切换不会清空旧向量；共享提案在提交和批准时检查本地来源是否存在。本地来源存在不代表提案内容属实，仍需审核者核对。
-
-## 快速开始
-
-需要 **Python 3.11+**、**Node.js/npm** 和 Git。聊天与自动提取需要 OpenAI 兼容的模型端点（远程 API，或本机 HTTP 服务）。共享记忆治理可不配置模型。
-
-### 1. 安装依赖并构建前端
-
-**Linux / macOS：**
-
-```bash
-git clone https://github.com/ZJ331456/Memoria-Agent.git
-cd Memoria-Agent
-
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-npm ci --prefix frontend
-npm run build --prefix frontend
-```
-
-**Windows PowerShell：**
+在仓库根目录执行，使用项目虚拟环境，不污染 conda base：
 
 ```powershell
-git clone https://github.com/ZJ331456/Memoria-Agent.git
-cd Memoria-Agent
-
+# 已有 .venv 时不重复创建
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-npm ci --prefix frontend
-npm run build --prefix frontend
+# 仅首次安装复制模板；已有 config.toml 不要覆盖
+Copy-Item config.example.toml config.toml
+.\.venv\Scripts\python.exe main.py --host 127.0.0.1 --port 2237
 ```
 
-本地 Embedding（BGE）还需 CUDA 版 PyTorch 与 `requirements-local-embedding.txt`，见[本地 Embedding 配置](docs/本地Embedding配置.md)。
+服务根路径返回 JSON；`/docs` 为 Swagger，`/api/health` 为存活检查。私人库和公开语料库是独立文件，storage 路径决定使用哪个库。
 
-### 2. 配置模型（二选一）
+本地模型在 `model/bge-small-zh-v1.5` 和 `model/Qwen3.5-2B`。新机器按 [Embedding 配置](docs/implemented/本地Embedding配置.md)与 [统一模型接口](docs/implemented/本地与远程OpenAI统一接口.md)安装依赖和启动。main/fast 可使用 `Qwen3.5-2B`、`http://127.0.0.1:8080/v1`；embedding 可使用 `bge-small-zh-v1.5` 和同一地址。远程 API 通过同一业务接口配置，不默认发起收费调用。
 
-复制示例配置后按需修改（也可用页面「设置」写入 `data/models.override.toml`）：
-
-```bash
-cp config.example.toml config.toml   # Windows: Copy-Item config.example.toml config.toml
-```
-
-| 方式 | `llm.main` 要点 | 说明 |
-| --- | --- | --- |
-| 远程 API | `base_url` + `api_key`（如 DeepSeek） | 单进程即可对话 |
-| 本地 HTTP（推荐，尤其 Windows） | `model = "model/Qwen3.5-2B"`，`base_url = "http://127.0.0.1:8080/v1"`，可无 Key | 先起本仓库 `serve_local_llm.py`；业务侧与远程同一套 OpenAI 兼容 HTTP |
-| 进程内兜底 | `base_url = "local://cuda"`（或 `cpu` / `auto`） | 无需另起服务；权重进 Memoria 进程 |
-
-Embedding 可共用本地服务：`model = "bge-small-zh-v1.5"`，`base_url = "http://127.0.0.1:8080/v1"`；也保留 `model/bge-small-zh-v1.5` + `local://cuda` 进程内方式。未配置 Embedding 时仍可词面检索。具体参数、工具/SSE、上下文预算和实测范围见[本地与远程 OpenAI 统一接口](docs/本地与远程OpenAI统一接口.md)。
-
-> **说明：** vLLM / SGLang 官方不支持原生 Windows；Windows 请用下方本机服务，或 WSL2 / Ollama。Linux 可将 `base_url` 指向已启动的 vLLM/SGLang/Ollama。
-
-### 3. 启动
-
-#### A. 远程 API（单终端）
-
-```bash
-.venv/bin/python main.py
-# Windows: .\.venv\Scripts\python.exe main.py
-```
-
-打开 <http://127.0.0.1:2237>，在「设置」填写主模型并测试连通。
-
-示例默认是本地模式；切到远程 API 时也要配置 fast（或在文件中禁用该槽位并清除对应 override），避免后台记忆提取仍连接本机服务。Embedding 可独立选择本地或远程。
-
-#### B. 本地模型 + OpenAI 兼容 HTTP（推荐两终端）
-
-权重放在项目 `model/`（如 `model/Qwen3.5-2B`）。**先起推理服务，再起 Memoria。**
+## 本地 MCP 与真实数据
 
 ```powershell
-# 终端 1：本地 OpenAI 兼容服务（默认 http://127.0.0.1:8080/v1）
-.\.venv\Scripts\python.exe scripts/serve_local_llm.py --model model/Qwen3.5-2B --device cuda --port 8080 --warmup
-
-# 终端 2：Memoria 主服务
-.\.venv\Scripts\python.exe main.py
+.\.venv\Scripts\python.exe scripts/install_mcp.py
+.\.venv\Scripts\python.exe scripts/configure_mcp.py
+.\.venv\Scripts\python.exe scripts/check_mcp.py
+.\.venv\Scripts\python.exe scripts/prepare_real_dialogues.py --limit 50 --import-corpus
 ```
 
-Linux / macOS 将解释器换成 `.venv/bin/python` 即可。确认 `config.toml` 或页面设置中 `base_url` 为 `http://127.0.0.1:8080/v1`。
-
-本机默认 `main`、`fast` 和 Embedding 都走这个服务；`fast` 控制记忆提取/规划，不能只改 main。默认服务总上下文为 8192 token，建议输出预算 1024。已有 override 文件优先于 config.toml，切换时检查三槽位实际值。
-
-#### C. 仅进程内本地 LLM（单终端）
-
-将 `llm.main.base_url` 设为 `local://cuda` 后直接：
-
-```powershell
-.\.venv\Scripts\python.exe main.py
-```
-
-首次启动会预热本地 Embedding / 进程内 LLM，耗时取决于机器。
-
-想先体验共享记忆治理，可直接打开「共享治理」页，无需模型。Agent 密钥只在页面内存中使用，刷新后需重新粘贴。模型密钥保存在 Git 忽略的 `data/models.override.toml`，API 永不回显。
-
-## 第一次使用
-
-### 共享记忆协作
-
-1. 在「共享治理」创建 Agent，保存只显示一次的密钥；连接该身份后创建空间，创建者成为 owner。
-2. 创建另一个 Agent，将其 ID 授权为 reader、contributor 或 curator。reader 检索，contributor 提交，curator 审核；owner 管理成员权限。
-3. 提交内容、稳定的 `topic_key` 和来源。owner / curator 填写原因后批准或拒绝；涉及已有主题的变更需确认被替代版本。
-4. 用其他身份检索已批准内容并查看版本链；owner / curator 可查看撤销后的审计记录。私有空间只允许 owner 使用。
-
-### 个人记忆工作台
-
-1. 在「对话」页告诉 Memoria 一项真实偏好或目标，完成一次对话。
-2. 到「记忆 → 待审核候选」查看候选，点击「查看原始对话」核对上下文，修改候选后批准，或直接拒绝。
-3. 在「记忆 → 有效记忆库」点击「检查并纠正」，编辑窗口会立即出现并聚焦内容输入框；填写修改原因后保存，新版本生效，旧版本留在时间线中。
-
-「记忆 → 存储与任务」提供 Markdown 视图和后台抽取记录：`MEMORY.md` 从有效记忆生成，`SELF.md` 可由用户编辑并注入上下文。未保存的 Markdown 修改会暂存在当前浏览器标签页，保存文件后清除；旧的 `PENDING.md` 仍可查看，新的审核队列以 SQLite 为准。
-
-旧聊天记忆与新共享空间分开存放；只有管理员显式导入并完成共享提案审核后，旧记忆才会出现在共享检索。当前多 Agent 隔离针对共享记忆接口，旧聊天运行时仍面向本地单用户。
-
-## 可选能力
-
-需要修改运行选项时，先执行 `cp config.example.toml config.toml`；修改后重启服务。
-
-| 能力 | 开启方式 |
-| --- | --- |
-| 语义检索 | 在「设置」中配置 Embedding 模型；需要 SQLite 向量索引时运行 `.venv/bin/python -m pip install -r requirements-vector.txt` |
-| MCP 工具 | 运行 `cp mcp_servers.example.json data/mcp_servers.json`，按需配置服务并在页面重载 |
-| 空闲 Drift | 在 `config.toml` 的 `[agent.drift]` 下设置 `enabled = true`；默认关闭，可设置空闲阈值、静默时段、日预算和工具白名单 |
-| API 访问限制 | 在 `config.toml` 的 `[server.security]` 下配置 `api_token`、允许的 Origin 和限流 |
-
-运行数据默认位于 `data/`，服务默认只监听 `127.0.0.1:2237`。升级依赖后请重启服务。
-
-## 代码导航
-
-各目录 README 说明真实文件职责、调用关系、配置和验证入口：
-
-| 目录 | 内容 |
-| --- | --- |
-| [memoria](memoria/README.md) | Python 服务、共享治理与个人 Agent 运行时；继续查看 lifecycle、prompting、memory、tools、MCP 等模块 |
-| [frontend](frontend/README.md) | React 工作台、页面与 API、UI 组件、草稿和身份缓存规则 |
-| [eval](eval/README.md) | 公共数据集接入、固定五题量化、来源与治理指标 |
-| [skills](skills/README.md) | 五个内置技能的使用说明、触发条件及 SKILL.md 编写约定 |
-| [tests](tests/README.md) | 按能力选择回归测试、可选依赖与测试范围 |
+安装位置、验证状态与飞书私密输入/OAuth 见 [MCP 部署](docs/implemented/MCP部署与授权.md)。只部署搜索/GitHub/飞书，其他免费服务由用户选择后再部署。
 
 ## 开发与验证
 
-```bash
-.venv/bin/python -m pip install pytest
-.venv/bin/python -m pytest -q
-.venv/bin/python -m tests.regression.run_governance
-npm run build --prefix frontend
-(cd frontend && npx playwright install chromium)
-npm run test:e2e --prefix frontend
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+git diff --check
 ```
 
-以上命令在仓库根目录运行。前端开发可另开终端运行 `npm run dev --prefix frontend`，Vite 会将 `/api` 代理到 `http://127.0.0.1:2237`。更多针对模块的命令见各目录 README。
+工程临时输入和故障替身不导入产品、不作为实验数据。旧模拟轨迹、演示服务、合成基准入口与成绩已移除。模块职责见 [核心目录](memoria/README.md)，提交前读取 [GitHub 规范](docs/implemented/github提交规范.md)。
 
-## 公开数据集评测
-
-`eval/` 使用公开 benchmark 的固定五题子集；自定义夹具与机制回归已迁至 `tests/regression/`，原三份合成分数报告已移除。
-
-| 数据集 | 本次范围 | 主要能力 |
-| --- | --- | --- |
-| LongMemEval | 用户提供的 5 题 | 长历史事实、偏好、时间与知识更新 |
-| LoCoMo | 原始五类各 1 题 | 多会话来源、人物归属、拒答与语义/情景分层注入 |
-| GateMem | 4 领域共 5 个检查点 | 共享权限、删除后回答、来源和真实共享路径时延 |
-
-```bash
-.venv/bin/python -m eval.prepare_public
-.venv/bin/python -m eval.run_locomo --embedding --qa --judge
-.venv/bin/python -m eval.run_gatemem
-# 已有 LongMemEval 五题：默认离线检索，可加 --embedding --qa --judge
-.venv/bin/python -m eval.run_longmemeval
-```
-
-原始数据位于 `data/benchmark/`，版本、校验和与样本 ID 固定；本次没有运行完整集。GateMem 也是上游合成的公开 benchmark，并非生产记录。LoCoMo 五题自动判分 4/5，标注来源召回 50%；情景层在这五题没有提高来源召回。LongMemEval 的偏好判分存在争议，保留逐题说明。GateMem 访问/遗忘各通过 2/2，但有权效用 0/1，存在过度拒绝。实际报告与适配局限见[评测入口](eval/README.md)和[报告导航](eval/results/README.md)。
-
-这些报告不覆盖全部工程机制，也不是官方完整榜单分数。TTL、并发、技能指纹与 UI 交互由 `tests/` 验证。GateMem 调用实际共享治理 API，仍不能证明旧聊天 runtime 已统一多主体身份。
-
-## Related Projects
-
-以下开源项目为 Memoria-Agent 的设计提供了参考；Memoria-Agent 是独立实现。
-
-- [Pask](https://github.com/xzf-thu/Pask) — 主动式 Agent 与分层长期记忆。
-- [akashic-agent](https://github.com/kachofugetsu09/akashic-agent) — Agent 运行时、记忆层与后台任务。
-- [claude-mem](https://github.com/thedotmack/claude-mem) — 会话记录、压缩与跨会话上下文召回。
-- [Holt](https://github.com/holt-os/holt) — 可查看来源的个人 Agent 记忆。
-- [Mem0](https://github.com/mem0ai/mem0) — 面向 Agent 的记忆存储与检索。
-- [Graphiti](https://github.com/getzep/graphiti) — 时序知识图谱框架，事实带有效期窗口与混合检索。
-- [A-mem](https://github.com/WujiangXu/AgenticMemory) — Agentic Memory，自组织记忆笔记、关联与持续演化。
+`config.toml`、`data/`、`.mcp/`、`.venv/` 和 `model/` 被忽略；原始语料由固定版本脚本复现，仓库只保存来源与 SHA 清单。

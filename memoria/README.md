@@ -1,6 +1,6 @@
 # Memoria 核心包
 
-[返回项目首页](../README.md) · [系统架构](../docs/系统架构与实现说明.md) · [API 文档](../docs/API接口文档.md)
+[返回项目首页](../README.md) · [系统架构](../docs/implemented/系统架构与实现说明.md) · [API 文档](../docs/implemented/API接口文档.md)
 
 此目录承载本地个人 Agent 的对话运行时，以及独立的多 Agent 共享记忆治理层。HTTP 入口位于 [api/](api/README.md)；一轮个人对话由 [service.py](service.py) 装配 [runtime/](runtime/README.md)、工具、记忆和模型。共享记忆由 [governance.py](governance.py) 管理空间、授权、提议、审批、版本和审计，走 [api/governance.py](api/governance.py)；**它不会自动进入个人对话的记忆召回或工具写入路径**。已有个人记忆可由管理员发起导入提议，批准前仍不可被共享检索。
 
@@ -30,14 +30,12 @@
 | [governance.py](governance.py) | 与个人 `memories` 表分离的 Agent 空间、权限和审核记录 |
 | [security.py](security.py) | 可选服务级 Token、Origin、请求大小和速率限制 |
 
-个人对话的主路径是 `api → AgentService → AgentRuntime → MemoryEngine / ToolRegistry → Store / LLMClient`。共享治理的主路径是 `api/governance.py → MemoryGovernance → Store.db`，由 Agent key 识别主体，再按空间角色检查每次读写。两条路径共享 SQLite 连接，但使用不同表和访问规则；更多边界见[记忆治理与多 Agent 共享记忆](../docs/记忆治理与多Agent共享记忆.md)。
+个人对话的主路径是 `api → AgentService → AgentRuntime → MemoryEngine / ToolRegistry → Store / LLMClient`。共享治理的主路径是 `api/governance.py → MemoryGovernance → Store.db`，由 Agent key 识别主体，再按空间角色检查每次读写。两条路径共享 SQLite 连接，但使用不同表和访问规则；更多边界见[记忆治理与多 Agent 共享记忆](../docs/implemented/记忆治理与多Agent共享记忆.md)。
 
 ## 从仓库根目录验证
 
 ```bash
 python -m pytest -q tests/test_core.py tests/test_governance_core.py tests/test_governance_api.py
-python -m tests.regression.run_seeded
-python -m tests.regression.run_memory_layers --min-pass-rate 1
 ```
 
-以上单元测试和种子评测可在不配置在线模型的情况下运行；在线聊天仍需要有效模型配置。
+以上单元测试可在不配置在线模型的情况下运行；在线聊天仍需要有效模型配置。

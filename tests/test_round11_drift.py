@@ -55,8 +55,10 @@ daily_budget=2
 quiet_hours=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23]
 allowed_skills=["drift-digest"]
 allow_write_tools=[]
+[agent.mcp]
+enabled=false
 [storage]
-database="{tmp_path / 'api-drift.db'}"
+database="{(tmp_path / 'api-drift.db').as_posix()}"
 ''',
         encoding="utf-8",
     )
@@ -81,8 +83,10 @@ api_key="x"
 base_url="http://example.test/v1"
 [agent.drift]
 enabled=false
+[agent.mcp]
+enabled=false
 [storage]
-database="{tmp_path / 'w.db'}"
+database="{(tmp_path / 'w.db').as_posix()}"
 ''',
         encoding="utf-8",
     )
@@ -100,8 +104,10 @@ def test_drift_continues_from_last_completed_run_of_same_skill(tmp_path: Path):
 model="test"
 api_key="x"
 base_url="http://example.test/v1"
+[agent.mcp]
+enabled=false
 [storage]
-database="{tmp_path / 'continuity.db'}"
+database="{(tmp_path / 'continuity.db').as_posix()}"
 ''', encoding="utf-8",
     )
     store = Store(tmp_path / "continuity.db")

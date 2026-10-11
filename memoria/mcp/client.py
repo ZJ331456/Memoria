@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 from dataclasses import dataclass
 from typing import Any
 
@@ -65,14 +66,14 @@ class McpClient:
                 return self._tool_infos
             try:
                 return await asyncio.wait_for(self._connect_impl(), timeout=_CONNECT_TIMEOUT)
-            except Exception:
+            except BaseException:
                 await self._force_cleanup()
                 raise
 
     async def _connect_impl(self) -> list[McpToolInfo]:
         merged = os.environ.copy()
         merged.update(self.env)
-        logger.info("[mcp] 启动 %s: %s", self.name, " ".join(self.command))
+        logger.info("[mcp] 启动 %s", self.name)
         self._process = await asyncio.create_subprocess_exec(
             *self.command,
             stdin=asyncio.subprocess.PIPE,
@@ -81,13 +82,14 @@ class McpClient:
             cwd=self.cwd,
             env=merged,
             limit=_STREAM_LIMIT,
+            **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}),
         )
         self._stderr_task = asyncio.create_task(self._drain_stderr(), name=f"mcp-stderr:{self.name}")
         init = await self._request(
             "initialize",
             {
                 "protocolVersion": _PROTOCOL_VERSION,
-                "capabilities": {"tools": {}},
+                "capabilities": {},
                 "clientInfo": {"name": "memoria-agent", "version": "0.8.0"},
             },
         )
@@ -96,10 +98,24 @@ class McpClient:
             raise RuntimeError(f"MCP server {self.name!r} 协议版本不受支持: {version!r}")
         self._protocol_version = str(version)
         await self._notify("notifications/initialized")
-        listed = await self._request("tools/list", {})
-        raw_tools = listed.get("tools", [])
-        if not isinstance(raw_tools, list):
-            raise RuntimeError(f"MCP server {self.name!r} tools/list.tools 不是数组")
+        raw_tools: list = []
+        cursors: set[str] = set()
+        params: dict[str, Any] = {}
+        for _ in range(100):
+            listed = await self._request("tools/list", params)
+            page = listed.get("tools", [])
+            if not isinstance(page, list):
+                raise RuntimeError(f"MCP server {self.name!r} tools/list.tools 不是数组")
+            raw_tools.extend(page)
+            cursor = listed.get("nextCursor")
+            if cursor is None:
+                break
+            if not isinstance(cursor, str) or not cursor or cursor in cursors:
+                raise RuntimeError("MCP tools/list 返回无效或循环 cursor")
+            cursors.add(cursor)
+            params = {"cursor": cursor}
+        else:
+            raise RuntimeError("MCP tools/list 分页超过上限")
         tools: list[McpToolInfo] = []
         seen: set[str] = set()
         for item in raw_tools:
@@ -157,7 +173,15 @@ class McpClient:
             pass
         try:
             if process.returncode is None:
-                process.terminate()
+                if os.name == "nt":
+                    # A Python launcher owns the actual server child. Terminate
+                    # the entire owned tree so cancelled calls leave no server.
+                    await asyncio.to_thread(subprocess.run,
+                        ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                        creationflags=subprocess.CREATE_NO_WINDOW, timeout=10)
+                else:
+                    process.terminate()
                 try:
                     await asyncio.wait_for(process.wait(), timeout=3.0)
                 except TimeoutError:
@@ -174,7 +198,12 @@ class McpClient:
     async def _request(self, method: str, params: dict[str, Any], *, timeout: float | None = None) -> dict[str, Any]:
         request_id = self._new_id()
         await self._send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
-        response = await self._recv(expected_id=request_id, timeout=timeout)
+        try:
+            response = await self._recv(expected_id=request_id, timeout=timeout)
+        except (TimeoutError, asyncio.CancelledError):
+            # A timed-out process must not keep executing unseen side effects.
+            await self._force_cleanup()
+            raise
         if "error" in response:
             error = response["error"]
             detail = error.get("message", error) if isinstance(error, dict) else error
@@ -216,9 +245,17 @@ class McpClient:
             try:
                 message = json.loads(text)
             except json.JSONDecodeError:
-                logger.warning("[mcp] %s 忽略非 JSON 行: %s", self.name, text[:200])
+                logger.warning("[mcp] %s 忽略非 JSON 行", self.name)
                 continue
             if not isinstance(message, dict):
+                continue
+            if "method" in message and "id" in message:
+                reply: dict[str, Any] = {"jsonrpc": "2.0", "id": message["id"]}
+                if message["method"] == "ping":
+                    reply["result"] = {}
+                else:
+                    reply["error"] = {"code": -32601, "message": "Client capability not supported"}
+                await self._send(reply)
                 continue
             if message.get("id") == expected_id:
                 return message
@@ -237,7 +274,8 @@ class McpClient:
                     break
                 text = line.decode("utf-8", errors="replace").rstrip()
                 if text:
-                    logger.debug("[mcp:%s:stderr] %s", self.name, text[:500])
+                    # Third-party logs can contain OAuth URLs or tokens.
+                    logger.debug("[mcp:%s:stderr] received %s bytes", self.name, len(line))
         except asyncio.CancelledError:
             raise
         except Exception:

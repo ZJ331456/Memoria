@@ -1,1 +1,1 @@
-"""Memoria regression tests; public benchmarks live in eval."""
+"""Engineering tests; authentic corpus preparation lives in scripts."""
