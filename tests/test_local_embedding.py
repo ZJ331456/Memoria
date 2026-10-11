@@ -198,6 +198,9 @@ def test_remote_query_keeps_existing_http_payload(monkeypatch):
 
 
 def test_engine_backfill_and_writes_use_documents_but_retrieval_uses_query(tmp_path, monkeypatch):
+    from memoria.memory.token_chunks import TokenChunker
+    from tests.test_token_chunks import CharacterTokenizer
+    monkeypatch.setattr("memoria.memory.token_chunks.local_chunker", lambda *a, **kw: TokenChunker(CharacterTokenizer()))
     model = _model_files(tmp_path / "model")
     encoder = _FakeEncoder()
     monkeypatch.setattr(local_bge, "get_encoder", lambda *args: encoder)

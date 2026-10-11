@@ -4,6 +4,7 @@ import asyncio
 import logging
 import math
 import re
+import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import Any
 from ..store import Store
 from .embedding import EmbeddingClient
 from .layer import MarkdownMemoryLayer
+from ..observability.timing import StageTimings
 
 logger = logging.getLogger(__name__)
 MemoryDecider = Callable[[str, str, list[dict[str, Any]]], Awaitable[dict[str, str]]]
@@ -83,7 +85,9 @@ class MemoryEngine:
             self.store.record_evolution(updated["id"], f"由 {memory_id} 演化: {reason or new_info[:120]}")
         return updated
 
-    async def retrieve(self, query: str, limit: int = 8, kinds: set[str] | None = None, as_of: str | None = None, expand_graph: bool = True) -> list[dict]:
+    async def retrieve(self, query: str, limit: int = 8, kinds: set[str] | None = None, as_of: str | None = None, expand_graph: bool = True, *, timings: StageTimings | None = None) -> list[dict]:
+        timers = timings or StageTimings()
+        candidate_started = time.perf_counter()
         embedder = self.embedder
         embedding_namespace = self.store.embedding_namespace
         lexical_query = self._lexical_query(query)
@@ -98,19 +102,24 @@ class MemoryEngine:
             return []
         by_id = {item["id"]: item for item in [*items, *lexical_seed]}
         items = list(by_id.values())
+        timers.since("memory.lexical_candidates", candidate_started)
 
         query_vector: list[float] | None = None
         if embedder and embedder.enabled:
-            await self._backfill(items, limit=64)
+            with timers.measure("memory.backfill"):
+                await self._backfill(items, limit=64, timings=timers)
             try:
                 encode_query = getattr(embedder, "embed_query", embedder.embed)
-                query_vector = await asyncio.wait_for(encode_query(query), timeout=embedder.timeout_seconds + 1)
+                with timers.measure("embedding.query"):
+                    query_vector = await asyncio.wait_for(encode_query(query), timeout=embedder.timeout_seconds + 1)
             except Exception as exc:
                 logger.warning("语义记忆召回降级为关键词召回: %s", type(exc).__name__)
 
         if embedding_namespace != self.store.embedding_namespace:
             query_vector = None
         vector_scores: dict[str, float] = {}
+        chunk_matches: dict[str, dict] = {}
+        vector_started = time.perf_counter()
         if query_vector:
             status = self.store.vector_index_status
             indexed = not as_of and status["enabled"] and status["dimension"] == len(query_vector)
@@ -125,6 +134,17 @@ class MemoryEngine:
                     vector = item.get("embedding")
                     if vector and len(vector) == len(query_vector):
                         vector_scores[item["id"]] = self._cosine(query_vector, vector)
+            with timers.measure("memory.chunk_candidates"):
+                chunk_hits = self.store.chunk_memory_candidates(query_vector, max(limit * 8, 64),
+                    memory_ids=None if indexed else list(by_id), as_of=as_of, namespace=embedding_namespace)
+            for item, similarity, chunk in chunk_hits:
+                if not kinds or item.get("kind") in kinds:
+                    by_id[item["id"]] = item
+                    vector_scores[item["id"]] = similarity
+                    chunk_matches[item["id"]] = chunk
+            items = list(by_id.values())
+        timers.since("memory.vector_candidates", vector_started)
+        fusion_started = time.perf_counter()
         query_tokens = self._tokens(lexical_query)
         lexical_scores = {item["id"]: self._lexical_score(lexical_query, query_tokens, item) for item in items}
         lexical_ids = {item["id"] for item in lexical_seed}
@@ -183,7 +203,13 @@ class MemoryEngine:
                 "vector_rank": self._rank(lanes["vector"], memory_id),
                 "vector_similarity": round(vector_scores[memory_id], 4) if memory_id in vector_scores else None,
             }
+            if memory_id in chunk_matches:
+                chunk = chunk_matches[memory_id]
+                item["retrieval"]["chunk"] = chunk
+                if item.get("embedding_chunk_count", 0) > 1:
+                    item["retrieval_excerpt"] = item["content"][chunk["start"]:chunk["end"]]
             result.append(item)
+        timers.since("memory.fusion_and_graph", fusion_started)
         return result
 
     async def add_if_new(self, content: str, kind: str, importance: int, source: str, source_ref: str | None = None) -> dict | None:
@@ -213,16 +239,18 @@ class MemoryEngine:
                 return MemoryWriteResult("reinforced", reinforced, item["id"], "exact match")
 
         vector: list[float] | None = None
+        document_chunks = None
         if embedder and embedder.enabled:
             try:
                 await self._backfill(items, limit=128)
-                vector = await asyncio.wait_for(embedder.embed(content), timeout=embedder.timeout_seconds + 1)
+                vector, document_chunks = await self._embed_document(content)
             except Exception as exc:
                 logger.warning("记忆向量去重不可用，使用文本去重: %s", type(exc).__name__)
                 vector = None
 
         if embedding_namespace != self.store.embedding_namespace:
             vector = None
+            document_chunks = None
         status = self.store.vector_index_status
         indexed = status["enabled"] and vector and status["dimension"] == len(vector)
         if vector and indexed:
@@ -263,7 +291,7 @@ class MemoryEngine:
             mutable_kinds = {"preference", "profile", "goal", "procedure"}
             if target and action == "supersede" and kind in mutable_kinds and float(target["relation_similarity"]) >= 0.55:
                 reason = decision.get("reason", "")
-                saved = self.store.add_memory(content, kind, importance, source, vector, target_id, reason, source_ref, require_source=require_source, embedding_namespace=embedding_namespace)
+                saved = self.store.add_memory(content, kind, importance, source, vector, target_id, reason, source_ref, require_source=require_source, embedding_namespace=embedding_namespace, embedding_chunks=document_chunks)
                 try:
                     organized = self.organize(content, kind)
                     with self.store.lock:
@@ -282,13 +310,13 @@ class MemoryEngine:
                 if full and full.get("source") == "user_correction" and source not in {"manual", "reviewed_conversation"}:
                     continue
                 if full and full.get("status") == "active" and kind in {"preference", "profile", "goal", "procedure"} and self._contradicts(content, full["content"]):
-                    saved = self.store.add_memory(content, kind, importance, source, vector, item["id"], "contradiction auto-supersede", source_ref, require_source=require_source, embedding_namespace=embedding_namespace)
+                    saved = self.store.add_memory(content, kind, importance, source, vector, item["id"], "contradiction auto-supersede", source_ref, require_source=require_source, embedding_namespace=embedding_namespace, embedding_chunks=document_chunks)
                     try:
                         self.store.record_evolution(saved["id"], f"矛盾替代 {item['id']}: {content[:120]}")
                     except Exception as exc:
                         logger.warning("记忆已替代，演化记录补充失败: %s", type(exc).__name__)
                     return MemoryWriteResult("superseded", saved, item["id"], "contradiction auto-supersede")
-        saved = self.store.add_memory(content, kind, importance, source, vector, source_ref=source_ref, require_source=require_source, embedding_namespace=embedding_namespace)
+        saved = self.store.add_memory(content, kind, importance, source, vector, source_ref=source_ref, require_source=require_source, embedding_namespace=embedding_namespace, embedding_chunks=document_chunks)
         try:
             organized = self.organize(content, kind)
             with self.store.lock:
@@ -313,12 +341,13 @@ class MemoryEngine:
         if not current or current["status"] != "active":
             return None
         vector = current.get("embedding") if content.strip() == current["content"] else None
+        chunks = self.store.memory_chunks(memory_id) if content.strip() == current["content"] else None
         if vector is None and embedder and embedder.enabled:
             try:
-                vector = await asyncio.wait_for(embedder.embed(content), timeout=embedder.timeout_seconds + 1)
+                vector, chunks = await self._embed_document(content.strip())
             except Exception as exc:
                 logger.warning("纠正记忆向量化不可用，使用关键词检索: %s", type(exc).__name__)
-        corrected = self.store.correct_memory(memory_id, content, kind, importance, reason, vector, embedding_namespace=embedding_namespace)
+        corrected = self.store.correct_memory(memory_id, content, kind, importance, reason, vector, embedding_namespace=embedding_namespace, embedding_chunks=chunks or None)
         if corrected:
             self.refresh_markdown()
         return corrected
@@ -341,23 +370,37 @@ class MemoryEngine:
     async def reindex(self, limit: int = 1000) -> dict[str, int | bool]:
         items = self.store.memories(limit=max(1, min(limit, 5000)))
         dimension = self.store.vector_index_status["dimension"]
-        missing = [item for item in items if not item.get("embedding") or (dimension and len(item["embedding"]) != dimension)]
+        missing = [item for item in items if self._needs_embedding(item, dimension)]
         if not self.embedder or not self.embedder.enabled:
             return {"enabled": False, "indexed": 0, "remaining": len(missing)}
         indexed = await self._backfill(missing, limit=len(missing))
         return {"enabled": True, "indexed": indexed, "remaining": max(0, len(missing) - indexed)}
 
-    async def _backfill(self, items: list[dict], limit: int) -> int:
+    def _needs_embedding(self, item: dict, dimension: int | None) -> bool:
+        chunks_required = bool(getattr(self.embedder, "supports_document_chunks", False)) and item.get("kind") != "benchmark_history"
+        return (not item.get("embedding") or (dimension and len(item["embedding"]) != dimension)
+                or (chunks_required and not item.get("embedding_chunk_count")))
+
+    async def _embed_document(self, text: str) -> tuple[list[float] | None, list[dict] | None]:
+        if getattr(self.embedder, "supports_document_chunks", False):
+            documents = await self.embedder.embed_documents([text])
+            if len(documents) != 1:
+                raise ValueError("document embedding count is invalid")
+            return documents[0].vector, documents[0].chunks
+        return await asyncio.wait_for(self.embedder.embed(text), timeout=self.embedder.timeout_seconds + 1), None
+
+    async def _backfill(self, items: list[dict], limit: int, *, timings: StageTimings | None = None) -> int:
         embedder = self.embedder
         embedding_namespace = self.store.embedding_namespace
         if not embedder or not embedder.enabled:
             return 0
         dimension = self.store.vector_index_status["dimension"]
-        missing = [item for item in items if not item.get("embedding") or (dimension and len(item["embedding"]) != dimension)][:limit]
+        missing = [item for item in items if self._needs_embedding(item, dimension)][:limit]
         if not missing:
             return 0
         try:
-            vectors = await embedder.embed_batch([item["content"] for item in missing])
+            documents = await embedder.embed_documents([item["content"] for item in missing], timings=timings) if getattr(embedder, "supports_document_chunks", False) else None
+            vectors = [doc.vector for doc in documents] if documents is not None else await embedder.embed_batch([item["content"] for item in missing])
         except Exception as exc:
             logger.warning("记忆向量回填失败: %s", type(exc).__name__)
             return 0
@@ -373,12 +416,24 @@ class MemoryEngine:
             if embedding_namespace != self.store.embedding_namespace:
                 logger.warning("Embedding 模型已切换，跳过旧模型的回填批次")
                 return 0
-            for item, vector in zip(missing, vectors, strict=True):
-                self.store.set_memory_embedding(item["id"], vector)
+            persisted = []
+            for index, (item, vector) in enumerate(zip(missing, vectors, strict=True)):
+                chunks = documents[index].chunks if documents is not None else None
+                if chunks is not None:
+                    saved = self.store.set_memory_document_embedding(item["id"], item["content"], vector, chunks)
+                else:
+                    current = self.store.memory(item["id"])
+                    saved = bool(current and current["content"] == item["content"])
+                    if saved:
+                        self.store.set_memory_embedding(item["id"], vector)
+                if saved:
+                    persisted.append((item, vector, chunks))
             # Update caller snapshots only after the whole batch has committed.
-        for item, vector in zip(missing, vectors, strict=True):
+        for item, vector, chunks in persisted:
             item["embedding"] = vector
-        return len(missing)
+            if chunks is not None:
+                item["embedding_chunk_count"] = len(chunks)
+        return len(persisted)
 
 
     @staticmethod

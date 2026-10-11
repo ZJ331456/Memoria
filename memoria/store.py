@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import re
 import sqlite3
@@ -206,6 +207,13 @@ class Store:
                 memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
                 namespace TEXT NOT NULL, dimension INTEGER NOT NULL, embedding TEXT NOT NULL,
                 updated_at TEXT NOT NULL, PRIMARY KEY(memory_id,namespace,dimension))""")
+            self.db.execute("""CREATE TABLE IF NOT EXISTS memory_embedding_chunks (
+                id TEXT PRIMARY KEY, memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+                namespace TEXT NOT NULL, part INTEGER NOT NULL, start_char INTEGER NOT NULL,
+                end_char INTEGER NOT NULL, tokens INTEGER NOT NULL, dimension INTEGER NOT NULL,
+                embedding TEXT NOT NULL, content_sha256 TEXT NOT NULL,
+                UNIQUE(memory_id,namespace,part))""")
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_chunks_namespace ON memory_embedding_chunks(namespace,memory_id)")
             for row in self.db.execute("SELECT id,embedding,embedding_model,updated_at FROM memories WHERE embedding IS NOT NULL").fetchall():
                 try:
                     vector = json.loads(row["embedding"])
@@ -218,6 +226,8 @@ class Store:
             self._init_fts()
             self.vector_index = SQLiteVecIndex(self.db, vector_backend)
             self._bootstrap_vector_index()
+            self.chunk_index = SQLiteVecIndex(self.db, vector_backend, self.embedding_namespace + ":source-chunks-v1")
+            self._bootstrap_chunk_index()
             self.db.commit()
 
     @contextmanager
@@ -268,11 +278,16 @@ class Store:
             WHERE memory_id=? AND namespace=? ORDER BY updated_at DESC LIMIT 1""", (memory_id, self.embedding_namespace)).fetchone()
         if vector and self.vector_index.dimension in {None, vector["dimension"]}:
             self.vector_index.upsert(memory_id, json.loads(vector["embedding"]))
+        if hasattr(self, "chunk_index"):
+            for chunk in self.db.execute("SELECT id,embedding FROM memory_embedding_chunks WHERE memory_id=? AND namespace=?", (memory_id, self.embedding_namespace)):
+                self.chunk_index.upsert(chunk["id"], json.loads(chunk["embedding"]))
 
     def _close_interval(self, memory_id: str, timestamp: str) -> None:
         self.db.execute("UPDATE memory_validity_intervals SET invalid_at=? WHERE memory_id=? AND invalid_at IS NULL", (timestamp, memory_id))
         self.db.execute("UPDATE memories SET invalid_at=? WHERE id=?", (timestamp, memory_id))
         self.vector_index.delete(memory_id)
+        if hasattr(self, "chunk_index"):
+            self._remove_chunk_index(memory_id)
 
     @staticmethod
     def _validate_vector(vector: list[float]) -> None:
@@ -289,6 +304,69 @@ class Store:
             self.embedding_namespace = namespace
             self.vector_index = SQLiteVecIndex(self.db, self.vector_backend, namespace)
             self._bootstrap_vector_index()
+            self.chunk_index = SQLiteVecIndex(self.db, self.vector_backend, namespace + ":source-chunks-v1")
+            self._bootstrap_chunk_index()
+
+    def _bootstrap_chunk_index(self) -> None:
+        rows = self.db.execute("""SELECT c.id,c.embedding,c.dimension FROM memory_embedding_chunks c
+            JOIN memories m ON m.id=c.memory_id WHERE c.namespace=? AND m.status='active'""",
+            (self.embedding_namespace,)).fetchall()
+        self.chunk_index.bootstrap([dict(r) for r in rows], prune=False)
+        if self.chunk_index.enabled and self.chunk_index.dimension:
+            # Chunk IDs are derived records, not parent memory IDs.
+            stale = self.db.execute(f"""SELECT v.memory_id FROM {self.chunk_index.map_table} v
+                LEFT JOIN memory_embedding_chunks c ON c.id=v.memory_id
+                LEFT JOIN memories m ON m.id=c.memory_id
+                WHERE c.id IS NULL OR m.status!='active' OR c.namespace!=?""", (self.embedding_namespace,)).fetchall()
+            for row in stale:
+                self.chunk_index.delete(row[0])
+
+    def _remove_chunk_index(self, memory_id: str) -> None:
+        for row in self.db.execute("SELECT id FROM memory_embedding_chunks WHERE memory_id=? AND namespace=?", (memory_id, self.embedding_namespace)).fetchall():
+            self.chunk_index.delete(row[0])
+
+    def _persist_chunks(self, memory_id: str, content: str, chunks: list[dict], namespace: str) -> None:
+        if not chunks:
+            raise ValueError("document chunk index must not be empty")
+        cursor, dimensions = 0, set()
+        for chunk in chunks:
+            self._validate_vector(chunk["embedding"])
+            dimensions.add(len(chunk["embedding"]))
+            if any(type(chunk[k]) is not int for k in ("start", "end", "tokens")) or chunk["start"] != cursor or not cursor < chunk["end"] <= len(content) or not 2 <= chunk["tokens"] <= 512:
+                raise ValueError("document chunk spans or token counts are invalid")
+            cursor = chunk["end"]
+        if cursor != len(content) or len(dimensions) != 1:
+            raise ValueError("document chunk coverage or vector dimensions are incomplete")
+        parent = self.db.execute("SELECT dimension FROM memory_embeddings WHERE memory_id=? AND namespace=? ORDER BY updated_at DESC LIMIT 1", (memory_id, namespace)).fetchone()
+        if not parent or parent[0] not in dimensions:
+            raise ValueError("parent summary and chunk vector dimensions differ")
+        if namespace == self.embedding_namespace:
+            self._remove_chunk_index(memory_id)
+        self.db.execute("DELETE FROM memory_embedding_chunks WHERE memory_id=? AND namespace=?", (memory_id, namespace))
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+        active = self.db.execute("SELECT status FROM memories WHERE id=?", (memory_id,)).fetchone()[0] == "active"
+        for part, chunk in enumerate(chunks):
+            chunk_id = uuid.uuid4().hex
+            self.db.execute("INSERT INTO memory_embedding_chunks VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (chunk_id, memory_id, namespace, part, chunk["start"], chunk["end"], chunk["tokens"],
+                 len(chunk["embedding"]), json.dumps(chunk["embedding"]), content_hash))
+            if active and namespace == self.embedding_namespace:
+                self.chunk_index.upsert(chunk_id, chunk["embedding"])
+
+    def memory_chunks(self, memory_id: str) -> list[dict]:
+        with self.lock:
+            rows = self.db.execute("SELECT * FROM memory_embedding_chunks WHERE memory_id=? AND namespace=? ORDER BY part", (memory_id, self.embedding_namespace)).fetchall()
+        return [{"start": r["start_char"], "end": r["end_char"], "tokens": r["tokens"],
+                 "embedding": json.loads(r["embedding"])} for r in rows]
+
+    def set_memory_document_embedding(self, memory_id: str, content: str, vector: list[float], chunks: list[dict]) -> bool:
+        with self._memory_transaction():
+            row = self.db.execute("SELECT content,status FROM memories WHERE id=?", (memory_id,)).fetchone()
+            if not row or row["content"] != content or row["status"] != "active":
+                return False  # A concurrent correction/deletion wins over delayed backfill.
+            self._persist_embedding(memory_id, vector)
+            self._persist_chunks(memory_id, content, chunks, self.embedding_namespace)
+        return True
 
     def _bootstrap_vector_index(self) -> None:
         rows = self.db.execute("""SELECT e.memory_id AS id,e.embedding,e.dimension FROM memory_embeddings e
@@ -652,7 +730,7 @@ class Store:
         if row is None or row["role"] != "user":
             raise MemorySourceUnavailable("来源用户消息已删除，不能批准悬空记忆")
 
-    def add_memory(self, content: str, kind: str = "fact", importance: int = 3, source: str = "manual", embedding: list[float] | None = None, supersedes_id: str | None = None, reason: str = "", source_ref: str | None = None, *, require_source: bool = False, embedding_namespace: str | None = None) -> dict[str, Any]:
+    def add_memory(self, content: str, kind: str = "fact", importance: int = 3, source: str = "manual", embedding: list[float] | None = None, supersedes_id: str | None = None, reason: str = "", source_ref: str | None = None, *, require_source: bool = False, embedding_namespace: str | None = None, embedding_chunks: list[dict] | None = None) -> dict[str, Any]:
         timestamp = now()
         item = {
             "id": uuid.uuid4().hex, "content": content.strip(), "kind": kind,
@@ -680,6 +758,8 @@ class Store:
             self.db.execute("INSERT INTO memories_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
             if embedding:
                 self._persist_embedding(item["id"], embedding, embedding_namespace)
+            if embedding_chunks is not None:
+                self._persist_chunks(item["id"], item["content"], embedding_chunks, embedding_namespace or self.embedding_namespace)
             if previous is not None:
                 self._close_interval(supersedes_id, timestamp)
                 self.db.execute("UPDATE memories SET status='superseded',updated_at=? WHERE id=?", (timestamp, supersedes_id))
@@ -757,7 +837,7 @@ class Store:
     def correct_memory(
         self, memory_id: str, content: str, kind: str, importance: int,
         reason: str, embedding: list[float] | None = None,
-        *, embedding_namespace: str | None = None,
+        *, embedding_namespace: str | None = None, embedding_chunks: list[dict] | None = None,
     ) -> dict[str, Any] | None:
         """Replace one active version atomically, retaining the user's correction trail."""
         timestamp = now()
@@ -785,6 +865,8 @@ class Store:
             self.db.execute("INSERT INTO memories_fts(id,content) VALUES (?,?)", (item["id"], content))
             if embedding:
                 self._persist_embedding(item["id"], embedding, embedding_namespace)
+            if embedding_chunks is not None:
+                self._persist_chunks(item["id"], content, embedding_chunks, embedding_namespace or self.embedding_namespace)
             self._close_interval(memory_id, timestamp)
             self.db.execute("UPDATE memories SET status='superseded',updated_at=? WHERE id=?", (timestamp, memory_id))
             self.db.execute("""INSERT INTO memory_replacements
@@ -805,7 +887,8 @@ class Store:
             return current
         vector = current.get("embedding") if content.strip() == current["content"] else None
         return self.correct_memory(memory_id, content, kind, importance, "通过存储接口编辑", vector,
-                                   embedding_namespace=self.embedding_namespace)
+                                   embedding_namespace=self.embedding_namespace,
+                                   embedding_chunks=(self.memory_chunks(memory_id) or None) if content.strip() == current["content"] else None)
 
     def set_memory_embedding(self, memory_id: str, embedding: list[float]) -> None:
         with self._memory_transaction():
@@ -825,6 +908,71 @@ class Store:
                     result.append((self._memory(dict(row)), similarity))
         return result
 
+    def chunk_memory_candidates(self, vector: list[float], limit: int = 100, *, memory_ids: list[str] | None = None,
+                                as_of: str | None = None, namespace: str | None = None) -> list[tuple[dict, float, dict]]:
+        """Max chunk cosine per eligible parent. Historical reads use validity intervals.
+        JSON fallback scans only the caller's bounded parent candidate set.
+        """
+        if memory_ids == []:
+            return []
+        with self.lock:
+            if namespace and namespace != self.embedding_namespace:
+                return []
+            clauses = ["c.namespace=?", "c.dimension=?"]
+            params: list[Any] = [self.embedding_namespace, len(vector)]
+            if as_of:
+                timestamp = normalize_time(as_of)
+                clauses.append("EXISTS(SELECT 1 FROM memory_validity_intervals vi WHERE vi.memory_id=m.id AND vi.valid_at<=? AND (vi.invalid_at IS NULL OR vi.invalid_at>?))")
+                params.extend([timestamp, timestamp])
+            else:
+                clauses.append("m.status='active'")
+            if memory_ids is not None:
+                clauses.append(f"m.id IN ({','.join('?' for _ in memory_ids)})")
+                params.extend(memory_ids)
+            query = " FROM memory_embedding_chunks c JOIN memories m ON m.id=c.memory_id WHERE " + " AND ".join(clauses)
+            scores = None
+            if not as_of and self.chunk_index.enabled and self.chunk_index.dimension == len(vector):
+                # One long parent must not consume all K slots. Expand until enough
+                # distinct eligible parents have been found or the index is exhausted.
+                total = self.db.execute(f"SELECT COUNT(*) FROM {self.chunk_index.map_table}").fetchone()[0]
+                k = min(total, max(1, limit * 4))
+                while k:
+                    matches = self.chunk_index.search(vector, k)
+                    if not self.chunk_index.enabled:
+                        break
+                    eligible = {}
+                    for start in range(0, len(matches), 500):
+                        ids = [cid for cid, _ in matches[start:start + 500]]
+                        if ids:
+                            found = self.db.execute("SELECT c.id,c.memory_id,c.part,c.start_char,c.end_char,c.tokens,c.content_sha256" + query
+                                + f" AND c.id IN ({','.join('?' for _ in ids)})", [*params, *ids]).fetchall()
+                            eligible.update({r["id"]: r for r in found})
+                    scores = [(eligible[cid], score) for cid, score in matches if cid in eligible]
+                    if len({r["memory_id"] for r, _ in scores}) >= limit or k >= total:
+                        break
+                    k = min(total, k * 2)
+            if scores is None or not self.chunk_index.enabled:
+                rows = self.db.execute("SELECT c.*" + query, params).fetchall()
+                norm = math.sqrt(sum(x * x for x in vector))
+                scores = []
+                for row in rows:
+                    values = json.loads(row["embedding"])
+                    denom = norm * math.sqrt(sum(x * x for x in values))
+                    score = sum(a * b for a, b in zip(vector, values, strict=True)) / denom if denom else -1
+                    scores.append((row, score))
+            best: dict[str, tuple[Any, float]] = {}
+            for row, score in scores:
+                if row["memory_id"] not in best or score > best[row["memory_id"]][1]:
+                    best[row["memory_id"]] = (row, score)
+            result = []
+            for memory_id, (row, score) in sorted(best.items(), key=lambda entry: entry[1][1], reverse=True)[:limit]:
+                item = self.memory(memory_id)
+                if as_of:
+                    item = self._memory_at(item, timestamp)
+                result.append((item, score, {"part": row["part"], "start": row["start_char"],
+                    "end": row["end_char"], "tokens": row["tokens"], "source_sha256": row["content_sha256"]}))
+            return result
+
     @property
     def vector_index_status(self) -> dict[str, Any]:
         with self.lock:
@@ -836,6 +984,8 @@ class Store:
             selected = self.db.execute("""SELECT embedding,dimension FROM memory_embeddings
                 WHERE memory_id=? AND namespace=? ORDER BY updated_at DESC LIMIT 1""",
                 (result["id"], self.embedding_namespace)).fetchone()
+            result["embedding_chunk_count"] = self.db.execute("SELECT COUNT(*) FROM memory_embedding_chunks WHERE memory_id=? AND namespace=? AND content_sha256=?",
+                (result["id"], self.embedding_namespace, hashlib.sha256(result["content"].encode()).hexdigest())).fetchone()[0]
         result["embedding"] = selected["embedding"] if selected else None
         result["embedding_model"] = self.embedding_namespace if selected else None
         raw = result.get("embedding")
@@ -850,6 +1000,7 @@ class Store:
 
     def delete_memory(self, memory_id: str) -> bool:
         with self.lock:
+            self._remove_chunk_index(memory_id)
             cur = self.db.execute("DELETE FROM memories WHERE id=?", (memory_id,))
             self.db.execute("DELETE FROM memories_fts WHERE id=?", (memory_id,))
             self.vector_index.delete(memory_id)

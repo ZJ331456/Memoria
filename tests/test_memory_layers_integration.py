@@ -30,9 +30,10 @@ def _app(
         f'[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n'
         f'[server.security]\napi_token="admin-secret"\n'
         f'[agent.mcp]\nenabled=false\n'
-        + (f'[agent.skills]\ndirectory="{skills_root}"\n' if skills_root else '')
+        + (f'[agent.skills]\ndirectory="{skills_root.as_posix()}"\n' if skills_root else '')
         + f'[memory.layers]\nenabled={str(layers_enabled).lower()}\n{layer_overrides}'
-        + f'[storage]\ndatabase="{tmp_path / "layers.db"}"\n',
+        + f'[storage]\ndatabase="{(tmp_path / "layers.db").as_posix()}"\n'
+        + '[memory.markdown]\nenabled=false\n',
         encoding="utf-8",
     )
     return create_app(config)
@@ -75,6 +76,10 @@ def test_episode_runtime_recall_source_and_governance_api(tmp_path: Path):
     assert trace["metadata"]["memory_tool_budget"]["calls"] == 0
     assert "truncated_messages" in trace["metadata"]["context_budget"]
     assert "preserved_context_frame" in trace["metadata"]["context_budget"]
+    stages = trace["metadata"]["stage_timings"]["stages"]
+    assert stages["llm.reader"]["calls"] == 1
+    assert stages["prompt.assemble"]["failed"] == 0
+    assert trace["metadata"]["ttft"]["turn_ms"] is None  # non-streaming has no token observation
     recall_tool = runtime.tools.get("recall_episodes")
     assert recall_tool is not None and recall_tool.risk == "read-only"
     tool_result = asyncio.run(runtime.tools.execute("recall_episodes", {"query": "整理客户需求文档"}))

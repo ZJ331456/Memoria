@@ -5,6 +5,7 @@ import logging
 import hashlib
 import math
 from functools import cached_property
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -12,6 +13,12 @@ import httpx
 from ..config import ModelConfig
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class DocumentEmbedding:
+    vector: list[float]
+    chunks: list[dict[str, Any]] | None = None
 
 
 class EmbeddingError(RuntimeError):
@@ -51,6 +58,43 @@ class EmbeddingClient:
     @property
     def enabled(self) -> bool:
         return self.config.is_ready(role="embedding")
+
+    @property
+    def supports_document_chunks(self) -> bool:
+        return self.uses_bge_instruction
+
+    async def embed_documents(self, texts: list[str], *, timings=None) -> list[DocumentEmbedding]:
+        """Encode every source slice. Parent vectors are only coarse summaries;
+        retrieval uses the best matching source chunk rather than its average.
+        """
+        from ..observability.timing import StageTimings
+        from .token_chunks import local_chunker
+        timers = timings or StageTimings()
+        if not self.supports_document_chunks:
+            with timers.measure("embedding.documents"):
+                vectors = await self.embed_batch(texts)
+            return [DocumentEmbedding(v) for v in vectors]
+        with timers.measure("embedding.chunking"):
+            tokenizer_model = self.config.model if self.is_local else "model/bge-small-zh-v1.5"
+            chunker = local_chunker(tokenizer_model)
+            documents = await asyncio.to_thread(lambda: [chunker.split(text) for text in texts])
+        with timers.measure("embedding.documents"):
+            vectors = await self.embed_batch([c.content for doc in documents for c in doc])
+        if len(vectors) != sum(map(len, documents)):
+            raise EmbeddingError("document chunk encoding is incomplete")
+        result, offset = [], 0
+        for doc in documents:
+            group = vectors[offset:offset + len(doc)]
+            offset += len(doc)
+            if len({len(v) for v in group}) != 1:
+                raise EmbeddingError("document chunks have inconsistent vector dimensions")
+            mean = [sum(values) / len(group) for values in zip(*group, strict=True)]
+            norm = math.sqrt(sum(x * x for x in mean))
+            summary = [x / norm for x in mean] if norm else group[0]
+            result.append(DocumentEmbedding(summary, [
+                {"start": c.start, "end": c.end, "tokens": c.tokens, "embedding": v}
+                for c, v in zip(doc, group, strict=True)]))
+        return result
 
     async def warmup(self) -> None:
         """Load local weights before serving; remote providers are never called."""

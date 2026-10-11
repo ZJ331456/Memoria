@@ -255,7 +255,10 @@ class PromptAssembler:
         for memory in memories:
             kind = memory.get("kind") or "fact"
             memory_id = memory.get("id") or "?"
-            content = str(memory.get("content") or "").strip()
+            content = str(memory.get("retrieval_excerpt") or memory.get("content") or "").strip()
+            chunk = (memory.get("retrieval") or {}).get("chunk")
+            if memory.get("retrieval_excerpt") and chunk:
+                content = f"[原文片段 {chunk['start']}:{chunk['end']}] {content}"
             if content:
                 lines.append(f"- [{memory_id}] ({kind}) {content}")
         return "\n".join(lines)

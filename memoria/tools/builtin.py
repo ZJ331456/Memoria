@@ -28,7 +28,9 @@ def build_registry(
     registry = ToolRegistry()
     async def recall(a):
         if memory:
-            return await memory.retrieve(str(a["query"]), int(a.get("limit", 5)))
+            items = await memory.retrieve(str(a["query"]), int(a.get("limit", 5)))
+            # Tool budgets should preserve the matched tail, like the initial frame.
+            return [{**item, "content": item.get("retrieval_excerpt", item["content"])} for item in items]
         return store.memories(str(a["query"]), int(a.get("limit", 5)))
     async def memorize(a):
         if memory:

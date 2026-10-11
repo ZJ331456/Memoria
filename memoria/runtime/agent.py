@@ -121,7 +121,8 @@ class AgentRuntime:
                     self.store.rename_session(session_id, user_text.replace("\n", " ")[:28])
 
                 interrupt_note = (session or {}).get("interrupt_note") or ""
-                compaction = await self.compactor.ensure(session_id, self.settings.memory_window)
+                with tracer.timings.measure("compaction"):
+                    compaction = await self.compactor.ensure(session_id, self.settings.memory_window)
                 if compaction:
                     context.metadata["compaction"] = {
                         "reused": compaction.reused,
@@ -130,9 +131,11 @@ class AgentRuntime:
                     }
 
                 history = self.store.messages(session_id, self.settings.memory_window)
-                plan = await self.retrieval_planner.plan(user_text, history[:-1])
+                with tracer.timings.measure("query_planner"):
+                    plan = await self.retrieval_planner.plan(user_text, history[:-1])
                 context.metadata["retrieval_plan"] = plan.public_dict()
-                context.memories = await self.memory.retrieve(plan.query, plan.limit, plan.kinds or None) if plan.needed else []
+                with tracer.timings.measure("memory.retrieve"):
+                    context.memories = await self.memory.retrieve(plan.query, plan.limit, plan.kinds or None, timings=tracer.timings) if plan.needed else []
                 context.metadata["retrieval"] = {
                     "injected": len(context.memories),
                     "top_score": context.memories[0].get("retrieval", {}).get("score") if context.memories else None,
@@ -212,13 +215,14 @@ class AgentRuntime:
                     extra_sections.append(PromptSection("Tool Search", tool_catalog, 35))
                 context.metadata["tool_search"] = self.tool_presentation.public_status()
 
-                assembled = self.prompt_assembler.assemble(
-                    self.settings.system_prompt,
-                    memories=context.memories,
-                    compaction_summary=compaction.summary if compaction else "",
-                    interrupt_note=interrupt_note,
-                    extra_sections=extra_sections,
-                )
+                with tracer.timings.measure("prompt.assemble"):
+                    assembled = self.prompt_assembler.assemble(
+                        self.settings.system_prompt,
+                        memories=context.memories,
+                        compaction_summary=compaction.summary if compaction else "",
+                        interrupt_note=interrupt_note,
+                        extra_sections=extra_sections,
+                    )
                 context.messages = assembled.as_messages()
                 context.messages += [{"role": message["role"], "content": message["content"]} for message in history]
                 context.metadata["prompt_sections"] = [section.name for section in assembled.sections]
@@ -273,7 +277,8 @@ class AgentRuntime:
                         context.response = "工具调用达到安全上限，请缩小任务范围后重试。"
                         break
                     step += 1
-                    budget = self.context_budget.apply(context.messages)
+                    with tracer.timings.measure("prompt.budget"):
+                        budget = self.context_budget.apply(context.messages)
                     context.messages = budget.messages
                     context.metadata["context_budget"] = {
                         "original_chars": budget.original_chars,
@@ -284,15 +289,19 @@ class AgentRuntime:
                         "preserved_context_frame": budget.preserved_context_frame,
                     }
                     try:
+                        tracer.mark_llm_request()
                         if on_event:
                             async def stream_delta(text: str):
+                                tracer.mark_visible_text(text)
                                 await on_event({"type": "delta", "content": text})
 
-                            result = await self.llm.chat_stream(
-                                context.messages, tools=self.tool_presentation.schemas(), on_delta=stream_delta
-                            )
+                            with tracer.timings.measure("llm.reader"):
+                                result = await self.llm.chat_stream(
+                                    context.messages, tools=self.tool_presentation.schemas(), on_delta=stream_delta
+                                )
                         else:
-                            result = await self.llm.chat(context.messages, tools=self.tool_presentation.schemas())
+                            with tracer.timings.measure("llm.reader"):
+                                result = await self.llm.chat(context.messages, tools=self.tool_presentation.schemas())
                     except ContextLengthError:
                         emergency = self.context_budget.emergency(context.messages)
                         context.messages = emergency.messages
@@ -315,7 +324,8 @@ class AgentRuntime:
                                 "preserved_context_frame": emergency.preserved_context_frame,
                             },
                         }
-                        result = await self.llm.chat(context.messages, tools=self.tool_presentation.schemas())
+                        with tracer.timings.measure("llm.reader_emergency"):
+                            result = await self.llm.chat(context.messages, tools=self.tool_presentation.schemas())
                     self._record_llm(context, result)
                     if not result.tool_calls:
                         context.response = result.content or "我暂时没有生成有效回复，请再试一次。"
@@ -349,18 +359,20 @@ class AgentRuntime:
                         }]
                         final_budget = self.context_budget.apply(final_messages)
                         context.metadata["context_budget"]["loop_guard_final_chars"] = final_budget.final_chars
-                        summary = await self.llm.chat(final_budget.messages)
+                        with tracer.timings.measure("llm.reader_loop_guard"):
+                            summary = await self.llm.chat(final_budget.messages)
                         self._record_llm(context, summary)
                         context.response = summary.content or "检测到重复工具调用，已安全停止。"
                         break
 
-                    tool_records = await self._execute_tools_parallel(
-                        result.tool_calls,
-                        authorization.allowed_write_tools,
-                        step,
-                        on_event,
-                        memory_budget,
-                    )
+                    with tracer.timings.measure("tools.execute"):
+                        tool_records = await self._execute_tools_parallel(
+                            result.tool_calls,
+                            authorization.allowed_write_tools,
+                            step,
+                            on_event,
+                            memory_budget,
+                        )
                     context.tool_chain.extend(tool_records)
                     if self.skills:
                         context.metadata["skills"]["loaded"].extend(

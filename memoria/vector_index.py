@@ -40,7 +40,7 @@ class SQLiteVecIndex:
             if self.mode == "sqlite-vec":
                 logger.warning("sqlite-vec 已配置但不可用，回退 JSON 扫描: %s", self.error)
 
-    def bootstrap(self, memories: list[dict[str, Any]]) -> None:
+    def bootstrap(self, memories: list[dict[str, Any]], *, prune: bool = True) -> None:
         if not self.enabled:
             return
         for item in memories:
@@ -51,7 +51,7 @@ class SQLiteVecIndex:
                 vector = None
             if isinstance(vector, list) and vector:
                 self.upsert(str(item["id"]), [float(value) for value in vector])
-        if self.enabled and self.dimension is not None:
+        if prune and self.enabled and self.dimension is not None:
             self._ensure_table(self.dimension)
             stale = f"SELECT vm.vector_rowid FROM {self.map_table} vm LEFT JOIN memories m ON m.id=vm.memory_id WHERE m.id IS NULL OR m.status!='active'"
             self.db.execute(f"DELETE FROM {self.vec_table} WHERE rowid IN ({stale})")
