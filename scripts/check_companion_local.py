@@ -41,7 +41,7 @@ async def long_memory(config: Path):
             text = "我记录了今天的天气、步行时间和阅读页数，其他日常安排照旧。\n" * 120
             text += "我家的猫叫栗子。栗子患有鸡肉过敏，喂食必须排除鸡肉。"
             with timings.measure("memory.long_write"):
-                saved = (await engine.remember(text, "fact", 3, "manual")).memory
+                saved = (await engine.remember(text, "fact", 3, "manual", timings=timings)).memory
             chunks = store.memory_chunks(saved["id"])
             assert len(chunks) > 1 and sum(c["end"] - c["start"] for c in chunks) == len(text)
             assert chunks[-1]["end"] == len(text) and max(c["tokens"] for c in chunks) <= 512
@@ -60,7 +60,7 @@ async def long_memory(config: Path):
                     "retrieval": hit["retrieval"] if hit else None,
                     "tail_survived_prompt": "鸡肉过敏" in frame})
             with timings.measure("memory.long_correct"):
-                corrected = await engine.correct(saved["id"], text.replace("鸡肉", "牛肉"), "fact", 3, "用户更正")
+                corrected = await engine.correct(saved["id"], text.replace("鸡肉", "牛肉"), "fact", 3, "用户更正", timings=timings)
             new_hits = await engine.retrieve("家里的猫需要避开哪一种肉类？", expand_graph=False)
             assert saved["id"] not in {h["id"] for h in new_hits}
             assert store.memory_chunks(corrected["id"])[-1]["end"] == len(corrected["content"])

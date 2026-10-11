@@ -9,6 +9,7 @@ from memoria.memory.embedding import EmbeddingClient
 from memoria.memory.engine import MemoryEngine
 from memoria.memory.token_chunks import TokenChunker
 from memoria.prompting import PromptAssembler
+from memoria.observability.timing import StageTimings
 from memoria.store import Store
 from tests.test_token_chunks import CharacterTokenizer
 
@@ -43,7 +44,10 @@ def long_text(tail="OLDTAIL"):
 def test_tail_is_semantic_hit_and_survives_prompt_budget(setup_memory):
     store, engine, _ = setup_memory
     text = long_text()
-    item = asyncio.run(engine.remember(text, "fact", 3, "manual")).memory
+    timers = StageTimings()
+    item = asyncio.run(engine.remember(text, "fact", 3, "manual", timings=timers)).memory
+    assert timers.stages["embedding.chunking"]["calls"] == 1
+    assert timers.stages["embedding.documents"]["calls"] == 1
     chunks = store.memory_chunks(item["id"])
     assert len(chunks) > 1 and chunks[-1]["end"] == len(text)
     assert sum(c["end"] - c["start"] for c in chunks) == len(text)

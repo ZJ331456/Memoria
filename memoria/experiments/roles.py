@@ -80,7 +80,8 @@ class ExperimentLLM(LLMClient):
             with self.timings.measure(f"llm.{role}"):
                 kwargs = dict(model=selected, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
                 result = await client.chat_stream(messages, on_delta=delta, **kwargs) if stream else await client.chat(messages, **kwargs)
-            row.update(usage=result.usage, retries=result.retries, finish_reason=result.finish_reason)
+            row.update(usage=result.usage, retries=result.retries, finish_reason=result.finish_reason,
+                       response=result.content, tool_calls=result.tool_calls)
             if result.finish_reason not in {None, "stop"} or not result.content.strip():
                 raise ValueError(f"incomplete final content: {result.finish_reason}")
             return result

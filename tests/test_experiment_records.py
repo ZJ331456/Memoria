@@ -1,4 +1,5 @@
 import asyncio
+import argparse
 import copy
 import json
 import subprocess
@@ -13,7 +14,7 @@ from memoria.experiments.roles import ExperimentLLM, load_roles
 from memoria.observability.timing import StageTimings
 from memoria.observability.tracing import TurnTracer
 from memoria.store import Store
-from tests.regression.run_companion import DIRECTORY, score_predictions, system_trajectories
+from tests.regression.run_companion import DIRECTORY, run, score_predictions, system_trajectories
 
 
 def test_nested_timers_count_failures_and_do_not_share_state(monkeypatch):
@@ -97,6 +98,28 @@ def test_failed_cases_remain_in_metrics_and_duplicate_ids_rejected():
         score_predictions([rows[0], rows[0], rows[1]], {"cases": {"one": label, "two": label}}, True)
 
 
+def test_aborted_run_records_every_unattempted_case(tmp_path, monkeypatch):
+    config = tmp_path / "config.toml"
+    config.write_text(f'[storage]\ndatabase="{(tmp_path / "unused.db").as_posix()}"\n', encoding="utf-8")
+    params = argparse.Namespace(config=config, roles=DIRECTORY / "companion_roles.toml",
+        inputs=DIRECTORY / "companion_inputs.json", gold=DIRECTORY / "companion_gold.json",
+        mode="reviewed", reader=False, embedding=False, allow_remote=False, out=tmp_path / "runs",
+        vector_backend="json", seed=17)
+
+    def fail_store(*args):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr("tests.regression.run_companion.Store", fail_store)
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        asyncio.run(run(params))
+    path = next(params.out.iterdir())
+    metrics = json.loads((path / "metrics.json").read_text())
+    assert metrics["requested_cases"] == metrics["errors"] == 8
+    assert metrics["completed_cases"] == 0 and not metrics["scoring_complete"]
+    cases = [json.loads(line) for line in (path / "cases.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(cases) == len({row["id"] for row in cases}) == 8
+
+
 @pytest.mark.parametrize("stream", [False, True])
 def test_roles_send_explicit_generation_settings_and_record_actual_usage(tmp_path, stream):
     config = tmp_path / "config.toml"
@@ -126,6 +149,7 @@ def test_roles_send_explicit_generation_settings_and_record_actual_usage(tmp_pat
     client.transport = httpx.MockTransport(handler)
     result = asyncio.run(client.call("reader", [{"role": "user", "content": "住哪"}], stream=stream))
     assert result.content == "北京" and client.calls[0]["usage"]["total_tokens"] == 3
+    assert client.calls[0]["response"] == "北京"
     assert (client.calls[0]["ttft_ms"] is not None) == stream
     assert client.timings.stages["llm.reader"]["calls"] == 1
     assert {file for file, row in recorded} == {"prompts.jsonl", "calls.jsonl"}

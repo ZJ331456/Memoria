@@ -137,6 +137,7 @@ async def run(args):
                     for event in trajectory["events"]:
                         timers = StageTimings()
                         llm.timings = timers
+                        writes, candidates = [], None
                         try:
                             message = store.add_message(session["id"], "user", f"[日期 {event['date']}] {event['text']}")
                             source_ids[message["id"]] = event["id"]
@@ -145,25 +146,31 @@ async def run(args):
                                     curated = event.get("reviewed")
                                     if curated:
                                         if curated.get("corrects"):
-                                            saved = await engine.correct(ids[curated["corrects"]], curated["content"], curated["kind"], 3, event["text"])
+                                            saved = await engine.correct(ids[curated["corrects"]], curated["content"], curated["kind"], 3, event["text"], timings=timers)
                                             # Explicit source audit for a fixture-directed user correction.
                                             with store.lock:
                                                 store.db.execute("UPDATE memories SET source_ref=? WHERE id=?", (message["id"], saved["id"]))
                                                 store.db.commit()
                                         else:
-                                            saved = (await engine.remember(curated["content"], curated["kind"], 3, "reviewed_conversation", message["id"], require_source=True)).memory
+                                            saved = (await engine.remember(curated["content"], curated["kind"], 3, "reviewed_conversation", message["id"], require_source=True, timings=timers)).memory
                                         ids[event["id"]] = saved["id"]
+                                        writes.append({"action": "corrected" if curated.get("corrects") else "reviewed_write", "memory_id": saved["id"]})
                                 else:
                                     job = store.enqueue_memory_job(message["id"], message["content"], "")
                                     worker = MemoryJobWorker(store, llm, engine, max_retries=1)
                                     await worker.process_once()
                                     if store.memory_jobs()[0]["status"] != "completed":
                                         raise RuntimeError("extraction job failed; inspect calls/events logs")
+                                    candidates = [{"content": r["content"], "kind": r["kind"], "importance": r["importance"]}
+                                        for r in store.memory_reviews() if r["job_id"] == job["id"]]
                                     for review in store.memory_reviews():
                                         if review["job_id"] == job["id"] and store.claim_memory_review(review["id"], review["content"], review["kind"], review["importance"]):
-                                            result = await engine.remember(review["content"], review["kind"], review["importance"], "reviewed_conversation", message["id"], require_source=True)
+                                            result = await engine.remember(review["content"], review["kind"], review["importance"], "reviewed_conversation", message["id"], require_source=True, timings=timers)
                                             store.finish_memory_review(review["id"], result.memory["id"] if result.memory else None, result.action)
+                                            writes.append({"action": result.action, "memory_id": result.memory["id"] if result.memory else None,
+                                                           "previous_id": result.previous_id, "reason": result.reason})
                             recorder.append("events.jsonl", {"trajectory": trajectory["id"], "event": event["id"],
+                                "extraction_candidates": candidates, "writes": writes,
                                 "active_memories": [{"id": m["id"], "content": m["content"], "source": source_ids.get(m["source_ref"]),
                                                      "chunks": m["embedding_chunk_count"]} for m in store.memories()],
                                 "stage_timings": timers.public_dict()})
@@ -207,7 +214,20 @@ async def run(args):
         recorder.finish(metrics)
         return recorder.path, metrics
     except BaseException as exc:
-        recorder.finish({"requested_cases": sum(len(t["probes"]) for t in supplied), "errors": 1}, error=f"{type(exc).__name__}: {exc}")
+        error = f"{type(exc).__name__}: {exc}"
+        finished = {r["id"] for r in predictions}
+        for trajectory in supplied:
+            for probe in trajectory["probes"]:
+                if probe["id"] not in finished:
+                    row = {"id": probe["id"], "trajectory": trajectory["id"], "question": probe["question"],
+                           "answer": None, "retrieved_sources": [], "error": "run aborted: " + error,
+                           "stage_timings": StageTimings().public_dict()}
+                    predictions.append(row)
+                    recorder.append("cases.jsonl", row)
+        recorder.finish({"requested_cases": sum(len(t["probes"]) for t in supplied),
+            "completed_cases": sum(not r.get("error") for r in predictions),
+            "errors": sum(bool(r.get("error")) for r in predictions),
+            "semantic_qa_accuracy": None, "scoring_complete": False}, error=error)
         raise
 
 

@@ -216,12 +216,12 @@ class MemoryEngine:
         result = await self.remember(content, kind, importance, source, source_ref)
         return result.memory if result.action in {"created", "superseded"} else None
 
-    async def remember(self, content: str, kind: str, importance: int, source: str, source_ref: str | None = None, *, require_source: bool = False) -> MemoryWriteResult:
-        result = await self._remember(content, kind, importance, source, source_ref, require_source=require_source)
+    async def remember(self, content: str, kind: str, importance: int, source: str, source_ref: str | None = None, *, require_source: bool = False, timings: StageTimings | None = None) -> MemoryWriteResult:
+        result = await self._remember(content, kind, importance, source, source_ref, require_source=require_source, timings=timings)
         self._sync_markdown_layer(result, content=content, kind=kind, source_ref=source_ref)
         return result
 
-    async def _remember(self, content: str, kind: str, importance: int, source: str, source_ref: str | None = None, *, require_source: bool = False) -> MemoryWriteResult:
+    async def _remember(self, content: str, kind: str, importance: int, source: str, source_ref: str | None = None, *, require_source: bool = False, timings: StageTimings | None = None) -> MemoryWriteResult:
         embedder = self.embedder
         embedding_namespace = self.store.embedding_namespace
         content = content.strip()
@@ -242,8 +242,8 @@ class MemoryEngine:
         document_chunks = None
         if embedder and embedder.enabled:
             try:
-                await self._backfill(items, limit=128)
-                vector, document_chunks = await self._embed_document(content)
+                await self._backfill(items, limit=128, timings=timings)
+                vector, document_chunks = await self._embed_document(content, timings=timings)
             except Exception as exc:
                 logger.warning("记忆向量去重不可用，使用文本去重: %s", type(exc).__name__)
                 vector = None
@@ -334,7 +334,7 @@ class MemoryEngine:
             return ""
         return self.markdown.sync_memory(self.store.memories(limit=5000))
 
-    async def correct(self, memory_id: str, content: str, kind: str, importance: int, reason: str) -> dict[str, Any] | None:
+    async def correct(self, memory_id: str, content: str, kind: str, importance: int, reason: str, *, timings: StageTimings | None = None) -> dict[str, Any] | None:
         embedder = self.embedder
         embedding_namespace = self.store.embedding_namespace
         current = self.store.memory(memory_id)
@@ -344,7 +344,7 @@ class MemoryEngine:
         chunks = self.store.memory_chunks(memory_id) if content.strip() == current["content"] else None
         if vector is None and embedder and embedder.enabled:
             try:
-                vector, chunks = await self._embed_document(content.strip())
+                vector, chunks = await self._embed_document(content.strip(), timings=timings)
             except Exception as exc:
                 logger.warning("纠正记忆向量化不可用，使用关键词检索: %s", type(exc).__name__)
         corrected = self.store.correct_memory(memory_id, content, kind, importance, reason, vector, embedding_namespace=embedding_namespace, embedding_chunks=chunks or None)
@@ -381,13 +381,14 @@ class MemoryEngine:
         return (not item.get("embedding") or (dimension and len(item["embedding"]) != dimension)
                 or (chunks_required and not item.get("embedding_chunk_count")))
 
-    async def _embed_document(self, text: str) -> tuple[list[float] | None, list[dict] | None]:
+    async def _embed_document(self, text: str, *, timings: StageTimings | None = None) -> tuple[list[float] | None, list[dict] | None]:
         if getattr(self.embedder, "supports_document_chunks", False):
-            documents = await self.embedder.embed_documents([text])
+            documents = await self.embedder.embed_documents([text], timings=timings)
             if len(documents) != 1:
                 raise ValueError("document embedding count is invalid")
             return documents[0].vector, documents[0].chunks
-        return await asyncio.wait_for(self.embedder.embed(text), timeout=self.embedder.timeout_seconds + 1), None
+        with (timings or StageTimings()).measure("embedding.documents"):
+            return await asyncio.wait_for(self.embedder.embed(text), timeout=self.embedder.timeout_seconds + 1), None
 
     async def _backfill(self, items: list[dict], limit: int, *, timings: StageTimings | None = None) -> int:
         embedder = self.embedder
