@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from memoria.memory.token_chunks import TokenChunker
+
 
 QUESTION_TYPES = {
     "single-session-user", "single-session-assistant", "single-session-preference",
@@ -23,6 +25,9 @@ class HistoryDocument:
     turn_index: int
     part: int
     content: str
+    start: int | None = None
+    end: int | None = None
+    tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -77,7 +82,7 @@ def load_cases(path: Path, limit: int | None = None) -> list[dict[str, Any]]:
     return cases
 
 
-def system_input(case: dict[str, Any], chunk_chars: int = 1600) -> QuestionInput:
+def system_input(case: dict[str, Any], chunk_chars: int = 1600, chunker: TokenChunker | None = None) -> QuestionInput:
     """Strip reference answers, label flags, task type, and answer-prefixed IDs."""
     if not 256 <= chunk_chars <= 7000:
         raise ValueError("chunk_chars must be between 256 and 7000")
@@ -85,6 +90,18 @@ def system_input(case: dict[str, Any], chunk_chars: int = 1600) -> QuestionInput
     for session_index, (date, turns) in enumerate(zip(case["haystack_dates"], case["haystack_sessions"], strict=True)):
         for turn_index, turn in enumerate(turns):
             text = turn["content"]
+            def header(part):
+                sid = f"S{session_index:04d}:T{turn_index:04d}:P{part:03d}"
+                return f"source={sid}; session_date={date}; role={turn['role']}\n"
+
+            if chunker is not None:
+                chunks = chunker.split(text, header)
+                chunker.coverage(text, chunks)
+                for part, chunk in enumerate(chunks):
+                    source_id = f"S{session_index:04d}:T{turn_index:04d}:P{part:03d}"
+                    documents.append(HistoryDocument(source_id, session_index, turn_index, part,
+                        chunk.content, chunk.start, chunk.end, chunk.tokens))
+                continue
             for part, start in enumerate(range(0, max(1, len(text)), chunk_chars)):
                 source_id = f"S{session_index:04d}:T{turn_index:04d}:P{part:03d}"
                 header = f"source={source_id}; session_date={date}; role={turn['role']}\n"

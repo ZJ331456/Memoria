@@ -38,6 +38,20 @@ LoCoMo/GateMem 入口拒绝超过五条的输入；目前没有自动扫全量�
 
 默认报告输出在 `data/benchmark/results/`。只有完成核对的量化结果才归档至 `eval/results/`。LoCoMo 使用 1600 字符分块、语义 top-10、情景 top-3、12000 字符帧；GateMem 编译最多 40 条带权限的状态记忆，枚举真实 ACL 过滤结果后按问题词排序、取前 20 条。reader 输出预算 4096，GateMem compiler 8192。它们均使用实际 `ContextBudget` 的最终限制；字符不是精确 token。
 
+2026-10-11 起，LongMemEval / LoCoMo 的本地 BGE 条件自动使用本地 tokenizer 分块：每块含来源前缀和 special token 最多 512 token，1600 字符仅作为额外上限。`--tokenizer-model model/bge-small-zh-v1.5` 可让词面基线使用完全相同的分块。报告新增 `protocol.chunking` 与逐题 `encoding_coverage`，保留 tokenizer SHA、原文 span、覆盖字符和每块 token；只核验索引编码覆盖，不代表最终 prompt 完整注入。比较方法时显式给双方相同 tokenizer 参数；旧字符分块报告保留为历史协议。BGE 中文模型在英文公共五题上的接线结果与中文质量实验分开报告。
+
+```powershell
+.\.venv\Scripts\python.exe -m eval.run_longmemeval --config $taskEvalConfig --tokenizer-model model/bge-small-zh-v1.5
+.\.venv\Scripts\python.exe -m eval.run_longmemeval --config $taskEvalConfig --embedding --tokenizer-model model/bge-small-zh-v1.5
+.\.venv\Scripts\python.exe -m eval.run_locomo --config $taskEvalConfig --embedding --tokenizer-model model/bge-small-zh-v1.5
+```
+
+`$taskEvalConfig` 应指向独立实验配置，本地 HTTP/进程模型无需 API key。评测索引在写向量前选择对应 namespace，缓存键包含 namespace；HTTP 服务更换实际权重时仍需新缓存目录与独立实验记录。原始分块可以用下方合成检查复现，不会写个人记忆库或调用 LLM：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/check_token_chunking.py --device cuda
+```
+
 ## 适配边界
 
 - **LongMemEval**：全部用户与助手历史建原始索引；调用实际 `MemoryEngine` 和上下文模块，不执行生产抽取审批。详见[专门说明](../docs/LongMemEval评测说明.md)。

@@ -143,6 +143,22 @@ def test_embedding_float_base64_and_query_instruction(service, monkeypatch):
     assert seen[-2:] == ["为这个句子生成表示以用于检索相关文章：饮料", "喝茶"]
 
 
+def test_embedding_token_overflow_returns_openai_input_error(service, monkeypatch):
+    from memoria.memory.local_bge import EmbeddingInputTooLong
+    app, _ = service
+
+    class Encoder:
+        async def encode(self, texts, timeout):
+            raise EmbeddingInputTooLong("input[0] has 513 tokens; BGE limit is 512")
+
+    monkeypatch.setattr("memoria.memory.local_bge.get_encoder", lambda *args: Encoder())
+    with TestClient(app) as api:
+        response = api.post("/v1/embeddings", json={"model": "bge-small-zh-v1.5", "input": "long text"})
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "context_length_exceeded"
+        assert response.json()["error"]["param"] == "input"
+
+
 def test_truncated_stream_is_not_retried_and_reasoning_is_not_answer(tmp_path):
     calls = []
 

@@ -53,7 +53,7 @@ def write_report(path: Path, report: dict):
 def configured(settings, slots):
     for slot in slots:
         model = getattr(settings, slot)
-        if not (model.model and model.api_key and model.base_url):
+        if not model.is_ready(role="embedding" if slot == "embedding" else "llm"):
             raise ValueError(f"{slot} model configuration is incomplete")
 
 

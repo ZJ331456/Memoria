@@ -9,8 +9,8 @@ def test_review_queue_requires_approval_and_links_to_old_source_message(tmp_path
     config = tmp_path / "config.toml"
     config.write_text(
         f'''[llm.main]\nmodel="test"\napi_key="x"\nbase_url="http://example.test/v1"\n'''
-        f'''[memory.markdown]\ndirectory="{tmp_path / 'markdown'}"\n'''
-        f'''[storage]\ndatabase="{tmp_path / 'review.db'}"\n''', encoding="utf-8",
+        f'''[memory.markdown]\ndirectory="{(tmp_path / 'markdown').as_posix()}"\n'''
+        f'''[storage]\ndatabase="{(tmp_path / 'review.db').as_posix()}"\n''', encoding="utf-8",
     )
     app = create_app(config)
     client = TestClient(app)

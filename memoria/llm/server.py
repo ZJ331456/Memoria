@@ -105,6 +105,9 @@ def _error(message: str, *, code="invalid_request_error", param=None, error_type
 
 
 def _inference_error(exc: Exception) -> tuple[int, dict]:
+    from ..memory.local_bge import EmbeddingInputTooLong
+    if isinstance(exc, EmbeddingInputTooLong):
+        return 400, _error(str(exc), code="context_length_exceeded", param="input")
     if isinstance(exc, ContextLengthError):
         return 400, _error(str(exc), code="context_length_exceeded", param="messages")
     if isinstance(exc, LocalQueueFullError) or (isinstance(exc, RuntimeError) and "队列已满" in str(exc)):

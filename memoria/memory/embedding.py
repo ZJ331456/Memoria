@@ -73,7 +73,7 @@ class EmbeddingClient:
             return []
         result: list[list[float]] = []
         for offset in range(0, len(texts), self.batch_size):
-            chunk = [text[:8000] for text in texts[offset:offset + self.batch_size]]
+            chunk = texts[offset:offset + self.batch_size]
             result.extend(await self._request(chunk))
         return result
 

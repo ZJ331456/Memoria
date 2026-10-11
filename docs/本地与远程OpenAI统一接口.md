@@ -16,6 +16,8 @@
 
 已有进程需要重启以加载修复。默认总上下文为 **8192 token（输入加输出预算）**，不是可再生成 8192 token；本机已将 `[agent].max_tokens` 调为 1024，给输入留出空间。可用 `--max-context-tokens` 调整服务预算，实际硬件是否容纳需要另外测量。超过预算返回 `context_length_exceeded`，不静默截断历史。
 
+BGE 输入上限为 **512 token，含 special token**。超长输入返回 HTTP 400、`context_length_exceeded`、`param=input`；进程后端同样拒绝静默截断。LongMemEval / LoCoMo 已接入包含来源前缀预算的 tokenizer 分块，见[评测说明](../eval/README.md)。当前生产单条长记忆尚未建立多块向量索引，超长时沿用关键词降级；既有旧向量仍需隔离重建，不能假设历史截断数据已自动修复。
+
 推荐模型槽位配置：
 
 ```toml

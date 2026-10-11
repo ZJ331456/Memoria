@@ -22,6 +22,7 @@ from memoria.config import Settings
 from memoria.llm import LLMClient
 from memoria.memory.embedding import EmbeddingClient
 from memoria.memory.engine import MemoryEngine
+from memoria.memory.token_chunks import local_chunker, chunking_metadata
 from memoria.observability.tracing import _redact_text
 from memoria.prompting import ContextBudget, PromptAssembler
 from memoria.store import Store
@@ -56,6 +57,16 @@ class Options:
     concurrency: int = 2
     max_tokens: int = 4096
     cache_dir: Path | None = None
+    tokenizer_model: str | None = None
+
+
+def resolve_tokenizer(settings: Settings, embedding: bool, requested: str | None) -> str | None:
+    if requested:
+        return requested
+    embedder = EmbeddingClient(settings.embedding)
+    if embedding and embedder.uses_bge_instruction:
+        return settings.embedding.model if embedder.is_local else "model/bge-small-zh-v1.5"
+    return None
 
 
 class TrackedEmbedder(EmbeddingClient):
@@ -79,8 +90,8 @@ class TrackedEmbedder(EmbeddingClient):
 
 
 async def document_vectors(embedder: TrackedEmbedder, texts: list[str], cache_dir: Path | None):
-    identity = {"protocol": "longmemeval-turn-chunks-v1", "model": embedder.config.model,
-                "base_url": embedder.config.base_url, "texts": texts}
+    identity = {"protocol": "document-vectors-v2", "model": embedder.config.model,
+                "namespace": embedder.namespace, "texts": texts}
     digest = hashlib.sha256(json.dumps(identity, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     path = cache_dir / f"{digest}.json" if cache_dir else None
     if path and path.exists():
@@ -88,7 +99,8 @@ async def document_vectors(embedder: TrackedEmbedder, texts: list[str], cache_di
         if (not isinstance(vectors, list) or len(vectors) != len(texts) or not vectors
                 or any(not isinstance(v, list) or not v for v in vectors)
                 or len({len(v) for v in vectors}) != 1
-                or any(type(x) not in {int, float} or not math.isfinite(x) for v in vectors for x in v)):
+                or any(type(x) not in {int, float} or not math.isfinite(x) for v in vectors for x in v)
+                or any(not any(v) for v in vectors)):
             raise ValueError("embedding cache is malformed; remove it and retry")
         return vectors, True
     vectors = await embedder.embed_batch(texts)
@@ -115,7 +127,9 @@ def final_answer(result) -> str:
 async def run_case(case: dict[str, Any], settings: Settings, options: Options, database: Path) -> dict[str, Any]:
     started = time.perf_counter()
     # The system sees this value, never the annotated case object.
-    supplied = system_input(case, options.chunk_chars)
+    tokenizer_model = resolve_tokenizer(settings, options.embedding, options.tokenizer_model)
+    chunker = local_chunker(tokenizer_model, max_chars=options.chunk_chars) if tokenizer_model else None
+    supplied = system_input(case, options.chunk_chars, chunker)
     row: dict[str, Any] = {"question_id": case["question_id"], "question_type": case["question_type"],
         "question": supplied.question, "reference_answer": case["answer"], "question_date": supplied.question_date,
         "history_sessions": len(case["haystack_sessions"]), "indexed_chunks": len(supplied.documents),
@@ -123,10 +137,19 @@ async def run_case(case: dict[str, Any], settings: Settings, options: Options, d
         "hypothesis": None, "judgment": None, "judge_requested": options.judge,
         "evidence_eligible": {level: evidence_metrics(case, [])[level]["eligible"]
                               for level in ("session", "turn")}}
+    if chunker:
+        row["encoding_coverage"] = {
+            "source_chars": sum(len(t["content"]) for turns in case["haystack_sessions"] for t in turns),
+            "covered_chars": sum(d.end - d.start for d in supplied.documents),
+            "max_encoded_tokens": max(d.tokens for d in supplied.documents), "truncated_chunks": 0,
+            "spans": [{"source": d.id, "start": d.start, "end": d.end, "tokens": d.tokens}
+                      for d in supplied.documents]}
     store = Store(database, "json")
     embedder = TrackedEmbedder(settings) if options.embedding else None
     try:
         index_started = time.perf_counter()
+        if embedder:
+            store.configure_embedding(embedder.namespace)
         vectors, cache_hit = await document_vectors(
             embedder, [d.content for d in supplied.documents], options.cache_dir,
         ) if embedder else (None, False)
@@ -195,11 +218,13 @@ async def run(path: Path, settings: Settings, options: Options, *, limit: int | 
         raise ValueError("invalid top-k, concurrency, or context character limit")
     for enabled, slot in ((options.embedding, "embedding"), (options.qa, options.reader_slot), (options.judge, options.judge_slot)):
         model = getattr(settings, slot)
-        if enabled and not (model.api_key and model.model and model.base_url):
+        if enabled and not model.is_ready(role="embedding" if slot == "embedding" else "llm"):
             raise ValueError(f"{slot} model configuration is incomplete")
     # Validate all cases/chunk options before making any API request.
+    tokenizer_model = resolve_tokenizer(settings, options.embedding, options.tokenizer_model)
+    chunker = local_chunker(tokenizer_model, max_chars=options.chunk_chars) if tokenizer_model else None
     for case in cases:
-        system_input(case, options.chunk_chars)
+        system_input(case, options.chunk_chars, chunker)
     if progress_path:
         progress_path.parent.mkdir(parents=True, exist_ok=True)
         progress_path.write_text("")
@@ -226,6 +251,7 @@ async def run(path: Path, settings: Settings, options: Options, *, limit: int | 
             "reader": options.reader_slot if options.qa else None, "judge": options.judge_slot if options.judge else None,
             "judge_rubric": "independently phrased LongMemEval type criteria; not official GPT-4o grading",
             "top_k_chunks": options.top_k, "chunk_chars": options.chunk_chars, "context_chars": options.context_chars,
+            "chunking": chunking_metadata(tokenizer_model, options.chunk_chars),
             "context_char_budget": settings.context_char_budget, "max_output_tokens": options.max_tokens,
             "concurrency": options.concurrency, "assistant_history_included": True,
             "gold_fields_used_only_for_scoring": ["answer", "answer_session_ids", "has_answer", "question_type"],
@@ -247,6 +273,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int)
     parser.add_argument("--top-k", type=int, default=10)
     parser.add_argument("--chunk-chars", type=int, default=1600)
+    parser.add_argument("--tokenizer-model", help="local embedding tokenizer; pass the same path to lexical/hybrid baselines")
     parser.add_argument("--context-chars", type=int, default=12000)
     parser.add_argument("--embedding", action="store_true")
     parser.add_argument("--qa", action="store_true")
@@ -262,7 +289,8 @@ def main() -> None:
     if args.max_tokens < 1 or (args.min_recall is not None and not 0 <= args.min_recall <= 1):
         parser.error("max-tokens must be positive; min-recall must be in 0..1")
     options = Options(args.top_k, args.chunk_chars, args.context_chars, args.embedding,
-        args.qa, args.judge, args.reader_slot, args.judge_slot, args.concurrency, args.max_tokens, args.cache_dir)
+        args.qa, args.judge, args.reader_slot, args.judge_slot, args.concurrency, args.max_tokens, args.cache_dir,
+        args.tokenizer_model)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     try:
         report = asyncio.run(run(args.data, Settings.load(args.config), options,

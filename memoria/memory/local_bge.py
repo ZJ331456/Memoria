@@ -16,6 +16,10 @@ POLICY = "bge-zh-v1.5:cls:l2:fp32:max512:query-instruction-v1"
 _ROOT = Path(__file__).resolve().parents[2]
 
 
+class EmbeddingInputTooLong(ValueError):
+    """Reject incomplete encodings rather than silently losing source evidence."""
+
+
 def model_path(model: str) -> Path:
     path = Path(model).expanduser()
     return (path if path.is_absolute() else _ROOT / path).resolve()
@@ -79,7 +83,14 @@ class LocalBgeEncoder:
 
     def _encode(self, texts: list[str]) -> list[list[float]]:
         self._load()
-        encoded = self._tokenizer(texts, padding=True, truncation=True, max_length=MAX_LENGTH, return_tensors="pt")
+        encoded = self._tokenizer(texts, padding=True, truncation=False, return_tensors="pt")
+        lengths = encoded["attention_mask"].sum(dim=1).tolist()
+        for index, length in enumerate(lengths):
+            if length > MAX_LENGTH:
+                raise EmbeddingInputTooLong(
+                    f"input[{index}] has {length} tokens including special tokens; BGE limit is {MAX_LENGTH}. "
+                    "Split source text with its tokenizer before embedding."
+                )
         encoded = {key: value.to(self._actual_device) for key, value in encoded.items()}
         with self._torch.inference_mode():
             hidden = self._model(**encoded).last_hidden_state[:, 0]
@@ -104,8 +115,8 @@ class LocalBgeEncoder:
                 "max_length": MAX_LENGTH, "loaded": self._model is not None}
 
     def count_tokens(self, texts: list[str]) -> int:
-        """Number of tokens actually encoded, including special tokens and truncation."""
-        encoded = self._tokenizer(texts, truncation=True, max_length=MAX_LENGTH, padding=False)
+        """Number of accepted input tokens, including special tokens; no truncation."""
+        encoded = self._tokenizer(texts, truncation=False, padding=False)
         return sum(len(ids) for ids in encoded["input_ids"])
 
 

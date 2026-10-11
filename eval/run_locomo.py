@@ -15,6 +15,7 @@ from memoria.llm import LLMClient
 from memoria.memory.engine import MemoryEngine
 from memoria.memory.episodic import EpisodicMemory
 from memoria.memory.layer_settings import MemoryLayerSettings
+from memoria.memory.token_chunks import local_chunker, chunking_metadata
 from memoria.observability.tracing import _redact_text
 from memoria.prompting import ContextBudget, PromptAssembler
 from memoria.prompting.assembler import PromptSection
@@ -22,7 +23,7 @@ from memoria.store import Store
 
 from .longmemeval import parse_judgment
 from .public_common import api_totals, call_stats, configured, latency, metadata, write_report
-from .run_longmemeval import ROOT, TrackedEmbedder, document_vectors, final_answer
+from .run_longmemeval import ROOT, TrackedEmbedder, document_vectors, final_answer, resolve_tokenizer
 
 
 READER = (
@@ -80,7 +81,7 @@ def judge_prompt(qa, hypothesis):
 
 
 async def run_case(case, settings, *, embedding=False, qa=False, judge=False, context_chars=12000,
-                   cache_dir=None, max_tokens=4096):
+                   cache_dir=None, max_tokens=4096, tokenizer_model=None):
     docs = history_input(case)
     question = case["qa"]["question"]
     category = case["qa"]["category"]
@@ -89,11 +90,17 @@ async def run_case(case, settings, *, embedding=False, qa=False, judge=False, co
            "adversarial_answer_used_for_scoring": False, "history_turns": len(docs),
            "hypothesis": None, "judgment": None}
     embedder = TrackedEmbedder(settings) if embedding else None
+    tokenizer_model = resolve_tokenizer(settings, embedding, tokenizer_model)
+    chunker = local_chunker(tokenizer_model) if tokenizer_model else None
+    if chunker:
+        row["encoding_coverage"] = []
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix="memoria-locomo-") as directory:
         store = Store(Path(directory) / "memory.db", "json")
         try:
             index_started = time.perf_counter()
+            if embedder:
+                store.configure_embedding(embedder.namespace)
             chunks = []
             sessions, source_messages, memory_sources, episode_sources = {}, {}, {}, {}
             episodes = EpisodicMemory(store, MemoryLayerSettings())
@@ -103,8 +110,14 @@ async def run_case(case, settings, *, embedding=False, qa=False, judge=False, co
                 message = store.add_message(sessions[doc["session"]], "user", doc["text"])["id"]
                 source_messages[doc["source_id"]] = message
                 header = f"source={doc['source_id']}; date={doc['date']}; speaker={doc['speaker']}\n"
-                for start in range(0, max(1, len(doc["text"])), 1600):
-                    chunks.append((doc["source_id"], header + doc["text"][start:start + 1600]))
+                if chunker:
+                    parts = chunker.split(doc["text"], lambda part: header)
+                    chunks.extend((doc["source_id"], part.content) for part in parts)
+                    row["encoding_coverage"].append({"source": doc["source_id"],
+                        **chunker.coverage(doc["text"], parts)})
+                else:
+                    for start in range(0, max(1, len(doc["text"])), 1600):
+                        chunks.append((doc["source_id"], header + doc["text"][start:start + 1600]))
                 imported = episodes.record(sessions[doc["session"]], message,
                     task=header + doc["text"], result=doc["text"], outcome="completed")
                 episode_sources[imported["id"]] = doc["source_id"]
@@ -196,6 +209,7 @@ async def run(path, settings, **options):
     metrics["source_resolution_rate"] = sum(r["resolved"] for r in resolved) / sum(r["retrieved"] for r in resolved) if sum(r["retrieved"] for r in resolved) else None
     report = metadata(path, payload, {"adapter": "locomo-dialogue-layers-v1", "questions": 5,
         "top_k_semantic": 10, "top_k_episode": 3, "chunk_chars": 1600, "context_chars": options.get("context_chars", 12000),
+        "chunking": chunking_metadata(resolve_tokenizer(settings, options.get("embedding", False), options.get("tokenizer_model"))),
         "max_output_tokens": options.get("max_tokens", 4096), "index_all_dialogue_turns": True,
         "labels_used_only_for_scoring": ["answer", "adversarial_answer", "evidence", "category"],
         "limitations": ["five selected QA pairs from one published conversation, not official overall scores",
@@ -218,6 +232,7 @@ def main():
     parser.add_argument("--out", type=Path, default=ROOT / "data/benchmark/results/locomo_subset5.json")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--embedding", action="store_true")
+    parser.add_argument("--tokenizer-model", help="local embedding tokenizer; use the same path for baseline comparisons")
     parser.add_argument("--qa", action="store_true")
     parser.add_argument("--judge", action="store_true")
     parser.add_argument("--context-chars", type=int, default=12000)
@@ -227,7 +242,7 @@ def main():
         parser.error("invalid output/context limit")
     report = asyncio.run(run(args.data, Settings.load(args.config), embedding=args.embedding,
         qa=args.qa, judge=args.judge, context_chars=args.context_chars, max_tokens=args.max_tokens,
-        cache_dir=ROOT / "data/benchmark/cache/locomo"))
+        cache_dir=ROOT / "data/benchmark/cache/locomo", tokenizer_model=args.tokenizer_model))
     write_report(args.out, report)
     if args.qa:
         args.out.with_suffix(".hypotheses.jsonl").write_text("".join(json.dumps({"sample_id": r["sample_id"],
