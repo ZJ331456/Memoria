@@ -15,7 +15,7 @@
 | [Embedding 配置](implemented/本地Embedding配置.md) | 项目内 BGE、虚拟环境与编码约定 |
 | [模型统一接口](implemented/本地与远程OpenAI统一接口.md) | Qwen/BGE 与远程 API 的统一协议 |
 | [分块索引与实验记录](implemented/实验记录与长记忆分块索引.md) | 长记忆、命中片段、阶段计时与账本组件 |
-| [MCP 部署与授权](implemented/MCP部署与授权.md) | 真实服务、本地部署、验证与飞书 OAuth |
+| [MCP 部署与授权](implemented/MCP部署与授权.md) | 真实服务；飞书 App Secret 查找、权限/回调、私密输入与 OAuth 排障教程 |
 | [真实对话数据](implemented/真实对话数据与实验入口.md) | 50 段微博对话、来源/SHA、独立库和边界 |
 | [GitHub 提交规范](implemented/github提交规范.md) | AI 读取入口、main、ZJ331456 身份和推送 |
 

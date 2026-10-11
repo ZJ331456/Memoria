@@ -30,25 +30,189 @@ GitHub 使用 `--read-only` 并限制 toolsets；launcher 从 Git Credential Man
 - 服务随 Memoria-Agent 启动，不另外启动公网监听。修改配置后通过 `POST /api/mcp/reload` 重载，`GET /api/mcp` 查看连接状态；启用 API 认证时携带已配置的管理员认证。
 - MCP 工具受项目工具注册、风险策略及按需工具搜索限制；工具发现列表可多于实际开放的白名单工具。
 
-## 飞书：用户稍后私密输入并授权
+## 飞书详细教程：找到 App Secret 并完成本机授权
 
-已有飞书自建应用，在开放平台配置 OAuth 重定向地址：**`http://localhost:3000/callback`**。发布应用并确保当前用户在可用范围内；开通下列只读能力。实际可访问的文档/知识库还取决于用户自身权限。
+核对日期：2026-10-11。以下是本项目已安装的官方 MCP 0.5.1 的授权流程；后台菜单名称可能调整，以页面实际显示为准。本节提供操作步骤，当前仍未完成你的账号授权。
 
-本项目请求的 OAuth scope：`offline_access docx:document:readonly drive:drive:readonly wiki:wiki:readonly`。与 [官方 CLI](https://github.com/larksuite/lark-openapi-mcp/blob/main/docs/reference/cli/cli.md) 一致使用用户 token 模式。
+### 1. 先确认你已有的是哪一种“飞书应用”
+
+**App Secret 在飞书开放平台的应用后台查看，本地飞书客户端的设置页不提供该应用凭据。** 官方 SDK 将获取位置说明为开发者后台 → 凭证与基础信息 → 应用凭证。[飞书官方 SDK 说明](https://github.com/larksuite/oapi-sdk-nodejs/blob/main/doc/ISV.APP.README.zh.md)
+
+| 你目前已有的东西 | 是否能直接用于本项目 |
+| --- | --- |
+| 电脑上安装了飞书、可以聊天和打开文档 | 还需要开放平台自建应用，安装客户端本身不会给你 App Secret |
+| 开放平台中自己创建或有管理权限的企业自建应用 | 可以，在应用后台获取 App ID / App Secret |
+| 群设置里添加的自定义机器人、一个 Webhook 地址 | Webhook 地址及其签名密钥不能填写到本项目的 App Secret；仍需开放平台应用 |
+| 同事创建的开放平台应用 | 需要该应用管理权限；由应用所有者添加协作者或提供私密配置 |
+
+本项目通过 API 读取文档、云盘和知识库；本轮不要求你额外创建群聊机器人，也不用把机器人拉入群。
+
+### 2. 打开开发者后台并找到你的应用
+
+1. 在本机浏览器打开 [飞书开发者后台](https://open.feishu.cn/app)。这是中国版飞书后台，本项目使用 `open.feishu.cn`。
+2. 按页面提示登录，可以用飞书客户端扫码。登录后选择**创建应用时所属的企业/组织**；如果有多个身份，切换到正确组织。
+3. 在应用列表中点击你已有的自建应用，进入应用详情。
+4. 如果没有应用列表项，先确认账号/企业是否选对，以及是否有该应用的管理权限。
+5. 若此前只有本地飞书客户端、实际没有自建应用：在后台选择“创建企业自建应用”，填写名称（例如 Memoria-MCP）、说明及页面要求的信息。企业限制创建时，需要管理员协助。已有应用则直接使用，不必重复创建。
+
+创建和管理流程以 [飞书官方自建应用指南](https://open.feishu.cn/document/home/introduction-to-custom-app-development/self-built-application-development-process) 为准。
+
+### 3. 查找 App ID 和 App Secret
+
+1. 在应用详情左侧导航找到“凭证与基础信息”；部分布局把它放在“基础信息”分组内。
+2. 在右侧“应用凭证”区域找到 **App ID**，本项目脚本要求它以 `cli_` 开头。
+3. 同一区域找到 **App Secret**。被圆点遮住时，使用旁边的查看/眼睛或复制按钮；如果页面要求身份验证，先完成验证。
+4. 暂时保留这个后台页面，稍后把两个值分别粘贴到**本机终端**的输入提示中。
+5. 如果没有查看权限，联系应用所有者/管理员开通管理权限。不要用“重置/刷新 Secret”代替“查看/复制”，重置会使依赖旧凭据的调用失效。
+
+几个常见名称不能混用：
+
+| 名称 | 本项目如何使用 |
+| --- | --- |
+| App ID | 应用标识，终端第一个输入项 |
+| App Secret | 应用密钥，终端第二个输入项，输入不回显 |
+| 飞书登录密码 / 验证码 | 仅用于平台登录，不填到 App Secret |
+| Verification Token / Encrypt Key / Webhook 签名密钥 | 用于其他事件/机器人场景，不填到 App Secret |
+| user_access_token | 浏览器 OAuth 后由官方工具取得并管理，用户不需要手动复制 |
+
+如果你问的是“以前是否已经存过本机凭据”，本项目约定的位置是 `C:\Users\zero\Desktop\Memory-Project\Memoria-Agent\.mcp\feishu.credentials.json`。可以只检查是否存在：
 
 ```powershell
-# 在本机终端输入；App Secret 不回显，随后完成浏览器授权
-.\.venv\Scripts\python.exe scripts/configure_feishu.py
+Test-Path 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent\.mcp\feishu.credentials.json'
+```
 
-# 授权后验证真实飞书 API，再重载项目 MCP
+存在只说明文件已保存，不说明 Secret 有效、账号已授权或飞书 API 可用；没有保存过时请去后台获取。
+
+### 4. 配置 OAuth 回调地址
+
+在同一个应用详情中，进入“开发配置 → 安全设置”（或直接显示的“安全设置”），找到“重定向 URL / OAuth 重定向 URL”，添加并保存：
+
+```text
+http://localhost:3000/callback
+```
+
+本项目官方 MCP 登录命令明确使用 `--host localhost --port 3000`。地址的协议、主机、端口、路径保持一致；不要改为项目 API 的 2237 端口，不要换成 `127.0.0.1`，也不要多加末尾 `/`。这是浏览器授权结束后的本机回调，不需要部署公网网站或购买域名。先启动授权命令再访问它；平时直接打开地址无法连接是正常情况。[官方 MCP 的回调约定](https://github.com/larksuite/lark-openapi-mcp/blob/main/README_ZH.md)，[飞书官方安全设置示例](https://www.feishu.cn/content/7317091221654224898)
+
+### 5. 开通本项目请求的权限
+
+进入应用的“开发配置 → 权限管理”（或“权限管理”），选择开通/添加权限；按下表中的 **scope 字符串**搜索。若后台区分应用身份和用户身份，确认允许**用户身份 user_access_token** 对应的权限。本项目不以租户身份替代个人授权。
+
+| 当前请求 scope | 用途 |
+| --- | --- |
+| `docx:document:readonly` | 读取新版云文档内容 |
+| `drive:drive:readonly` | 读取云盘信息与文件列表 |
+| `wiki:wiki:readonly` | 读取知识库空间与节点 |
+| `offline_access` | 请求离线访问/刷新授权，供官方工具管理后续 token |
+
+这些字符串来自本项目 `scripts/mcp_server.py` 的 FEISHU_SCOPE，也是登录时请求的范围。`offline_access` 是 OAuth scope，不是某个业务 API 工具；若权限面板没有同名业务权限，检查该应用 OAuth/offline_access 的平台配置说明，不要通过开通“全部权限”绕过错误。平台提示某项不支持或未开通时，先核对用户身份与应用类型并处理具体缺项。
+
+确认开通后按后台要求保存、申请权限审批和发布版本。开了 API scope 仍须完成用户 OAuth，且**不能扩大你本人对具体文档/知识库的权限**。本项目仅开放 4 个读取工具，没有发送消息、创建文档或编辑内容工具。
+
+### 6. 发布版本并把自己加入可用范围
+
+1. 进入“应用发布 → 版本管理与发布”（或“版本管理与发布”）。
+2. 创建版本，填写后台要求的版本号、更新说明，并确认权限变更。
+3. 在“可用范围”中至少加入你将用于浏览器授权的飞书账号；先限定自己/实际需要的成员即可。
+4. 保存并申请发布，等待企业管理员审核；以后台的已生效/已发布状态为准。
+5. 后续新增权限时按后台要求再次发布。使用测试应用/测试企业时，测试身份与正式身份分别配置，不能把测试联调成功等同于正式版权限已生效。
+
+发布及审批示例见 [飞书官方应用发布操作](https://www.feishu.cn/practice_template/51118)。
+
+### 7. 在本机终端输入凭据并完成浏览器登录
+
+打开 Windows Terminal 或 PowerShell，在你的电脑上执行：
+
+```powershell
+Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent'
+.\.venv\Scripts\python.exe scripts/configure_feishu.py
+```
+
+按顺序操作：
+
+1. 出现 `Feishu App ID:` 时，粘贴后台的 App ID，按 Enter。
+2. 出现 `Feishu App Secret (hidden):` 时，粘贴 App Secret，按 Enter。输入时通常不显示任何字符或星号，这是隐藏输入的正常表现。
+3. 官方登录工具会打开浏览器；若没有自动打开，按终端显示的授权 URL 在本机浏览器访问。授权 URL 也留在本机，不粘贴到聊天。
+4. 登录具有目标文档权限、且在应用可用范围内的飞书账号，确认应用名称及请求范围，然后同意授权。
+5. 浏览器回调页显示成功、可关闭页面后，回到终端确认命令结束。
+
+已安装的 0.5.1 本机授权处理器有约 **60 秒**的回调等待时间。可以先登录飞书浏览器页面、准备好凭据，再执行命令；超时则用后文的重新登录命令再试。
+
+凭据写入被 Git 忽略的 `.mcp/feishu.credentials.json`，应用密钥是本机 JSON 中的明文字段，文件不要分享或上传。launcher 只通过子进程环境传给官方工具；OAuth token 由官方工具另行管理，脚本不把 token 写入服务器配置或检查报告。不要将真实值填到提交用的示例文件或聊天中。[官方 CLI 的 login / 环境变量参数](https://github.com/larksuite/lark-openapi-mcp/blob/main/docs/reference/cli/cli.md)
+
+如果你原本已有私密 JSON 配置，字段为 app_id、app_secret，可用绝对路径读取；路径需要替换为你的真实文件位置：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/configure_feishu.py --credentials-file 'C:\私密目录\feishu.json'
+```
+
+已有本项目凭据，仅重新授权时执行：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/configure_feishu.py --login-only
+```
+
+### 8. 验证真实业务，再让 Memoria-Agent 使用
+
+授权命令结束后执行：
+
+```powershell
 .\.venv\Scripts\python.exe scripts/check_mcp.py --server feishu
 ```
 
-已有私密 JSON 文件时也可 `--credentials-file C:\私密目录\feishu.json`（字段 app_id、app_secret）；之后重新登录用 `--login-only`。不要把内容粘贴到聊天或版本库。
+当前检查会初始化官方 MCP，发现工具，并以用户身份调用知识库空间列表 API。成功记录应包含：`initialized: true`、`business_call_ok: true`、`api_code: 0`，命令退出码为 0。返回空列表可能只是该用户没有可见知识库，并不必然是授权失败。
 
-脚本把应用凭据保存到被忽略的 `.mcp/feishu.credentials.json`，仅传给官方进程环境。OAuth token 由官方工具管理，不写入服务器配置、报告或命令参数。官方登录命令成功后脚本启用 feishu；实际业务调用是否成功仍由 check_mcp 单独确认。如果回调超时，检查应用发布、权限、回调地址及 3000 端口后重新登录。
+报告保存在 `data/reports/mcp-check.json`；检查脚本不保存文档正文或 token。它只验证该业务调用，不代表已测过所有 4 个工具或所有文档。飞书用户账号尚未完成本机 OAuth 时，本文不能作为成功记录。
 
-只读工具名按上游 schema：`docx_v1_document_rawContent`、`drive_v1_file_list`、`wiki_v2_space_list`、`wiki_v2_space_getNode`。本次没有浏览器授权，也没有记录飞书业务调用成功。
+configure_feishu 在官方登录命令返回成功后会将 `data/mcp_servers.json` 中 feishu 的 enabled 设为 true；**仍需以 check_mcp 结果确认实际访问**。然后：
+
+- Memoria-Agent 尚未运行：正常启动服务，启动时加载配置。
+- 服务已经运行：使用默认本机端口调用重载与状态接口：
+
+```powershell
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:2237/api/mcp/reload'
+Invoke-RestMethod -Method Get -Uri 'http://127.0.0.1:2237/api/mcp'
+```
+
+如果你启用了项目 API Token，上述请求需添加已配置的 Bearer 或 X-API-Key 认证。以下命令在终端隐藏输入**项目 API Token**，不要在这里输入飞书 App Secret：
+
+```powershell
+$memoriaApiToken = Read-Host 'Memoria API Token' -AsSecureString
+$memoriaHeaders = @{ Authorization = 'Bearer ' + ([System.Net.NetworkCredential]::new('', $memoriaApiToken).Password) }
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:2237/api/mcp/reload' -Headers $memoriaHeaders
+Invoke-RestMethod -Method Get -Uri 'http://127.0.0.1:2237/api/mcp' -Headers $memoriaHeaders
+Remove-Variable memoriaApiToken, memoriaHeaders
+```
+
+若服务端口已修改，用实际端口。返回的 feishu 状态应 connected 为 true，工具列表含 4 个允许的读取工具。只有之后实际读取目标文档成功，才能证明该文档的权限也已配置正确。
+
+### 9. 常见问题与排查顺序
+
+| 现象 | 检查/处理 |
+| --- | --- |
+| 本地飞书设置中找不到 App Secret | 用浏览器打开开发者后台 → 你的自建应用 → 凭证与基础信息 |
+| 后台看不到应用或 Secret | 确认企业/账号、应用管理权限；若只有群 Webhook，创建开放平台自建应用 |
+| App ID 无效 | 确认复制的是 cli_ 开头的 App ID，不是 open_id、user_id、机器人 ID 或 App Secret |
+| App Secret 无效 | 确认它属于同一个 App ID；如果已重置，重新运行输入凭据命令保存新值 |
+| 重定向 URL 有误 / redirect_uri 不匹配 | 核对后台完整地址为 http://localhost:3000/callback，保存后重新授权 |
+| scope 未开通 / 权限不足 | 按报错核对用户身份权限、正式版发布与当前账号可用范围；新增范围后重新授权 |
+| 应用不可用 / 用户不在范围内 | 在应用可用范围加入该授权账号，并确认版本及管理员审核已生效 |
+| 浏览器 localhost 拒绝连接 | 确认授权命令正在本机运行，且未超时退出；不是另一台电脑或远程容器 |
+| 3000 端口占用 / EADDRINUSE | 先用下面命令确认占用进程，再正常退出那个程序，重新授权；不要随意结束陌生进程 |
+| Python 路径不存在 | 确认已进入仓库根目录且项目 .venv 存在，按项目 README 配置环境 |
+| 找不到 Node.js 或官方 CLI 文件 | 确认 node --version 可运行、.mcp 依赖已安装；必要时重新执行 install_mcp.py |
+| 登录后知识库列表为空 | 检查授权账号是否属于目标知识库；空列表不等于 API 调用失败 |
+| 知识库验证通过但目标文档仍读取失败 | 检查该账号对具体文档的分享/访问权限，以及文档类型；本项目正文工具针对 docx |
+| 重载项目 API 返回 401 | 使用项目 API Token 认证；这与飞书 App Secret 是两套凭据 |
+| Token 过期 / 授权撤销 / 新增 scope | 检查 offline_access 及应用权限，再执行 --login-only；Secret 已变则重新输入凭据 |
+
+只读查看端口占用：
+
+```powershell
+Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object LocalAddress, LocalPort, OwningProcess
+```
+
+排查时可以提供脱敏错误码、阶段和工具名；不要发送 Secret、token、完整授权 URL 或凭据文件。安装完成、OAuth 完成、MCP 连接成功、具体文档读取成功是四个分别验证的状态。
 
 ## 主机优化与工程验证
 
