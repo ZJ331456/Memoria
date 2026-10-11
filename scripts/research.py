@@ -50,7 +50,7 @@ def main():
     sub.add_argument("--dataset")
     sub.add_argument("--protocol")
     sub.add_argument("--limit", type=int, default=50, help="Extraction only; QA uses every frozen probe")
-    sub.add_argument("--baseline", choices=["B0_recent", "B2_fts"], default="B0_recent")
+    sub.add_argument("--baseline", choices=["B0_recent", "B2_fts", "B2_fts_compact"], default="B0_recent")
     sub.add_argument("--history-limit", type=int, default=8)
     sub.add_argument("--context-chars", type=int, default=12000)
     sub.add_argument("--roles")

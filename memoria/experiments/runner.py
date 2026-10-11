@@ -66,14 +66,17 @@ def quantiles(values):
 def select_history(history, question, baseline, limit):
     if baseline == "B0_recent":
         return history[-limit:]
-    if baseline != "B2_fts":
+    if baseline not in {"B2_fts", "B2_fts_compact"}:
         raise ValueError("Unsupported baseline")
+    # Explicit alternate baseline for character-segmented corpora. Only the
+    # search key changes; returned evidence, source spans and hashes stay original.
+    key = (lambda value: re.sub(r"\s+", "", unicodedata.normalize("NFKC", value))) if baseline == "B2_fts_compact" else (lambda value: value)
     # Prefix-only ephemeral BM25 index; no production DB, no future/gold facts.
     db = sqlite3.connect(":memory:")
     try:
         db.execute("CREATE VIRTUAL TABLE history USING fts5(id UNINDEXED,content,tokenize='trigram')")
-        db.executemany("INSERT INTO history VALUES(?,?)", [(m["id"], m["content"]) for m in history])
-        tokens = re.findall(r"[A-Za-z0-9_]{3,}|[\u4e00-\u9fff]+", question)
+        db.executemany("INSERT INTO history VALUES(?,?)", [(m["id"], key(m["content"])) for m in history])
+        tokens = re.findall(r"[A-Za-z0-9_]{3,}|[\u4e00-\u9fff]+", key(question))
         terms = set()
         for token in tokens:
             if re.search(r"[\u4e00-\u9fff]", token):

@@ -5,3 +5,5 @@
 标注必须声明 `annotator.kind=human/ai_assisted`。真人填写稳定去标识化 `independence_id`，AI 填 tool 且不声明真人身份；模板默认 unspecified，不能直接提交。`annotation_seconds` 是实际标注会话墙钟，AI 时间不当人工工时。test 冻结须两名独立声明的真人；不同版本 ID 不代表不同人。协议和评分保留 gold 的审核来源。2026-10-12 已冻结 `lccc50-codex-dev-qa-20261012-v2`：50 段/206 原话审核覆盖、32 条陈述、64 QA（41 可知、23 不可知），仅 AI 辅助开发 gold，真人审核及真实 QA 调用仍待开展。
 
 本地管理员入口为 [research.py](../../scripts/research.py)，操作说明与格式见 [研究工具文档](../../docs/implemented/真实历史标注与评测.md)。50 段 LCCC 公开对话仅做独立来源的开发诊断，不构造个人连续经历。临时工程输入与 MockTransport 仅存在测试，不作为真实数据或成绩。
+
+`B2_fts_compact` 是逐字分隔语料的显式对照：临时检索键/查询 NFKC 去空白，返回原始消息与证据；原版 `B2_fts` 和无命中不回退行为保留。用户已选择跳过独立真人审核，允许使用当前 AI gold 开发对照；不解除真实连续历史的长期效果数据要求。

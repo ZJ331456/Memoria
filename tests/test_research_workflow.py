@@ -91,6 +91,16 @@ def test_sources_immutable_and_participant_split_not_leaked(setup):
         workspace.load("engineering")
 
 
+def test_compact_search_preserves_original_evidence_and_does_not_fallback():
+    original = {"id": "engineering-source", "content": "甲 乙 丙 丁 戊"}
+    other = {"id": "other-source", "content": "未 命 中"}
+    assert select_history([original, other], "甲乙丙", "B2_fts", 8) == []
+    selected = select_history([original, other], "甲乙丙", "B2_fts_compact", 8)
+    assert selected == [original] and selected[0] is original
+    assert original["content"] == "甲 乙 丙 丁 戊"
+    assert select_history([original, other], "不存在的内容", "B2_fts_compact", 8) == []
+
+
 @pytest.mark.parametrize("alter", ["consent", "timezone", "order", "speaker"])
 def test_rejects_unconsented_or_rewritten_identity_inputs(setup, alter):
     workspace, _, source = setup
