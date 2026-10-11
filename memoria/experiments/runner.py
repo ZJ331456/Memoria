@@ -1,4 +1,4 @@
-"""Source-only inference, then separate human-gold scoring. Never mutates memories."""
+"""Source-only inference, then separate attributed-gold scoring. Never mutates memories."""
 from __future__ import annotations
 
 import asyncio
@@ -432,6 +432,8 @@ def score(workspace, run_id, judgments=None):
                      "human_correct": manual.get(case["id"]) if valid else False})
     known = [r["human_correct"] for r in rows if r["human_correct"] is not None]
     result = {"run_id": run_id, "scope": protocol["scope"], "source_kind": protocol["source_kind"],
+              "gold_human_reviewed": protocol.get("human_reviewed"),
+              "gold_independent_human_review_count": protocol.get("independent_human_review_count"),
               "requested_cases": len(rows), "statuses": dict(Counter(r["status"] for r in rows)),
               "exact_answer_rate_all_cases": sum(r["exact_answer"] for r in rows) / len(rows),
               "exact_answer_warning": "literal normalized matching only; not semantic QA correctness",

@@ -1,4 +1,4 @@
-"""Immutable, consented source bundles and human annotation in one account's space.
+"""Immutable sources and explicitly attributed annotation in one account's space.
 
 These are local administrator tools, not HTTP authentication entry points. No
 source, annotation or prediction is written to the production memory database.
@@ -269,24 +269,45 @@ class HistoryWorkspace:
         manifest, messages = self.load(dataset)
         return {"schema_version": 1, "dataset_id": dataset, "history_sha256": manifest["history_sha256"],
                 "reviewer": identifier(reviewer), "status": "draft", "annotation_seconds": None,
+                "annotator": {"kind": "unspecified", "tool": None, "independence_id": None},
                 "scope": "facts_and_qa", "facts": [], "probes": [], "source_context": messages}
+
+    @staticmethod
+    def annotator(review):
+        value = review.get("annotator")
+        if not isinstance(value, dict) or value.get("kind") not in {"human", "ai_assisted"}:
+            raise ValueError("Declare annotator kind: human or ai_assisted")
+        if value["kind"] == "human":
+            identifier(value.get("independence_id"))
+        else:
+            text(value.get("tool"), "AI annotation tool")
+            if value.get("independence_id") is not None:
+                raise ValueError("AI annotation cannot declare an independent human identity")
+        return value
 
     def validate_review(self, review):
         manifest, messages = self.load(review.get("dataset_id"))
         identifier(review.get("reviewer"))
         if review.get("schema_version") != 1 or review.get("status") != "completed":
-            raise ValueError("Human review must explicitly be completed")
+            raise ValueError("Annotation must explicitly be completed")
+        self.annotator(review)
         if review.get("history_sha256") != manifest["history_sha256"]:
             raise ValueError("Annotation was made against different history")
         duration = review.get("annotation_seconds")
         if type(duration) not in {float, int} or not 0 < duration < float("inf"):
-            raise ValueError("Record actual human annotation time")
+            raise ValueError("Record actual annotation elapsed time; AI time is not human labor")
+        if "annotation_started_at" in review or "annotation_finished_at" in review:
+            elapsed = (timestamp(review.get("annotation_finished_at")) - timestamp(review.get("annotation_started_at"))).total_seconds()
+            if elapsed <= 0 or abs(elapsed - duration) > 0.01:
+                raise ValueError("Annotation timestamps and elapsed time differ")
         indexed = {item["id"]: (index, item) for index, item in enumerate(messages)}
 
         def evidence(spans, pid, cutoff=None):
             if not isinstance(spans, list):
                 raise ValueError("Evidence must be a list of exact original spans")
             for span in spans:
+                if not isinstance(span, dict):
+                    raise ValueError("Evidence spans must be objects")
                 mid = span.get("message_id")
                 if mid not in indexed:
                     raise ValueError("Unknown evidence source")
@@ -311,7 +332,7 @@ class HistoryWorkspace:
             if pid not in participant_ids:
                 raise ValueError("Unknown participant/source group")
             text(fact.get("predicate"), "fact predicate")
-            text(fact.get("statement"), "human fact statement")
+            text(fact.get("statement"), "source-grounded fact statement")
             if fact.get("modality") not in {"statement", "inference", "plan", "unknown"}:
                 raise ValueError("Explicit modality is required")
             if "subject_id" not in fact or "value" not in fact or "conditions" not in fact or "fact_time" not in fact:
@@ -329,7 +350,7 @@ class HistoryWorkspace:
         if not isinstance(review.get("probes"), list):
             raise ValueError("Probes must be a list")
         if not review["probes"] and review.get("scope") != "extraction_only":
-            raise ValueError("At least one real human probe is required (or declare extraction_only)")
+            raise ValueError("At least one source-grounded probe is required (or declare extraction_only)")
         for probe in review["probes"]:
             qid = identifier(probe.get("id"))
             if qid in seen:
@@ -338,15 +359,29 @@ class HistoryWorkspace:
             cutoff = indexed.get(probe.get("cutoff_message_id"))
             if not cutoff or cutoff[1]["participant_id"] != probe.get("participant_id"):
                 raise ValueError("Unknown or foreign checkpoint")
-            text(probe.get("question"), "human question")
+            text(probe.get("question"), "annotated question")
             if type(probe.get("answerable")) is not bool:
-                raise ValueError("Answerability requires a human decision")
+                raise ValueError("Answerability requires an explicit annotation decision")
             answers = probe.get("accepted_answers")
             if not isinstance(answers, list) or not answers or any(not isinstance(x, str) or not x.strip() for x in answers):
-                raise ValueError("Human accepted answers (including abstention wording) are required")
+                raise ValueError("Annotated accepted answers (including abstention wording) are required")
             if probe["answerable"] and not probe.get("evidence"):
                 raise ValueError("Answerable probes require evidence")
             evidence(probe.get("evidence"), probe["participant_id"], cutoff[0])
+        if "coverage" in review:
+            coverage = review["coverage"]
+            if not isinstance(coverage, list) or len(coverage) != len(participant_ids):
+                raise ValueError("Coverage must audit every source group exactly once")
+            covered = set()
+            for item in coverage:
+                pid = item.get("participant_id")
+                expected = [m["id"] for m in messages if m["participant_id"] == pid]
+                if pid not in participant_ids or pid in covered or item.get("message_ids") != expected:
+                    raise ValueError("Coverage contains missing, duplicate or foreign source messages")
+                if item.get("status") != "reviewed":
+                    raise ValueError("Coverage has unreviewed sources")
+                text(item.get("note"), "source review note")
+                covered.add(pid)
         return manifest, messages
 
     def submit(self, path):
@@ -370,7 +405,7 @@ class HistoryWorkspace:
     def freeze(self, dataset, protocol_id, reviewers, adjudication=None):
         identifier(protocol_id)
         if not reviewers or len(set(reviewers)) != len(reviewers):
-            raise ValueError("Distinct human reviewer IDs are required")
+            raise ValueError("Distinct reviewer revision IDs are required")
         db = self.db()
         try:
             selected = []
@@ -383,6 +418,10 @@ class HistoryWorkspace:
         finally:
             db.close()
         review = selected[0][0]
+        # A revision ID does not establish a second person. Old reviews must be
+        # resubmitted with explicit provenance before making a new freeze.
+        for original, _ in selected:
+            self.validate_review(original)
         content = lambda r: canonical({"facts": r["facts"], "probes": r["probes"]})
         disagreement = len({content(r) for r, _ in selected}) > 1
         adjudicator = None
@@ -393,15 +432,21 @@ class HistoryWorkspace:
                 raise ValueError("Adjudicator must independently identify this dataset")
             text(review.get("resolution"), "adjudication resolution")
             adjudicator = {"reviewer": review["reviewer"], "sha256": digest_file(adjudication),
-                           "resolution": review["resolution"], "annotation_seconds": review["annotation_seconds"]}
+                           "resolution": review["resolution"], "annotation_seconds": review["annotation_seconds"],
+                           "annotator": self.annotator(review)}
         elif disagreement:
             raise ValueError("Disagreement requires explicit human adjudication")
         manifest, messages = self.validate_review(review)
         if not review["probes"]:
-            raise ValueError("QA freeze requires human probes; extraction-only reviews are not QA gold")
+            raise ValueError("QA freeze requires probes; extraction-only reviews are not QA gold")
         split = {p["id"]: p["split"] for p in manifest["participants"]}
-        if len(reviewers) < 2 and any(split[p["participant_id"]] == "test" for p in review["probes"]):
+        people = [self.annotator(r)["independence_id"] for r, _ in selected if self.annotator(r)["kind"] == "human"]
+        all_human = len(people) == len(selected) and self.annotator(review)["kind"] == "human"
+        independent = len(set(people))
+        if any(split[p["participant_id"]] == "test" for p in review["probes"]) and (not all_human or independent < 2):
             raise ValueError("Test protocols require two independent human reviews")
+        if adjudicator and all_human and adjudicator["annotator"]["independence_id"] in people:
+            raise ValueError("Adjudicator must be a different independent human")
         inputs, gold = [], []
         for probe in review["probes"]:
             cutoff = next(i for i, item in enumerate(messages) if item["id"] == probe["cutoff_message_id"])
@@ -416,9 +461,12 @@ class HistoryWorkspace:
         protocol = {"schema_version": 1, "protocol_id": protocol_id, "owner_user_id": self.owner,
                     "dataset_id": dataset, "history_sha256": manifest["history_sha256"],
                     "source_kind": manifest["kind"], "created_at": datetime.now(timezone.utc).isoformat(),
-                    "reviewers": [{"id": r["reviewer"], "sha256": sha, "annotation_seconds": r["annotation_seconds"]} for r, sha in selected],
+                    "reviewers": [{"id": r["reviewer"], "sha256": sha, "annotation_seconds": r["annotation_seconds"],
+                                   "annotator": self.annotator(r)} for r, sha in selected],
                     "disagreement": disagreement, "adjudicator": adjudicator,
-                    "scope": "single-review development diagnostic" if len(reviewers) < 2 else "human-reviewed protocol; not a quality result",
+                    "human_reviewed": all_human, "independent_human_review_count": independent,
+                    "scope": ("AI-assisted development QA gold; independent human review pending" if not all_human else
+                              "single-review development diagnostic" if independent < 2 else "human-reviewed protocol; not a quality result"),
                     "input_sha256": hashlib.sha256(input_body.encode()).hexdigest(),
                     "gold_sha256": hashlib.sha256(gold_body.encode()).hexdigest(), "cases": len(inputs)}
         db = self.db()

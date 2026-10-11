@@ -45,6 +45,7 @@ def setup(tmp_path):
 
 def review(workspace, reviewer="human1"):
     result = workspace.template("engineering", reviewer)
+    result["annotator"] = {"kind": "human", "tool": None, "independence_id": reviewer}
     _, messages = workspace.load("engineering")
     item = messages[0]
     span = {"message_id": "m1", "start": 0, "end": len(item["content"]), "quote": item["content"],
@@ -272,6 +273,98 @@ def test_test_protocol_requires_two_independent_reviews(setup):
     workspace.submit(path)
     with pytest.raises(ValueError, match="two independent"):
         workspace.freeze("testsource", "testprotocol", ["human1"])
+
+
+def test_ai_gold_is_development_only_with_honest_provenance(setup):
+    workspace, settings, source = setup
+    value = review(workspace, "ai1")
+    value["annotator"] = {"kind": "ai_assisted", "tool": "engineering fixture", "independence_id": None}
+    path = source.parent / "ai.json"
+    write_json(path, value)
+    workspace.submit(path)
+    frozen = workspace.freeze("engineering", "ai-development", ["ai1"])
+    protocol = read_json(frozen / "protocol.json")
+    assert not protocol["human_reviewed"]
+    assert protocol["independent_human_review_count"] == 0
+    assert "AI-assisted development" in protocol["scope"]
+    assert protocol["reviewers"][0]["annotator"] == value["annotator"]
+    assert "gold-only-marker" not in (frozen / "inputs.jsonl").read_text()
+    run = asyncio.run(execute(workspace, settings, mode="qa", protocol_id="ai-development",
+                             client_factory=factory(lambda request: response({"answer": "fixture", "evidence_ids": ["m1"]}))))
+    scores = read_json(score(workspace, run.name))
+    assert scores["gold_human_reviewed"] is False
+    assert scores["gold_independent_human_review_count"] == 0
+    assert "AI-assisted development" in scores["scope"]
+    assert scores["human_reviewed_cases"] == 0
+
+
+@pytest.mark.parametrize("kind", ["ai", "same_person", "unspecified"])
+def test_aliases_and_ai_cannot_satisfy_independent_test_gate(setup, kind):
+    workspace, _, source = setup
+    data = read_json(source)
+    data["dataset_id"] = "heldout"
+    data["participants"][0].update(id="heldout-person", split="test")
+    for message in data["messages"]:
+        message.update(participant_id="heldout-person", speaker_id="heldout-person")
+    write_json(source, data)
+    workspace.import_history(source)
+    manifest, _ = workspace.load("heldout")
+    for revision in ("r1", "r2"):
+        value = review(workspace, revision)
+        value.update(dataset_id="heldout", history_sha256=manifest["history_sha256"])
+        value["probes"][0]["participant_id"] = "heldout-person"
+        if kind == "ai":
+            value["annotator"] = {"kind": "ai_assisted", "tool": "fixture", "independence_id": None}
+        elif kind == "same_person":
+            value["annotator"]["independence_id"] = "one-person"
+        else:
+            value.pop("annotator")
+            with pytest.raises(ValueError, match="annotator kind"):
+                workspace.validate_review(value)
+            return
+        path = source.parent / f"{revision}.json"
+        write_json(path, value)
+        workspace.submit(path)
+    with pytest.raises(ValueError, match="two independent"):
+        workspace.freeze("heldout", "invalid-test", ["r1", "r2"])
+    assert not workspace.path("research/protocols/invalid-test").exists()
+
+
+def test_annotation_time_and_complete_coverage_are_checked(setup):
+    workspace, _, _ = setup
+    value = review(workspace)
+    value.update(annotation_started_at="2026-01-01T00:00:00Z", annotation_finished_at="2026-01-01T00:00:03Z",
+                 coverage=[{"participant_id": "subject", "message_ids": ["m1", "m2"], "status": "reviewed", "note": "fixture"}])
+    workspace.validate_review(value)
+    value["coverage"][0]["message_ids"] = ["m1"]
+    with pytest.raises(ValueError, match="Coverage"):
+        workspace.validate_review(value)
+    value.pop("coverage")
+    value["annotation_finished_at"] = "2026-01-01T00:00:04Z"
+    with pytest.raises(ValueError, match="timestamps"):
+        workspace.validate_review(value)
+
+
+def test_distinct_declared_humans_can_freeze_test_protocol(setup):
+    workspace, _, source = setup
+    data = read_json(source)
+    data["dataset_id"] = "heldout"
+    data["participants"][0].update(id="heldout-person", split="test")
+    for message in data["messages"]:
+        message.update(participant_id="heldout-person", speaker_id="heldout-person")
+    write_json(source, data)
+    workspace.import_history(source)
+    manifest, _ = workspace.load("heldout")
+    for person in ("h1", "h2"):
+        value = review(workspace, person)
+        value.update(dataset_id="heldout", history_sha256=manifest["history_sha256"])
+        value["probes"][0]["participant_id"] = "heldout-person"
+        path = source.parent / f"{person}.json"
+        write_json(path, value)
+        workspace.submit(path)
+    frozen = workspace.freeze("heldout", "valid-test", ["h1", "h2"])
+    protocol = read_json(frozen / "protocol.json")
+    assert protocol["human_reviewed"] and protocol["independent_human_review_count"] == 2
 
 
 def test_grounded_protocol_accepts_exact_span_and_rejects_invented_subject(setup):

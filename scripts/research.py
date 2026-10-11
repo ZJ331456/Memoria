@@ -84,7 +84,7 @@ def main():
         result = output
     elif args.command == "submit-annotation":
         workspace.submit(private_input(args.input, directory))
-        result = "Human review validated and saved (immutable)"
+        result = "Annotation and declared provenance validated and saved (immutable)"
     elif args.command == "freeze":
         result = workspace.freeze(args.dataset, args.protocol, args.reviewers,
                                   private_input(args.adjudication, directory) if args.adjudication else None)
