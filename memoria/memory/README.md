@@ -58,7 +58,7 @@
 
 删除会话时，原始消息、对应情景、压缩摘要、抽取任务和审核候选一并清理。**已批准语义记忆与来源操作账本仍保留**，删除会话不代表已完成所有事实的遗忘；要移除事实需使用记忆删除/撤销 API。来源丢失的候选不能继续批准。
 
-`GET /api/memory-layers` 查看配置与统计，`GET /api/episodes` 管理记录，`GET /api/episodes/{id}` 取得来源指针，`PATCH /api/episodes/{id}` 固定或归档，`POST /api/episodes/maintenance` 预览或执行维护。详细请求见[API 文档](../../docs/implemented/API接口文档.md)。这些接口属于个人数据域，使用全局 API Token；共享 `X-Agent-Key` 不授予访问权限。
+`GET /api/memory-layers` 查看配置与统计，`GET /api/episodes` 管理记录，`GET /api/episodes/{id}` 取得来源指针，`PATCH /api/episodes/{id}` 固定或归档，`POST /api/episodes/maintenance` 预览或执行维护。详细请求见[API 文档](../../docs/implemented/API接口文档.md)。这些接口属于当前登录账号的个人数据域，使用用户 Bearer 或 Cookie，运行时、数据库和索引按账号隔离；单独共享 `X-Agent-Key` 不授予访问权限。
 
 ## 配置与边界
 

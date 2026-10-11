@@ -30,7 +30,7 @@ Copy-Item config.example.toml config.toml
 .\.venv\Scripts\python.exe main.py --host 127.0.0.1 --port 2237
 ```
 
-服务根路径返回 JSON；`/docs` 为 Swagger，`/api/health` 为存活检查。先注册/登录，业务请求使用用户 Bearer 或 Cookie；所有业务库按账号 UUID 隔离。qin 已预留，用 `scripts/manage_users.py set-password qin` 私密设置登录密码。目录整理、文件保护和登录步骤见 [用户隔离](docs/implemented/用户登录与数据隔离.md)。
+服务根路径返回 JSON；`/docs` 为 Swagger，`/api/health` 为存活检查。先注册/登录，业务请求使用用户 Bearer 或 Cookie；所有业务库按账号 UUID 隔离。本机 qin 已预留且用户已私密设置密码；新安装或重设时用 `scripts/manage_users.py set-password qin` 隐藏输入，凭据不写入文档。目录整理、文件保护和登录步骤见 [用户隔离](docs/implemented/用户登录与数据隔离.md)。
 
 本地模型在 `model/bge-small-zh-v1.5` 和 `model/Qwen3.5-2B`。新机器按 [Embedding 配置](docs/implemented/本地Embedding配置.md)与 [统一模型接口](docs/implemented/本地与远程OpenAI统一接口.md)安装依赖和启动。main/fast 可使用 `Qwen3.5-2B`、`http://127.0.0.1:8080/v1`；embedding 可使用 `bge-small-zh-v1.5` 和同一地址。远程 API 通过同一业务接口配置，不默认发起收费调用。
 

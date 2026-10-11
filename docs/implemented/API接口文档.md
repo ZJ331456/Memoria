@@ -65,7 +65,7 @@ GET /api/datasets 返回当前用户的真实语料 manifest；GET /api/datasets
 
 ### `GET /metrics`
 
-当 `metrics_enabled=true` 时返回 Prometheus 文本，包含 HTTP 请求、turn、token、后台任务和有效记忆指标。启用 API Token 后该路径也需要认证。
+当 `metrics_enabled=true` 时返回当前登录用户运行时的 Prometheus 文本，包含 HTTP 请求、turn、token、后台任务和有效记忆指标。正式网关始终要求用户登录；远程访问还要求 HTTPS，旧全局 API Token 不代替用户会话。
 
 ## 4. Session API
 
@@ -249,7 +249,7 @@ embedding 没有完整配置时不会报错，返回 `enabled=false` 和剩余�
 
 ## 6.1 分层记忆与个人任务情景
 
-这些接口使用全局 API Token，`X-Agent-Key` 不授予访问权限；未配置 Token 时沿用本地个人 API 模式。分层设计与配置解释见[中文 README](memory-layers/README.md)。当前没有单独的前端情景管理页，可通过本节接口或 `/docs` 管理。
+这些接口使用当前登录用户的 Bearer 或 Cookie，在该用户独立库中操作；单独 `X-Agent-Key` 不授予访问权限。分层设计与配置解释见[分层说明](记忆分层与配置.md)。当前没有单独的前端情景管理页，可通过本节接口或 `/docs` 管理。
 
 | 方法 | 路径 | 参数与响应 |
 | --- | --- | --- |

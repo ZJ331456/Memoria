@@ -1,6 +1,6 @@
 # MCP 本地部署与飞书授权
 
-更新：2026-10-11。目录网站用于发现候选，实际部署依据上游仓库、固定版本和真实调用。三个服务接入 Memoria-Agent 的 stdio MCP 主机；与 Codex 桌面端插件设置独立。
+更新：2026-10-12。目录网站用于发现候选，实际部署依据上游仓库、固定版本和真实调用。三个服务接入 Memoria-Agent 的 stdio MCP 主机；与 Codex 桌面端插件设置独立。
 
 ## 已安装服务与验证状态
 
@@ -27,7 +27,7 @@ GitHub 使用 `--read-only` 并限制 toolsets；launcher 从 Git Credential Man
 - npm 依赖仅安装在 `.mcp/node`，版本与完整依赖锁在 `deploy/mcp/`；GitHub exe 位于 `.mcp/github`，下载按官方 release SHA256 校验。
 - 安装清单 `.mcp/installation.json`，实际调用记录 `data/users/<UUID>/reports/mcp-check.json`；这些本机文件不提交 Git。
 - `configure_mcp.py` 生成带绝对 Python/脚本路径及 cwd 的 `data/users/<UUID>/config/mcp_servers.json`，保留已配置开关和自定义服务。模板 `mcp_servers.example.json` 的相对命令仅适用于从仓库根目录启动。
-- 服务随 Memoria-Agent 启动，不另外启动公网监听。修改配置后通过 `POST /api/mcp/reload` 重载，`GET /api/mcp` 查看连接状态；使用该用户的登录 Bearer 或 Cookie。
+- 用户首次访问业务 API 时创建该账号运行时并启动 MCP，不另外启动公网监听。修改配置后通过 `POST /api/mcp/reload` 重载，`GET /api/mcp` 查看该账号连接状态；使用该用户的登录 Bearer 或 Cookie。
 - MCP 工具受项目工具注册、风险策略及按需工具搜索限制；工具发现列表可多于实际开放的白名单工具。
 
 ## 飞书详细教程：找到 App Secret 并完成本机授权
@@ -199,7 +199,11 @@ Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
 
 主机最多并行初始化 4 个服务，支持 tools/list 分页、服务端 ping 和 JSON-RPC 请求区分；工具名超长或字符清洗时附加摘要以降低冲突。严格校验开关和超时；超时/取消关闭连接，失效工具移出注册表。Windows 下隐藏服务窗口，并在停止时清理 launcher 所属进程树。
 
-启动日志不打印凭据命令或上游 stderr 正文，检查报告仅保留身份、状态及公开搜索链接。工程验证见 `tests/test_mcp_lifecycle.py`；真实联网验证见 `scripts/check_mcp.py --user qin`，两种验证结果分别记录。2026-10-11 本机 Node.js 22.16.0；项目 Host 实际注册搜索 2 个/GitHub 8 个工具，ToolRegistry 中搜索与 get_me 调用成功，停止后注册表清空、没有发现遗留服务进程。飞书仍待用户授权。
+启动日志不打印凭据命令或上游 stderr 正文，检查报告仅保留身份、状态、列表数量及公开搜索链接。工程验证见 `tests/test_mcp_lifecycle.py`；真实联网验证见 `scripts/check_mcp.py --user qin`，两种验证结果分别记录。
+
+2026-10-11 实现基线 `040362c` 的本机 Node.js 为 22.16.0：搜索返回 3 个实际链接，GitHub get_me 确认 ZJ331456 且本仓库 README 读取成功；飞书已完成 OAuth，空间列表成功（0 个可见空间）、云盘列表成功（24 个文件）。项目 Host 的 qin 配置实际注册搜索 2 个/GitHub 8 个/飞书 4 个允许工具，并经 ToolRegistry 成功调用飞书空间列表；记录在该账号 `reports/mcp-host-check.json`。上述调用都没有验证文档正文或知识库节点读取，不能把四工具白名单都记成业务已测。
+
+这轮完成的接入状态已同步 [研究计划的进度表](../plans/长期陪伴记忆研究与实验计划书.md#当前进度与下一步)。后续每次新增权限、重新授权或读取新文档，应更新实际检查时间、工具和结果，不能沿用旧成功记录充当新验证。
 
 ## 其他免费候选：仅推荐，未部署
 
