@@ -104,7 +104,7 @@ class RunRecorder:
         self.manifest = {"schema_version": 1, "run_id": self.run_id,
             "started_at_utc": datetime.now(timezone.utc).isoformat(), "status": "running",
             "code": code_identity(root), "environment": environment(), "seed": seed,
-            "seed_scope": "fixture ordering; greedy local generation does not consume a sampling seed",
+            "seed_scope": "recorded protocol identifier; fixture order is fixed; greedy local generation does not consume a sampling seed",
             "datasets": [{"file": p.name, "sha256": digest_file(p)} for p in datasets],
             "models": models, "model_snapshots": {role: model_snapshot(p, root) for role, p in (model_paths or {}).items()},
             "model_binding": "client-declared local snapshots; HTTP provider identity requires deployment provenance",
