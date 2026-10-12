@@ -146,7 +146,9 @@ class ContextBudget:
             clone = dict(message)
             content = str(clone.get("content", ""))
             if clone.get("role") == "tool" and len(content) > self.tool_result_chars:
-                if self.tool_result_chars > len(_TOOL_TRUNCATION):
+                if content.startswith("[claim-access-atomic]\n"):
+                    clone["content"] = "[结构化状态因预算不足未呈现；请澄清，不得猜测当前事实]"
+                elif self.tool_result_chars > len(_TOOL_TRUNCATION):
                     clone["content"] = content[:self.tool_result_chars - len(_TOOL_TRUNCATION)] + _TOOL_TRUNCATION
                 else:
                     clone["content"] = content[:self.tool_result_chars]

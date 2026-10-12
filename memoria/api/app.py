@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..config import Settings
+from ..claims import ClaimError
 from ..governance import GovernanceError, MemoryGovernance
 from ..llm import LLMClient
 from ..memory import export_memories_markdown
@@ -24,6 +25,7 @@ from ..security import RequestGate
 from ..service import AgentService
 from ..store import MemorySourceUnavailable, MemoryVersionConflict, Store, normalize_time
 from .governance import governance_router
+from .claims import claims_router
 
 MemoryKind = Literal["fact", "preference", "profile", "goal", "procedure"]
 
@@ -298,12 +300,12 @@ class MarkdownWriteBody(StrictModel):
     content: str = Field(min_length=1, max_length=200000)
 
 
-def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings: Settings | None = None, schema_only: bool = False) -> FastAPI:
+def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings: Settings | None = None, schema_only: bool = False, tenant_user_id: str = "local") -> FastAPI:
     """Internal runtime factory. Network entry points use the authenticated gateway."""
     settings = tenant_settings or Settings.load(config_path)
     store = None if schema_only else Store(settings.database, settings.vector_backend)
     governance = None if schema_only else MemoryGovernance(store)
-    service = None if schema_only else AgentService(settings, store, LLMClient(settings))
+    service = None if schema_only else AgentService(settings, store, LLMClient(settings), user_id=tenant_user_id)
     session_locks: dict[str, asyncio.Lock] = {}
     active_turns: dict[str, asyncio.Task] = {}
     deleting_sessions: set[str] = set()
@@ -348,6 +350,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     )
     app.state.settings, app.state.store, app.state.service, app.state.metrics = settings, store, service, metrics
     app.state.governance = governance
+    app.include_router(claims_router(service.claims if service else None,service.llm if service else None))
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "X-Request-ID", "Authorization", "X-API-Key", "X-Agent-Key"])
 
     @app.middleware("http")
@@ -387,6 +390,10 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     @app.exception_handler(MemoryVersionConflict)
     async def memory_conflict(request: Request, exc: MemoryVersionConflict):
         return _error(request, 409, "conflict", str(exc))
+
+    @app.exception_handler(ClaimError)
+    async def claim_error(request: Request, exc: ClaimError):
+        return _error(request, exc.status, _error_code(exc.status), exc.detail)
 
     @app.get("/api/health", response_model=HealthResponse, tags=["system"], summary="存活检查")
     def health() -> HealthResponse:

@@ -4,7 +4,7 @@
 
 ## 1. 文档范围
 
-本文描述 Memoria Agent `0.12.0` 本地 HTTP API（2026-10-11 更新登录、用户隔离和真实数据接口）。API 覆盖系统状态、会话、Agent 对话、个人分层记忆、共享记忆治理、工具调试、Tool Search、MCP、Drift 和运行追踪，不包含 Telegram、飞书、QQ 等外部通道。
+本文描述 Memoria Agent `0.12.0` 本地 HTTP API（2026-10-12 更新Claim、条件视图与访问路由）。API 覆盖系统状态、会话、Agent 对话、个人分层记忆、共享记忆治理、工具调试、Tool Search、MCP、Drift 和运行追踪，不包含 Telegram、飞书、QQ 等外部通道。
 
 共享记忆的数据流、权限边界和评测方法见 [记忆治理与多 Agent 共享记忆](./记忆治理与多Agent共享记忆.md)。
 
@@ -385,3 +385,11 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 记忆返回 `proposal_id`、`proposer_agent_id`、`approved_by`、`source_type`、`source_ref`、`version`、`supersedes_id` 和状态；详情与版本链还返回 `effective_status`，过期记忆显示为 `expired`。审批响应带 `action=activate|supersede|confirm`。`source_ref` 是来源指针，不会自动证明外部材料真实，也不授权读取旧个人会话。所有新请求体拒绝未知字段，审核与撤销理由必须包含非空白文字。
 
 该层是单机、按 Agent key 与空间角色隔离的共享记忆服务。旧 `/api/memories`、聊天工具和来源消息 API 仍属于本地个人数据域，不应通过其路由读取共享层内容，也不能用它们证明多 Agent 隔离。
+
+## Claim、条件视图与访问路由
+
+新增登录后接口：`GET /api/claim-slots`，`GET/POST /api/claims`，`POST /api/claims/extract`，`GET /api/claims/{id}`及`/history`，`POST /api/claims/{id}/revisions`及`approve/reject/retract/dispute/restore`，`DELETE /api/claims/{id}`，`POST /api/claim-views`，`GET /api/claim-views/{id}`，`POST /api/memory-access`。完整契约、字段示例及四路语义见[实现说明](Claim条件视图与访问路由.md)；OpenAPI提供严格Pydantic schema。
+
+候选须有本账号真实user原话的message_id/span/quote/SHA，公开数据回执中的消息拒绝；抽取最多3条pending、不自动批准。批准/修订/决策需expected_revision与reason，版本变化409，来源/条件非法422，跨用户ID404，匿名401。条件视图按主体/槽位/条件/预算隔离，缓存更新清空依赖payload；history支持Claim的fact_as_of与recorded_as_of，普通memories接口不因此变为双时间。memory-access的retrieve为槽位SQL读取，尚不是Dense补检。
+
+来源撤销的dry-run仍只预览普通记忆操作；正式执行同事务撤销关联Claim来源并使视图失效，即使普通记忆操作数为0也会生效。

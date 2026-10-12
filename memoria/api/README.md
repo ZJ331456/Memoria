@@ -42,3 +42,7 @@
 python -m pytest -q tests/test_core.py tests/test_memory_review.py tests/test_governance_api.py
 python -m compileall -q memoria
 ```
+
+## Claim接口
+
+[claims.py](claims.py)组装claim-slots、claims及抽取/审核/修订/历史、claim-views、memory-access路由。所有业务通过网关选择账号；请求不能覆盖user_id，ClaimError使用统一错误契约。schema-only路由只生成OpenAPI，不开启个人库。[完整说明](../../docs/implemented/Claim条件视图与访问路由.md)。

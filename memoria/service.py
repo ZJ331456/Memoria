@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from .config import Settings
+from .claims import ClaimMemory
 from .drift import DriftWorker
 from .llm import LLMClient
 from .store import Store
@@ -22,8 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class AgentService:
-    def __init__(self, settings: Settings, store: Store, llm: LLMClient):
+    def __init__(self, settings: Settings, store: Store, llm: LLMClient, *, user_id: str = "local"):
         self.settings, self.store, self.llm = settings, store, llm
+        self.claims = ClaimMemory(store, user_id)
         self.markdown = MarkdownMemoryLayer(settings.markdown_directory, settings.markdown_enabled)
         self.embedder = EmbeddingClient(settings.embedding, min(settings.request_timeout_seconds, 30), settings.max_retries)
         memory = MemoryEngine(
@@ -51,6 +53,7 @@ class AgentService:
             self.skills,
             http_allowed_hosts=settings.http_allowed_hosts,
             episodes=self.episodes,
+            claims=self.claims,
         )
         self.tool_presentation = ToolPresentation(tools, enabled=settings.tool_search_enabled)
         self.mcp = McpHost(tools, settings.mcp_config_file, enabled=settings.mcp_enabled)
@@ -64,6 +67,7 @@ class AgentService:
             markdown=self.markdown,
             tool_presentation=self.tool_presentation,
             episodes=self.episodes,
+            claims=self.claims,
         )
         self.memory_worker = MemoryJobWorker(
             store, llm, memory, lease_seconds=settings.memory_job_lease_seconds,

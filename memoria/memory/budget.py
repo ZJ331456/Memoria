@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 
-_MEMORY_READ_TOOLS = frozenset({"recall_memory", "recall_episodes", "search_history", "load_skill"})
+_MEMORY_READ_TOOLS = frozenset({"recall_memory", "recall_episodes", "search_history", "load_skill", "access_claims"})
 _TRUNCATED = "\n[本轮记忆检索预算已截断]"
 _EXHAUSTED = "[本轮记忆检索预算已用尽；此结果未作为有效记忆注入]"
 
@@ -43,7 +43,7 @@ class TurnMemoryBudget:
                 raise ValueError("initial memory context exceeds per-turn retrieval budget")
             self.used_chars += chars
 
-    def consume(self, content: str) -> str:
+    def consume(self, content: str, *, atomic: bool = False) -> str:
         content = str(content)
         with self._lock:
             available = self.max_chars - self.used_chars
@@ -52,6 +52,9 @@ class TurnMemoryBudget:
             if len(content) <= available:
                 self.used_chars += len(content)
                 return content
+            if atomic:
+                self.used_chars = self.max_chars
+                return _EXHAUSTED
             if available <= len(_TRUNCATED):
                 self.used_chars = self.max_chars
                 return _EXHAUSTED

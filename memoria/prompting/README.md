@@ -28,3 +28,7 @@
 python -m pytest -q tests/test_round7_akashic.py::test_prompt_assembler_builds_system_context_frame tests/test_core.py::test_context_budget_keeps_recent_and_valid_tool_protocol
 python -m pytest -q tests/test_layered_context_budget.py
 ```
+
+## 条件状态的原子预算
+
+PromptSection.atomic让StructuredState整段保留或替换为明确缺失提示，帧重裁剪同样遵守。access_claims工具结果带原子标记，超限整条省略，不留下被裁掉条件的值。字符预算仍非tokenizer预算，reader需遵守证据，不能用旧摘要填当前缺失。[说明](../../docs/implemented/Claim条件视图与访问路由.md)。

@@ -71,3 +71,7 @@
 python -m pytest -q tests/test_memory_review.py tests/test_memory_retrieval_scale.py tests/test_core.py
 python -m pytest -q tests/test_episodic_memory.py tests/test_layered_context_budget.py tests/test_memory_layers_integration.py
 ```
+
+## 与Claim状态的边界
+
+[../claims.py](../claims.py)使用独立根/修订/来源/缓存表，限定槽位和条件不转成普通memories或向量。普通memories的worker/召回保持原有语义；源撤销正式事务额外使关联Claim/视图失效。access_claims与普通读取共享本轮配额，结构化结果超额时整体省略。[状态说明](../../docs/implemented/Claim条件视图与访问路由.md)。

@@ -1401,6 +1401,8 @@ class Store:
             affected = list(dict.fromkeys([*state_affected, *reinforced]))
             if not dry_run:
                 timestamp = now()
+                from .claims import revoke_claim_sources
+                revoke_claim_sources(self, refs, timestamp)
                 for memory_id in state_affected:
                     self._close_interval(memory_id, timestamp)
                     self.db.execute("UPDATE memories SET status='superseded',updated_at=? WHERE id=?", (timestamp, memory_id))

@@ -35,3 +35,7 @@
 python -m pytest -q tests/test_round7_akashic.py tests/test_optimizations.py::test_sse_chat_endpoint_emits_delta_and_complete tests/test_core.py::test_builtin_tools_and_trace
 python -m pytest -q tests/test_incremental_compaction.py tests/test_memory_layers_integration.py
 ```
+
+## 结构化状态访问
+
+明确识别的少量中文居住/语言/详细度问题走Claim路由，跳过会话摘要编译、fast查询规划及普通语义召回；完整状态作为低信任StructuredState段呈现，trace记录claim.access。一般自然语言仍走既有流程，可通过access_claims显式请求槽位/条件/时间。原子预算保护条件/引用不被截半，reader正确性仍需真实评测。[说明](../../docs/implemented/Claim条件视图与访问路由.md)。

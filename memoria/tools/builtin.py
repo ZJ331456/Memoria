@@ -6,6 +6,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from ..memory import MemoryEngine
+from ..claims import AccessRequest, ClaimMemory
 from ..memory.episodic import EpisodicMemory
 from ..skills import SkillCatalog
 from ..store import Store
@@ -24,6 +25,7 @@ def build_registry(
     *,
     http_allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS,
     episodes: EpisodicMemory | None = None,
+    claims: ClaimMemory | None = None,
 ) -> ToolRegistry:
     registry = ToolRegistry()
     async def recall(a):
@@ -39,6 +41,8 @@ def build_registry(
         return store.add_memory(a["content"], a.get("kind", "fact"), int(a.get("importance", 3)), "agent_tool")
     async def forget(a): return {"deleted": store.delete_memory(a["memory_id"])}
     async def history(a): return store.search_messages(a["query"], int(a.get("limit", 6)))
+    async def access_claims(a):
+        return claims.access(AccessRequest.model_validate(a))
     async def recall_episodes(a):
         if not episodes:
             return {"error": "episodic memory is disabled"}
@@ -87,6 +91,12 @@ def build_registry(
         _schema({"query":{"type":"string","minLength":1,"maxLength":300},"limit":{"type":"integer","minimum":1,"maximum":20}}, ["query"]),
         history, search_hint="历史 会话消息 history", always_on=False,
     ))
+    if claims:
+        registry.register(Tool(
+            "access_claims", "按明确槽位、条件和时间读取已批准Claim及原话；缺证据时返回clarify，不猜条件。",
+            AccessRequest.model_json_schema(), access_claims,
+            search_hint="当前状态 结构化记忆 条件 历史 Claim", always_on=False, max_output_chars=20000,
+        ))
     if episodes:
         registry.register(Tool(
             "recall_episodes", "检索过去的任务执行记录；结果不代表已验证的用户事实。",

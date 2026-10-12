@@ -18,6 +18,7 @@ _BOUNDED_SECTION_HEADER = re.compile(
     rf"(?m)^{re.escape(_SECTION_BOUNDARY)}\n## ([^\n]+)\n"
 )
 _LEADING_MEMORY_ID = re.compile(r"^- \[[^\]\n]+\]")
+_ATOMIC_OMISSION = "结构化状态因预算不足未呈现；请澄清，不得用旧摘要猜测当前事实。"
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +26,7 @@ class PromptSection:
     name: str
     content: str
     order: int = 100
+    atomic: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +75,7 @@ def _parse_frame(text: str) -> tuple[str, list[PromptSection]]:
     sections = []
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(core)
-        sections.append(PromptSection(match.group(1), core[match.end():end].strip(), index))
+        sections.append(PromptSection(match.group(1), core[match.end():end].strip(), index, match.group(1)=="Structured State"))
     return intro, sections
 
 
@@ -106,13 +108,16 @@ def _fit_sections(
     if type(max_chars) is not int or max_chars <= 0:
         raise ValueError("context frame budget must be a positive integer")
     ordered = [
-        PromptSection(item.name, item.content.strip().replace(_SECTION_BOUNDARY, "&lt;!--memoria-section--&gt;"), item.order)
+        PromptSection(item.name, item.content.strip().replace(_SECTION_BOUNDARY, "&lt;!--memoria-section--&gt;"), item.order, item.atomic)
         for item in sorted(sections, key=lambda item: (item.order, item.name))
     ]
     full = _render_frame(ordered, intro)
     if len(full) <= max_chars:
         return full, ordered
-    minimums = [_minimum_prefix(item.content.strip()) for item in ordered]
+    minimums = [len(item.content) if item.atomic else _minimum_prefix(item.content.strip()) for item in ordered]
+    if len(_render_frame([PromptSection(item.name,"",item.order) for item in ordered],""))+sum(minimums)>max_chars:
+        ordered = [PromptSection(item.name,_ATOMIC_OMISSION if item.atomic else item.content,item.order,item.atomic) for item in ordered]
+        minimums = [len(item.content) if item.atomic else _minimum_prefix(item.content.strip()) for item in ordered]
     for candidate_intro in (intro, _SHORT_INTRO, ""):
         overhead = len(_render_frame([PromptSection(item.name, "", item.order) for item in ordered], candidate_intro))
         if overhead + sum(minimums) <= max_chars:
@@ -140,7 +145,7 @@ def _fit_sections(
         if not progressed:
             break
     fitted = [
-        PromptSection(item.name, _clip(content, lengths[index]), item.order)
+        PromptSection(item.name, _clip(content, lengths[index]), item.order,item.atomic)
         for index, (item, content) in enumerate(zip(ordered, contents))
     ]
     frame = _render_frame(fitted, intro)
@@ -152,7 +157,7 @@ def _fit_sections(
 def minimum_context_frame_chars(text: str) -> int:
     """Smallest frame that retains markers, headings, and each leading ID."""
     _, sections = _parse_frame(text)
-    prefixes = [section.content[:_minimum_prefix(section.content)] for section in sections]
+    prefixes = [_ATOMIC_OMISSION if section.atomic else section.content[:_minimum_prefix(section.content)] for section in sections]
     return len(_render_frame(
         [PromptSection(section.name, prefix, section.order) for section, prefix in zip(sections, prefixes)],
         "",
@@ -218,8 +223,11 @@ class PromptAssembler:
             if cap is not None:
                 # A legal but tiny per-section cap cannot preserve the first
                 # memory ID or skill name. Omit that optional section safely.
-                content = _clip(content, cap) if cap >= _minimum_prefix(content) and cap else ""
-            bounded.append(PromptSection(section.name, content, section.order))
+                if section.atomic:
+                    content = content if len(content)<=cap else _ATOMIC_OMISSION
+                else:
+                    content = _clip(content, cap) if cap >= _minimum_prefix(content) and cap else ""
+            bounded.append(PromptSection(section.name, content, section.order,section.atomic))
 
         active_indices = [index for index, section in enumerate(bounded) if section.content]
         active = [bounded[index] for index in active_indices]

@@ -26,3 +26,7 @@
 ```bash
 python -m pytest -q tests/test_optimizations.py::test_tool_permissions_hooks_validation_and_output_cap tests/test_core.py::test_tool_loop_guard_uses_stable_argument_signature tests/test_round10_tool_search_mcp.py::test_tool_search_presentation
 ```
+
+## 只读结构化状态工具
+
+有Claim服务时注册access_claims，参数为严格AccessRequest（主体、槽位、条件、当前/历史时间与字符预算）。工具通过发现提供，不授予创建/批准权限；按解码后名称计入本轮读取额度，输出整条保留或明确省略。[Claim说明](../../docs/implemented/Claim条件视图与访问路由.md)。

@@ -61,7 +61,7 @@ class TenantPool:
             settings.api_token = ""  # Login sessions are authenticated by this gateway.
             settings.drift_enabled = False
             apply_overrides(settings)
-            app = _create_tenant_app(tenant_settings=settings)
+            app = _create_tenant_app(tenant_settings=settings, tenant_user_id=user["id"])
             try:
                 await self.stack.enter_async_context(app.router.lifespan_context(app))
             except BaseException:
