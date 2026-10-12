@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.requests import Request as ASGIRequest
 
@@ -137,7 +138,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             return JSONResponse({"message": "远程访问需要 HTTPS"}, status_code=426)
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             origin = request.headers.get("origin")
-            if origin and origin.rstrip("/") not in settings.allowed_origins:
+            if origin and origin.rstrip("/") != str(request.base_url).rstrip("/") and origin.rstrip("/") not in settings.allowed_origins:
                 return JSONResponse({"message": "Origin 不在允许列表"}, status_code=403)
             if request.headers.get("sec-fetch-site") == "cross-site":
                 return JSONResponse({"message": "跨站请求被拒绝"}, status_code=403)
@@ -171,6 +172,8 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers.setdefault("X-Request-ID", uuid.uuid4().hex)
+        if request.url.path.startswith("/studio/"):
+            response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
         return response
 
     @app.exception_handler(RequestValidationError)
@@ -230,6 +233,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     @app.get("/", include_in_schema=False)
     def index():
         return {"service": "Memoria-Agent", "docs": "/docs", "health": "/api/health",
+                "studio": "/studio/",
                 "register": "/api/auth/register", "login": "/api/auth/login"}
 
     # Build schema without opening the legacy database or warming a tenant/model.
@@ -247,5 +251,13 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
                         if isinstance(operation, dict): operation["security"] = [{"UserSession": []}]
         return app.openapi_schema
     app.openapi = openapi
+    studio = Path(__file__).resolve().parents[2] / "studio" / "dist"
+    if (studio / "index.html").is_file():
+        # Public shell only; all data still passes authenticated tenant dispatch.
+        app.mount("/studio", StaticFiles(directory=studio, html=True), name="memory-studio")
+    else:
+        @app.get("/studio/", include_in_schema=False)
+        def studio_not_built():
+            return JSONResponse({"message": "请先在 studio 目录执行 npm ci 和 npm run build，再重启服务"}, status_code=503)
     app.mount("/", PrivateDispatch(accounts, pool))
     return app

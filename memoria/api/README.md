@@ -46,3 +46,7 @@ python -m compileall -q memoria
 ## Claim接口
 
 [claims.py](claims.py)组装claim-slots、claims及抽取/审核/修订/历史、claim-views、memory-access路由。所有业务通过网关选择账号；请求不能覆盖user_id，ClaimError使用统一错误契约。schema-only路由只生成OpenAPI，不开启个人库。[完整说明](../../docs/implemented/Claim条件视图与访问路由.md)。
+
+## Memory Studio迭代
+
+新增/api/memory-query与Claim source/analyze入口由claims.py组装；research_runs.py只读服务器绑定账号的规范实验metadata/metrics。gateway同源托管构建后的/studio/公开壳，业务仍鉴权。详见[Memory Studio](../../docs/implemented/MemoryStudio与统一记忆访问.md)。

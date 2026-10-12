@@ -1,0 +1,9 @@
+{
+  "name": "memoria-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {"dev": "vite --host 127.0.0.1", "build": "vue-tsc --noEmit && vite build", "test": "node --experimental-strip-types --test tests/*.test.ts"},
+  "dependencies": {"vue": "^3.5.0", "element-plus": "^2.10.0"},
+  "devDependencies": {"vite": "^6.4.0", "@vitejs/plugin-vue": "^5.2.0", "typescript": "~5.8.3", "vue-tsc": "^3.0.0", "@types/node": "^22.0.0"}
+}

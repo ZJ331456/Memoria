@@ -4,7 +4,7 @@
 
 A memory management HTTP service for small-model long-term companionship. It provides source-linked review, correction/restoration, validity intervals, hybrid retrieval, token-aware long-document indexing, layered context, independent shared governance, and local/remote OpenAI-compatible model interfaces.
 
-The chatbot frontend has been removed. Use the API, Swagger `/docs`, or experiment tools. Login selects an independent database, memory runtime, Markdown directory and MCP profile per account. Structured Claims, conditional user views and access routing remain research plans.
+The chatbot frontend has been removed. Use the API, Swagger `/docs`, experiment tools, or the dedicated [Memory Studio](docs/implemented/MemoryStudio与统一记忆访问.md). Build it in `studio/` with `npm ci` and `npm run build`, restart the Python service, and open `/studio/`. Login selects an independent database, runtime, Markdown directory and MCP profile. Reviewed Claims, conditional views, dual-time revisions, unified access and character-budget evidence selection are implemented in a bounded scope; longitudinal quality remains unmeasured.
 
 ## Run from the repository root
 

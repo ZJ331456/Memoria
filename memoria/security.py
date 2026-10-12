@@ -31,7 +31,7 @@ class RequestGate:
             except ValueError:
                 return 400, "invalid_content_length", "Content-Length 无效", {}
         origin = request.headers.get("origin")
-        if request.method not in {"GET", "HEAD"} and origin and origin not in self.allowed_origins:
+        if request.method not in {"GET", "HEAD"} and origin and origin.rstrip("/") != str(request.base_url).rstrip("/") and origin not in self.allowed_origins:
             return 403, "origin_forbidden", "请求 Origin 不在允许列表", {}
         # Shared-memory routes authenticate with a separate, agent-scoped key in
         # their dependency. The server-wide token never grants an agent identity.

@@ -123,6 +123,7 @@ class ExtractionRequest(Strict):
     message_id: str = Field(min_length=1,max_length=64)
     subject_id: str = Field(default="self",pattern=r"^(self|entity:[a-zA-Z0-9_-]{1,64})$")
     scope: dict = Field(default_factory=dict)
+    infer_conditions: bool = Field(default=False, strict=True)
     _conditions = field_validator("scope")(conditions)
 
 
@@ -132,6 +133,9 @@ class ExtractedAssertion(Strict):
     polarity: Literal["positive","negative"] = "positive"
     modality: Literal["statement","plan","inference"] = "statement"
     evidence_quote: str = Field(min_length=1,max_length=4000)
+    scope: dict = Field(default_factory=dict)
+    condition_quote: str | None = Field(default=None, min_length=1, max_length=4000)
+    _conditions = field_validator("scope")(conditions)
 
 
 class ExtractionOutput(Strict):
@@ -382,6 +386,10 @@ class ClaimMemory:
             "evidence_quote必须是原话中唯一出现的完整连续引用。条件由调用方提供，禁止扩大条件。"
             "predicate必须取自："+", ".join(SLOTS)+"。承诺/计划不能当已发生事实，推断须标inference。"
         )
+        if request.infer_conditions:
+            prompt += ("本次允许附加scope和condition_quote：仅支持原话明确的面试模拟条件activity=interview。"
+                       "condition_quote必须是包含面试模拟并约束该候选的唯一连续原话，且包含在evidence_quote中。"
+                       "默认/全局陈述scope为空。其他条件不能猜或丢掉，不能转换为无条件事实；不确定时跳过。")
         try:
             response = await llm.chat([{"role":"system","content":prompt},
                                        {"role":"user","content":canonical({"subject_id":request.subject_id,"scope":request.scope,"source":text})}],
@@ -396,7 +404,20 @@ class ClaimMemory:
                 start = text.find(quote)
                 if start<0 or text.find(quote,start+1)>=0:
                     raise ValueError("引用必须在原话中唯一匹配")
-                drafts.append(ClaimDraft(subject_id=request.subject_id,predicate=candidate.predicate,scope=request.scope,
+                scope = dict(request.scope)
+                if request.infer_conditions and "面试模拟" in quote and not candidate.scope and request.scope.get("activity") != "interview":
+                    raise ValueError("条件不能被丢弃为无条件陈述")
+                if candidate.scope or candidate.condition_quote:
+                    if not request.infer_conditions or candidate.scope != {"activity":"interview"}:
+                        raise ValueError("不支持的模型条件")
+                    condition = candidate.condition_quote or ""
+                    at = text.find(condition) if condition else -1
+                    if "面试模拟" not in condition or at < 0 or text.find(condition,at+1)>=0 or condition not in quote:
+                        raise ValueError("条件证据无效")
+                    if "activity" in scope and scope["activity"] != "interview":
+                        raise ValueError("模型不能改变调用方条件")
+                    scope.update(candidate.scope)
+                drafts.append(ClaimDraft(subject_id=request.subject_id,predicate=candidate.predicate,scope=scope,
                     value=candidate.value,polarity=candidate.polarity,modality=candidate.modality,
                     evidence=[Evidence(message_id=request.message_id,start=start,end=start+len(quote),quote=quote,content_sha256=sha(text))],
                     proposal_origin="model",reason="模型生成的待审核候选，尚未核验语义支持度"))

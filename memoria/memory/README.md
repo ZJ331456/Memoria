@@ -75,3 +75,7 @@ python -m pytest -q tests/test_episodic_memory.py tests/test_layered_context_bud
 ## 与Claim状态的边界
 
 [../claims.py](../claims.py)使用独立根/修订/来源/缓存表，限定槽位和条件不转成普通memories或向量。普通memories的worker/召回保持原有语义；源撤销正式事务额外使关联Claim/视图失效。access_claims与普通读取共享本轮配额，结构化结果超额时整体省略。[状态说明](../../docs/implemented/Claim条件视图与访问路由.md)。
+
+## Memory Studio迭代
+
+access.py为MemoryAccessOrchestrator/严格QueryRequest，temporal_query.py做有限中文区间解析，evidence_selector.py执行整组字符预算topk/coverage，claim_analysis.py提供可选但不写状态的更新/模型支持度建议。engine.retrieve增加显式keyword/bm25/dense/rrf诊断模式；旧默认rrf保持。公开/撤销/丢失来源不进入个人补检状态，recorded_as_of跳过普通语义路径。[完整说明](../../docs/implemented/MemoryStudio与统一记忆访问.md)。

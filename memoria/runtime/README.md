@@ -39,3 +39,7 @@ python -m pytest -q tests/test_incremental_compaction.py tests/test_memory_layer
 ## 结构化状态访问
 
 明确识别的少量中文居住/语言/详细度问题走Claim路由，跳过会话摘要编译、fast查询规划及普通语义召回；完整状态作为低信任StructuredState段呈现，trace记录claim.access。一般自然语言仍走既有流程，可通过access_claims显式请求槽位/条件/时间。原子预算保护条件/引用不被截半，reader正确性仍需真实评测。[说明](../../docs/implemented/Claim条件视图与访问路由.md)。
+
+## Memory Studio迭代
+
+本轮有限个人状态问题改用MemoryAccessOrchestrator，结合中文区间、来源补检与整组选择；reader只接收selection及缺项/限制，未选中调试候选不额外注入。trace保存ID/过滤/阶段，原子省略仍保留；通用任务和工具契约不扩大。[边界](../../docs/implemented/MemoryStudio与统一记忆访问.md)。

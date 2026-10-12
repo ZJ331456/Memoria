@@ -85,7 +85,9 @@ class MemoryEngine:
             self.store.record_evolution(updated["id"], f"由 {memory_id} 演化: {reason or new_info[:120]}")
         return updated
 
-    async def retrieve(self, query: str, limit: int = 8, kinds: set[str] | None = None, as_of: str | None = None, expand_graph: bool = True, *, timings: StageTimings | None = None) -> list[dict]:
+    async def retrieve(self, query: str, limit: int = 8, kinds: set[str] | None = None, as_of: str | None = None, expand_graph: bool = True, *, timings: StageTimings | None = None, mode: str = "rrf", diagnostics: dict | None = None) -> list[dict]:
+        if mode not in {"keyword", "bm25", "dense", "rrf"}:
+            raise ValueError("unsupported retrieval mode")
         timers = timings or StageTimings()
         candidate_started = time.perf_counter()
         embedder = self.embedder
@@ -105,7 +107,7 @@ class MemoryEngine:
         timers.since("memory.lexical_candidates", candidate_started)
 
         query_vector: list[float] | None = None
-        if embedder and embedder.enabled:
+        if items and mode in {"dense", "rrf"} and embedder and embedder.enabled:
             with timers.measure("memory.backfill"):
                 await self._backfill(items, limit=64, timings=timers)
             try:
@@ -165,7 +167,17 @@ class MemoryEngine:
         bm25_ranked = sorted((mid for mid, sc in bm25_scores.items() if sc > 0), key=lambda m: bm25_scores[m], reverse=True)
         fused: dict[str, float] = {}
         lanes: dict[str, list[str]] = {"keyword": [item["id"] for item in lexical], "vector": [item["id"] for item in semantic], "bm25": bm25_ranked}
-        for lane, weight in ((lexical, 0.8), (semantic, 1.0), ([by_id[m] for m in bm25_ranked if m in by_id], 0.9)):
+        active_lanes = {"keyword": [(lexical, 0.8)], "dense": [(semantic, 1.0)],
+                        "bm25": [([by_id[m] for m in bm25_ranked if m in by_id], 0.9)],
+                        "rrf": [(lexical, 0.8), (semantic, 1.0), ([by_id[m] for m in bm25_ranked if m in by_id], 0.9)]}
+        if diagnostics is not None:
+            diagnostics.update({"mode": mode, "candidate_count": len(items), "embedding_namespace": embedding_namespace,
+                                "dense_available": query_vector is not None, "graph_expansion": expand_graph,
+                                "lanes": lanes, "fallback": mode == "rrf" and query_vector is None,
+                                "semantic_floor": semantic_floor, "candidate_limit": self.vector_scan_limit,
+                                "score_kind": "weighted_reciprocal_rank", "rrf_constant": 60,
+                                "embedding_attempted": bool(items and mode in {"dense", "rrf"} and embedder and embedder.enabled)})
+        for lane, weight in active_lanes[mode]:
             for rank, item in enumerate(lane, start=1):
                 fused[item["id"]] = fused.get(item["id"], 0.0) + weight / (60 + rank)
         by_id = {item["id"]: item for item in items}

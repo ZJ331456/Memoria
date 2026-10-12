@@ -43,3 +43,7 @@ python -m pytest -q tests/test_core.py tests/test_governance_core.py tests/test_
 ## 结构化状态
 
 [claims.py](claims.py)提供12槽位Claim、原话证据、明确审批/不可变修订、条件视图与四路访问；由service绑定服务器登录UUID，同账号Store保存但不投影为普通memories。完整边界见[说明](../docs/implemented/Claim条件视图与访问路由.md)。
+
+## Memory Studio迭代
+
+新增[studio](../studio/README.md)专用记忆控制台；memory/access.py将Claim、有限中文时间、来源补检和字符证据组连接到API与有限个人问题运行时。候选分析仍为建议、批准仍显式；[完整边界](../docs/implemented/MemoryStudio与统一记忆访问.md)。

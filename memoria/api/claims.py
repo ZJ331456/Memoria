@@ -1,17 +1,35 @@
 """Structured memory endpoints; tenant identity is supplied only by the gateway."""
 from fastapi import APIRouter, Query
 
-from ..claims import (AccessRequest, ClaimDecision, ClaimDraft, ClaimMemory,
+from ..claims import (AccessRequest, ClaimDecision, ClaimDraft, ClaimError, ClaimMemory,
                       ClaimRevision, ExtractionRequest, SLOTS, ViewRequest)
+from ..claims import sha
+from ..memory.access import MemoryAccessOrchestrator, QueryRequest
+from ..memory.claim_analysis import AnalysisRequest, analyze_claim
 
 
-def claims_router(memory: ClaimMemory | None, llm=None) -> APIRouter:
+def claims_router(memory: ClaimMemory | None, llm=None, engine=None) -> APIRouter:
     router = APIRouter(tags=["claims and views"])
 
     @router.get("/api/claim-slots")
     def slots():
         return {"slots":[{"predicate":name,"multiple":multiple} for name,multiple in SLOTS.items()],
                 "scope_semantics":"exact_typed_conjunction","default_subject":"self"}
+
+    @router.get("/api/claim-source/{message_id}")
+    def source(message_id: str):
+        with memory.store._memory_transaction():
+            item = memory.store.message_source(message_id)
+            if not item:
+                raise ClaimError(404, "来源消息不存在")
+            text = item["content"]
+            evidence = {"message_id": message_id, "start": 0, "end": len(text), "quote": text, "content_sha256": sha(text)}
+            try:
+                memory._evidence({"evidence": [evidence]})
+                eligible = True
+            except ClaimError:
+                eligible = False
+            return {**item, "evidence": evidence, "personal_claim_eligible": eligible}
 
     @router.get("/api/claims")
     def listing(limit: int = Query(default=100,ge=1,le=500)):
@@ -72,5 +90,13 @@ def claims_router(memory: ClaimMemory | None, llm=None) -> APIRouter:
     @router.post("/api/memory-access")
     def access(body: AccessRequest):
         return memory.access(body)
+
+    @router.post("/api/memory-query")
+    async def query(body: QueryRequest):
+        return await MemoryAccessOrchestrator(memory, engine).access(body)
+
+    @router.post("/api/claims/{claim_id}/analyze")
+    async def analyze(claim_id: str, body: AnalysisRequest):
+        return await analyze_claim(memory, llm, claim_id, body)
 
     return router

@@ -354,7 +354,7 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 
 ## 10. 服务入口
 
-`GET /` 返回 JSON 导航；`GET /docs` 提供 Swagger，`GET /openapi.json` 提供当前接口 schema。聊天前端及 SPA 静态托管已移除。接口可由脚本、终端或后续记忆控制台调用。
+`GET /` 返回 JSON 导航；`GET /docs` 提供 Swagger，`GET /openapi.json` 提供当前接口 schema。旧聊天前端已移除。/studio/提供新专用记忆工作室，构建后由网关同源托管，全部业务仍要求登录；未构建返回503说明。
 
 ## 11. 记忆治理与多 Agent 共享 API
 
@@ -393,3 +393,15 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 候选须有本账号真实user原话的message_id/span/quote/SHA，公开数据回执中的消息拒绝；抽取最多3条pending、不自动批准。批准/修订/决策需expected_revision与reason，版本变化409，来源/条件非法422，跨用户ID404，匿名401。条件视图按主体/槽位/条件/预算隔离，缓存更新清空依赖payload；history支持Claim的fact_as_of与recorded_as_of，普通memories接口不因此变为双时间。memory-access的retrieve为槽位SQL读取，尚不是Dense补检。
 
 来源撤销的dry-run仍只预览普通记忆操作；正式执行同事务撤销关联Claim来源并使视图失效，即使普通记忆操作数为0也会生效。
+
+## Memory Studio与统一访问新增接口
+
+| 路径 | 请求/返回边界 |
+| --- | --- |
+| GET /studio/ | 公开界面壳，构建后200；业务数据不在静态文件中 |
+| GET /api/claim-source/{message_id} | 账号来源/SHA/span与personal_claim_eligible；跨账号404 |
+| POST /api/memory-query | query、subject_id、predicates/context、两个as_of、mode/selector/字符预算/top_k/candidate_limit；返回真实路径/解析/候选/selection/同池对照/过滤/阶段，不调用reader |
+| POST /api/claims/{id}/analyze | expected_revision，use_model默认false；更新/支持度建议，不写库、不批准；源或版本变化409 |
+| GET /api/research-runs、GET /api/research-runs/{run_id} | 仅本账号规范ID；白名单metadata及SHA/大小匹配的执行metrics，无gold/prompt/执行任务接口 |
+
+抽取增加infer_conditions严格布尔开关，默认旧契约，仅opt-in允许来源有证据的面试模拟scope。具体路由、区间语义、预算、模型成本与未完成项见[完整说明](MemoryStudio与统一记忆访问.md)。Swagger提供严格字段schema；匿名全部新业务401，不接受user_id覆盖服务器身份。

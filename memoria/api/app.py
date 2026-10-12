@@ -26,6 +26,7 @@ from ..service import AgentService
 from ..store import MemorySourceUnavailable, MemoryVersionConflict, Store, normalize_time
 from .governance import governance_router
 from .claims import claims_router
+from .research_runs import research_runs_router
 
 MemoryKind = Literal["fact", "preference", "profile", "goal", "procedure"]
 
@@ -350,7 +351,11 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     )
     app.state.settings, app.state.store, app.state.service, app.state.metrics = settings, store, service, metrics
     app.state.governance = governance
-    app.include_router(claims_router(service.claims if service else None,service.llm if service else None))
+    app.include_router(claims_router(service.claims if service else None,service.llm if service else None,
+                                     service.runtime.memory if service else None))
+    experiment_owner = settings.database.parent.parent
+    app.include_router(research_runs_router(experiment_owner / "experiments" if experiment_owner.name == tenant_user_id else None,
+                                            tenant_user_id))
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "X-Request-ID", "Authorization", "X-API-Key", "X-Agent-Key"])
 
     @app.middleware("http")

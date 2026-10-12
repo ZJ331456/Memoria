@@ -57,3 +57,9 @@
 [test_source_retrieval.py](test_source_retrieval.py)覆盖未来消息缓存不得进入早期prefix、原文ID/词面/Dense融合、模型空间与内容绑定、坏分块及无效向量拒绝；研究工作流新增无reader纯召回和副本checkpoint/SHA检查。全部为临时工程输入；当前全量371 passed / 84.82 s，不是研究分数。
 
 固定自动评测代码全量371 passed / 84.82 s；之后扩展既有错误分母用例，确认未提交judgments的工程错误不得变为人工False，受影响研究回归55 passed / 28.69 s。真实9轮评分派生修订另核验576项human_correct=null，0新模型调用，旧评分/预测及字面/证据指标保持。
+
+## Memory Studio迭代
+
+[test_memory_studio.py](test_memory_studio.py)新增日历区间/歧义/条件冲突、来源复核/公开归属/版本竞态、固定池整组预算、独立通道、advisory不批准、账本身份/指纹/隐私/只读及HTTP跨账号验证。studio/tests/api.test.ts覆盖Unicode码点、跨账号延迟响应与401清理；临时输入不导入产品或研究。[实现验证](../docs/implemented/MemoryStudio与统一记忆访问.md)。
+
+2026-10-12最终代码全量工程回归 **405 passed / 91.20 s**，前端3项测试通过、vue-tsc与生产构建通过；临时浏览器真实HTTP链路与实际qin只读核验均通过。工程质量保护不是长期研究收益，真实连续人物/正向视图/B7效用仍未测。

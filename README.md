@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [功能说明与研究计划](docs/README.md) · [AI 项目指令](AGENTS.md)
 
-面向小模型长期陪伴的记忆管理服务。核心工作是保存可追溯的来源、审核候选、纠正与恢复版本、理解变化并快速访问证据。当前以 HTTP API 和实验工具为入口，聊天前端已移除；待验证的 Claim、用户视图和路由见 [研究计划](docs/plans/长期陪伴记忆研究与实验计划书.md)。
+面向小模型长期陪伴的记忆管理服务。核心工作是保存可追溯的来源、审核候选、纠正与恢复版本、理解变化并快速访问证据。入口为 HTTP API、实验工具与专用 [Memory Studio](docs/implemented/MemoryStudio与统一记忆访问.md)，旧聊天前端仍移除。限定Claim、条件视图与统一访问已实现，研究质量与长期效果待测项见 [研究计划](docs/plans/长期陪伴记忆研究与实验计划书.md)。
 
 ## 已实现
 
@@ -14,6 +14,8 @@
 - 真实 MCP 接入、工具搜索/授权、trace、阶段计时和实验账本。
 - 注册登录、按账号独立数据库/Markdown/来源/后台任务和 MCP；旧个人历史单独封存。
 - qin 空间内 50 段/206 条真实公开微博对话，保留未知说话者，不充当个人画像或长期陪伴成绩。
+- 有证据的12槽位Claim、条件视图、双时间修订、统一访问/中文区间解析、限定条件提取与待审支持度建议。
+- Memory Studio来源审核、变化查看、检索解释、只读执行账本及整组字符预算选择；字符预算不是reader token。
 
 能力和限制见 [架构](docs/implemented/系统架构与实现说明.md)、[API](docs/implemented/API接口文档.md)和 [真实数据](docs/implemented/真实对话数据与实验入口.md)。
 
@@ -30,7 +32,7 @@ Copy-Item config.example.toml config.toml
 .\.venv\Scripts\python.exe main.py --host 127.0.0.1 --port 2237
 ```
 
-服务根路径返回 JSON；`/docs` 为 Swagger，`/api/health` 为存活检查。先注册/登录，业务请求使用用户 Bearer 或 Cookie；所有业务库按账号 UUID 隔离。本机 qin 已预留且用户已私密设置密码；新安装或重设时用 `scripts/manage_users.py set-password qin` 隐藏输入，凭据不写入文档。目录整理、文件保护和登录步骤见 [用户隔离](docs/implemented/用户登录与数据隔离.md)。
+服务根路径返回JSON导航；专用工作室位于`/studio/`（先在studio执行npm ci与npm run build）；`/docs`为Swagger，`/api/health` 为存活检查。先注册/登录，业务请求使用用户 Bearer 或 Cookie；所有业务库按账号 UUID 隔离。本机 qin 已预留且用户已私密设置密码；新安装或重设时用 `scripts/manage_users.py set-password qin` 隐藏输入，凭据不写入文档。目录整理、文件保护和登录步骤见 [用户隔离](docs/implemented/用户登录与数据隔离.md)。
 
 本地模型在 `model/bge-small-zh-v1.5` 和 `model/Qwen3.5-2B`。新机器按 [Embedding 配置](docs/implemented/本地Embedding配置.md)与 [统一模型接口](docs/implemented/本地与远程OpenAI统一接口.md)安装依赖和启动。main/fast 可使用 `Qwen3.5-2B`、`http://127.0.0.1:8080/v1`；embedding 可使用 `bge-small-zh-v1.5` 和同一地址。远程 API 通过同一业务接口配置，不默认发起收费调用。
 

@@ -28,6 +28,9 @@ venv/
 
 # 本机旧前端构建/依赖缓存（源码已移除）
 frontend/
+studio/node_modules/
+studio/dist/
+studio/.npm-cache/
 npm-debug.log*
 
 # IDE / OS / local runtime
