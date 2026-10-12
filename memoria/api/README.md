@@ -42,6 +42,8 @@ Claim 审批带预期修订号并重新核对来源；模型支持度仅是未�
 
 ## 验证
 
+analyze新增use_relation_model/peer_limit及核验/关系/4类影子策略；extract附带0额外模型调用的shadow_updates。query新增scope_mode区分明确默认与场景。[算法说明](../../docs/implemented/Claim证据核验与演化策略.md)。
+
 在仓库根目录：
 
 ```powershell

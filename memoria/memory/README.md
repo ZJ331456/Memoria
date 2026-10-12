@@ -14,6 +14,8 @@
 | [temporal_query.py](temporal_query.py) | 有限中文年月日/相对日期解析，区间、身份和获知截止歧义处理 |
 | [evidence_selector.py](evidence_selector.py) | 同一池的 top-k/coverage 整组选择；完整 JSON 的字符成本 |
 | [claim_analysis.py](claim_analysis.py) | 更新建议及明确开启的模型支持度建议；不批准、不持久化 |
+| [claim_relations.py](claim_relations.py) | typed scope/时间/多值关系与4类更新策略，完整目标复核 |
+| [evidence_verifier.py](evidence_verifier.py) | 来源硬校验、词面风险、事件边界与可选支持度模型 |
 | [embedding.py](embedding.py) | HTTP/本地 BGE、查询指令、文档分块、批次和向量校验 |
 | [local_bge.py](local_bge.py)、[token_chunks.py](token_chunks.py) | 离线 CUDA/CPU、模型指纹、tokenizer 分块、连续原文 span 和完整覆盖 |
 | [worker.py](worker.py) | 持久租约抽取任务及普通记忆审核队列 |
@@ -25,6 +27,8 @@
 
 自动对话抽取由 MemoryJobWorker 写入 memory_reviews，先待审，批准才调用 remember；任务完成只代表抽取完成。手动 API 和明确授权的 memorize 直接写普通记忆，不能等同于 Claim 审批。
 
+Claim显式抽取附带shadow_updates，额外模型调用0；analyze升级独立核验/关系/策略，支持度和关系模型分别opt-in。建议不提交，普通worker尚未接入Claim。[演化策略](../../docs/implemented/Claim证据核验与演化策略.md)。
+
 普通记忆的创建、纠正、替代及来源撤销在 Store 事务内维护 `[valid_at, invalid_at)` 区间。恢复旧版本新建区间，保留中间变化；as_of 后词面、BM25、向量与图扩展均受时间过滤。正文相同会强化；其他候选可由同类型预筛后的 fast 决策器保守分类。详见 [一致性](../../docs/implemented/记忆一致性与检索审查.md)。
 
 向量按模型命名空间与维度隔离。本地 BGE 长记忆保存连续 tokenizer 块、独立向量和原文 span，以父版本最佳块召回；更正、删除、撤销和时间查询同步限制块。批次完整校验后事务保存，延迟回填重验版本/正文/模型。HTTP 模型端点有输入限额，完整分块能力见 [长记忆索引](../../docs/implemented/实验记录与长记忆分块索引.md)。
@@ -34,6 +38,8 @@
 `/api/memory-query` 支持 unified/claim/keyword/bm25/dense/rrf。统一模式优先已批准 Claim；不完整时补检普通记忆，只把仍有效、属于合法用户原话的来源列作未批准证据，不能消除 Claim 的缺项或冲突。公开导入、丢失和撤销来源被排除；模型 await 后重验来源/版本。
 
 recorded_as_of 时跳过只有事实时间的普通记忆通道。中文年份/月/日保留日历区间，以修订时间线展示，不编造某日期或把整个区间当已证明的状态。规则未覆盖、主体不明或获知区间需精确截止时返回 clarify。
+
+明确平时/默认用scope_mode=default只读无条件状态，面试场景匹配activity；未给条件仍澄清。模式进缓存键，编译v2不复用旧视图，精确时间不覆盖条件冲突。
 
 Claim 同槽位条件/否定保持完整组。top-k/coverage 用同池/预算比较，不用 gold；字符预算含 JSON，不是 reader token。Dense 专用诊断不会伪装成词面结果，可用性依赖编码配置。API 诊断不调用 reader，通用条件、精确 token、MMR 与选择质量实验仍待完成。
 

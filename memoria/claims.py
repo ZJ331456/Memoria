@@ -23,7 +23,7 @@ SLOTS = {"residence": False, "occupation": True, "school": True,
          "response_language": False, "response_detail": False, "diet": True,
          "work_habit": True, "hobby": True, "learning_goal": True,
          "project_goal": True, "time_preference": True, "budget": False}
-COMPILER = "deterministic-claims-v1"
+COMPILER = "deterministic-claims-v2"
 
 
 def canonical(value) -> str:
@@ -146,6 +146,7 @@ class AccessRequest(Strict):
     subject_id: str = Field(default="self", pattern=r"^(self|entity:[a-zA-Z0-9_-]{1,64})$")
     predicates: list[str] = Field(min_length=1, max_length=12)
     context: dict = Field(default_factory=dict)
+    scope_mode: Literal["applicable", "default"] = "applicable"
     intent: Literal["current", "history"] = "current"
     fact_as_of: str | None = None
     recorded_as_of: str | None = None
@@ -153,6 +154,12 @@ class AccessRequest(Strict):
 
     _conditions = field_validator("context")(conditions)
     _times = field_validator("fact_as_of", "recorded_as_of")(timestamp)
+
+    @model_validator(mode="after")
+    def default_scope_only(self):
+        if self.scope_mode == "default" and self.context:
+            raise ValueError("默认状态查询不能同时指定场景条件")
+        return self
 
     @field_validator("predicates")
     @classmethod
@@ -427,10 +434,14 @@ class ClaimMemory:
             # Verify the exact snapshot again after the awaited model request.
             self._evidence({"evidence":[{"message_id":request.message_id,"start":0,"end":len(text),"content_sha256":sha(text)}]})
             created = [self.create(draft) for draft in drafts]
+            from .memory.claim_analysis import update_suggestion
+            shadow = [{"claim_id": item["id"], "revision": item["revision"], "update": update_suggestion(self, item)}
+                      for item in created]
         return {"candidates":created,"automatic_approvals":0,"semantic_support_verified":False,
                 "usage":response.usage or None,"elapsed_ms":round((time.perf_counter()-started)*1000,3),
                 "model":llm.settings.main.model if getattr(llm,"settings",None) else None,
-                "model_revision":None,"time_policy":"unknown; no model-generated event timestamps"}
+                "model_revision":None,"time_policy":"unknown; no model-generated event timestamps",
+                "shadow_updates":shadow,"shadow_model_calls":0}
 
     def get(self, claim_id: str) -> dict:
         with self.store._memory_transaction():
@@ -566,6 +577,8 @@ class ClaimMemory:
                 if not self._valid(data,historical=historical):
                     continue
                 scope = json.loads(root["scope_json"])
+                if request.scope_mode == "default" and scope:
+                    continue  # Explicit default question; conditional assertions remain stored.
                 if any(k in request.context and (type(request.context[k])!=type(v) or request.context[k]!=v) for k,v in scope.items()):
                     continue
                 if data["modality"]=="inference" or (data["modality"]=="plan" and predicate not in {"learning_goal","project_goal"}):

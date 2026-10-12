@@ -2,6 +2,8 @@
 
 核对：2026-10-12。本轮按用户明确授权交付专用记忆工作室：来源审核、变化查看、访问诊断和只读运行账本。旧聊天前端仍移除；没有新增演示画像、模拟研究数据或自动批准。
 
+后续同日算法深化：analyze升级[独立核验/关系/影子策略](Claim证据核验与演化策略.md)，增加transition建议及完整目标复核；extract附shadow_updates。scope_mode区分明确默认与面试，applicable行为保留。下面初次交付记录保留，历史研究成绩不改。
+
 ## 启动与使用
 
 本机已在studio安装依赖并构建。源码更新后先构建、再重启Python服务：
@@ -31,7 +33,7 @@ Pop-Location
 
 `POST /api/memory-query`：保守中文解析 → 已批准Claim/有效视图或时间线 → 缺项时普通记忆RRF来源补检 → 重新核对父版本/事实有效区间/来源角色/撤销/公开归属 → 去重及整组预算 → 路径/证据/解释。身份只来自服务器登录UUID，拒绝user_id等未知字段。
 
-请求字段query、subject_id、predicates、context、fact_as_of、recorded_as_of、mode、selector、budget_chars、top_k、candidate_limit。默认unified/coverage/6000字符/8证据组/32检索结果；最多64候选、32证据组、256–16000字符。调试候选不计入selection预算；完整调试响应不是reader上下文。
+请求字段query、subject_id、predicates、context、scope_mode、fact_as_of、recorded_as_of、mode、selector、budget_chars、top_k、candidate_limit。默认unified/coverage/6000字符/8证据组/32检索结果；最多64候选、32证据组、256–16000字符。调试候选不计入selection预算；完整调试响应不是reader上下文。
 
 Unified先读Claim，完整状态省掉补检；条件缺失/冲突保留clarify。Claim只读结构化状态；Keyword/BM25/Dense/RRF是独立来源通道，关闭图扩展。Dense不可用明确dense_available=false，不伪装成词面结果；RRF沿用生产权重0.8/1.0/0.9与k=60，报告通道rank/相似度/扫描限制/实际降级。空候选不调用embedding。
 
@@ -51,7 +53,7 @@ AgentRuntime对短而明确的个人状态问题使用统一入口，跳过旧�
 
 `GET /api/claim-source/{message_id}`：本账号来源、精确SHA/span及personal_claim_eligible；公开来源可浏览但不能作为个人Claim。抽取新增显式infer_conditions=true，仅支持原话明确面试模拟条件；condition_quote唯一匹配、包含在evidence_quote并含“面试模拟”，不能改调用方activity、丢条件或补时间。结构/证据失败整批回滚，结果仍pending；其他条件未完成。
 
-`POST /api/claims/{id}/analyze`：expected_revision、use_model（默认false）。默认给值首尾空白建议及同主体/槽位/typed scope的create/reinforce/review建议；强化需值/极性/模态/事实边界/父记忆一致，变化/并存仍明确审核，不静默替代。
+`POST /api/claims/{id}/analyze`：expected_revision、use_model/use_relation_model（默认false）、peer_limit（默认32）。新版给独立词面风险与跨scope的create/reinforce/transition/review建议，模型不绕过确定性门控；细则见新算法说明。
 
 显式use_model=true调用已配置LLM读取引用，建议Supported/Contradicted/Insufficient。semantic_support_verified=false、persisted=false、automatic_approvals=0，不属于真人或现实核验。返回后重查版本/来源指纹，变化409作废；失败502且不写Claim。同模型不能作为独立裁判，本轮没有为新NLI功能发起真实远程质量实验。
 

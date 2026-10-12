@@ -6,6 +6,8 @@ Source-backed memory management for small-model companionship: reviewed Claims, 
 
 ## Local setup and startup
 
+The latest algorithm iteration separates source-risk verification, Claim relation proposals and guarded Create/Reinforce/Transition/Review policies. Explicit default questions read unscoped state; explicit interview questions select applicable conditions, while missing context still requires clarification. All proposals remain advisory. See [implementation and limits](docs/implemented/Claim证据核验与演化策略.md). Full engineering regression: 432 passed / 159.55 s; no new research quality scores or real model calls.
+
 Run from the repository root in Windows PowerShell. Preserve an existing private configuration and use the project virtual environment.
 
 ```powershell

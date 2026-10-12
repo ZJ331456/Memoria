@@ -1,5 +1,7 @@
 # Memoria Agent API 接口文档
 
+同日算法深化：`/api/claims/{id}/analyze`新增use_relation_model（默认false）/peer_limit（1–64，默认32），返回核验/关系/4类影子策略；extract附shadow_updates，额外模型调用0。memory-query的scope_mode为auto/applicable/default，memory-access/view为applicable/default，default不与context混用。[演化说明](Claim证据核验与演化策略.md)，完整schema以当前OpenAPI为准。
+
 [文档导航](../README.md) · [API 实现说明](../../memoria/api/README.md)
 
 ## 1. 文档范围

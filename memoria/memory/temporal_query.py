@@ -23,12 +23,18 @@ def parse_query(text: str, reference: datetime | None = None) -> dict:
         raise ValueError("reference requires timezone")
     reference = reference.astimezone(LOCAL_ZONE)
     predicates = [p for p, pattern in PATTERNS.items() if re.search(pattern, text)]
-    context = {"activity": "interview"} if "面试模拟" in text else {}
-    result = {"parser": "zh-calendar-rules-v1", "subject_id": "self", "predicates": predicates,
-              "context": context, "intent": "current", "axis": "fact", "precision": "unknown",
+    interview = bool(re.search(r"面试模拟|模拟面试|面试时|面试的时候|面试中", text))
+    default = bool(re.search(r"平时|默认|通常情况下|一般情况下", text))
+    context = {"activity": "interview"} if interview else {}
+    result = {"parser": "zh-calendar-context-rules-v2", "subject_id": "self", "predicates": predicates,
+              "context": context, "scope_mode": "default" if default and not interview else "applicable",
+              "intent": "current", "axis": "fact", "precision": "unknown",
               "range_start": None, "range_end": None, "requires_clarification": False,
               "subject_requires_clarification": bool(OTHER_SUBJECT.search(text)),
               "reason": "current_or_general_query", "reference_time": reference.isoformat()}
+    if default and interview:
+        result.update(requires_clarification=True, reason="default_and_specific_context_ambiguous")
+        return result
     if re.search(r"你.*(?:认为|知道|记得|获知)|当时.*(?:认为|知道)", text):
         result["axis"] = "recorded"
     transition = bool(re.search(r"什么时候|何时", text) and re.search(r"搬|变|改|开始|停止", text))

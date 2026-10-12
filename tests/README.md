@@ -69,6 +69,8 @@ Pop-Location
 
 ## 外部与研究边界
 
+[test_claim_evolution.py](test_claim_evolution.py)新增27项独立核验/关系/策略、源时间、主体/计划/否定、并发目标、模型引用、无提交和默认缓存反例；项目.venv执行`-m pytest -q tests/test_claim_evolution.py`。临时输入不作为研究数据或质量分数。
+
 - sqlite-vec 可选，未安装时相应用例可跳过；在项目环境安装 requirements-vector.txt 后再验证该后端。
 - 传输/模型替身不证明真实 Qwen/BGE 质量；网络握手不证明业务权限或可靠性。MCP 真实只读验证用 `scripts/check_mcp.py --user USERNAME`，飞书先完成 OAuth。
 - 跨账号测试不等于任意个人信息脱敏、全盘加密、多节点隔离或商用安全认证。

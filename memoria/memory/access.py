@@ -33,6 +33,7 @@ class QueryRequest(Strict):
     subject_id: str = Field(default="self", pattern=r"^(self|entity:[a-zA-Z0-9_-]{1,64})$")
     predicates: list[str] = Field(default_factory=list, max_length=12)
     context: dict = Field(default_factory=dict)
+    scope_mode: Literal["auto", "applicable", "default"] = "auto"
     fact_as_of: str | None = None
     recorded_as_of: str | None = None
     mode: Literal["unified", "claim", "keyword", "bm25", "dense", "rrf"] = "unified"
@@ -72,6 +73,8 @@ class MemoryAccessOrchestrator:
                     if not item["source_available"]:
                         continue
                     scope = item["scope"]
+                    if parsed["scope_mode"] == "default" and scope:
+                        continue
                     if any(k in parsed["context"] and (type(parsed["context"][k]) != type(v) or parsed["context"][k] != v) for k, v in scope.items()):
                         continue
                     # Unknown bounds stay visible as unknown, not evidence of residence in a year.
@@ -93,6 +96,12 @@ class MemoryAccessOrchestrator:
         inferred_context = dict(parsed["context"])
         parsed.update(subject_id=request.subject_id, predicates=request.predicates or parsed["predicates"],
                       context={**parsed["context"], **request.context})
+        if request.scope_mode != "auto":
+            if request.scope_mode != parsed["scope_mode"] and parsed["scope_mode"] == "default":
+                parsed.update(requires_clarification=True, reason="explicit_scope_conflicts_with_query")
+            parsed["scope_mode"] = request.scope_mode
+        if parsed["scope_mode"] == "default" and parsed["context"]:
+            parsed.update(requires_clarification=True, reason="default_scope_with_specific_context")
         if any(k in request.context and (type(request.context[k]) != type(v) or request.context[k] != v) for k, v in inferred_context.items()):
             parsed.update(requires_clarification=True, reason="explicit_context_conflicts_with_query")
         # Ambiguous entity wording needs explicit pseudonymous identity, never guessed self.
@@ -101,7 +110,9 @@ class MemoryAccessOrchestrator:
             if parsed["reason"] == "subject_requires_explicit_entity_id":
                 parsed.update(requires_clarification=False, reason="explicit_subject")
         explicit_time = bool(request.fact_as_of or request.recorded_as_of)
-        if explicit_time and not parsed["subject_requires_clarification"] and parsed["reason"] != "explicit_context_conflicts_with_query":
+        if explicit_time and not parsed["subject_requires_clarification"] and parsed["reason"] not in {
+                "explicit_context_conflicts_with_query", "explicit_scope_conflicts_with_query",
+                "default_scope_with_specific_context", "default_and_specific_context_ambiguous"}:
             parsed.update(intent="history", requires_clarification=False, precision="exact",
                           range_start=None, range_end=None, reason="explicit_as_of")
         candidates, rejected, state, timeline = [], [], None, []
@@ -121,6 +132,7 @@ class MemoryAccessOrchestrator:
         else:
             if parsed["predicates"] and state_mode:
                 args = AccessRequest(subject_id=request.subject_id, predicates=parsed["predicates"], context=parsed["context"],
+                                     scope_mode=parsed["scope_mode"],
                                      fact_as_of=request.fact_as_of, recorded_as_of=request.recorded_as_of,
                                      intent="history" if explicit_time else "current", budget_chars=request.budget_chars)
                 with timings.measure("access.claims"):
