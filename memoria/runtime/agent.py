@@ -138,7 +138,7 @@ class AgentRuntime:
 
                 history = self.store.messages(session_id, self.settings.memory_window)
                 with tracer.timings.measure("claim.access"):
-                    claim_access = await MemoryAccessOrchestrator(self.claims, self.memory).access(claim_request) if claim_request else None
+                    claim_access = await MemoryAccessOrchestrator(self.claims, self.memory, self.llm).access(claim_request) if claim_request else None
                 with tracer.timings.measure("query_planner"):
                     plan = RetrievalPlan(False,user_text,reason="structured_claim_access") if claim_request else await self.retrieval_planner.plan(user_text, history[:-1])
                 context.metadata["retrieval_plan"] = plan.public_dict()

@@ -65,3 +65,7 @@ QueryRequest新增scope_mode=auto/applicable/default；auto解析明确“平时
 下一项研究：新增获准连续本人资料，测Claim Precision/Recall、Update Decision Macro-F1、False Supersede、Stale-Fact Answer与条件/主体误用；记录误报/未知、同候选/同预算、live/settled及人工审核依赖。独立真人研究评估继续暂缓。
 
 LongMemEval官方说明历史经过属性控制构建，若使用须另作公开可比基准，不能变成真实用户历史，本轮未下载。[官方来源](https://github.com/xiaowu0162/LongMemEval)。设计参考[Mem0论文](https://arxiv.org/abs/2504.19413)与状态演化的[Inside Out论文](https://arxiv.org/abs/2601.05171)，没有复用其训练/成绩或宣称相同收益。当前为可测试的保守基线，尚未训练记忆决策模型。
+
+## 本轮进一步深化
+
+2026-10-12继续拆分normalizer/condition_parser/temporal_resolver/update_policy，增独立条件证据、同值事件精度和自然语言知识区间；旧文中“抽取不补事件时间/限定面试”等为上一轮边界。最新契约与真实同池选择负结果见[实现文档](条件时序抽取与预算证据选择.md)，来源一致性不等于语义批准，模型不能自动覆盖。

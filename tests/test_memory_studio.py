@@ -55,7 +55,7 @@ def test_calendar_is_range_not_fake_instant(text, precision, start, end):
     assert not parsed['requires_clarification']
 
 
-@pytest.mark.parametrize('text', ['我2025年2月30日住哪里', '我去年和今年住哪里', '我上周住哪里', '我朋友住哪里', '上个月你认为我住哪里',
+@pytest.mark.parametrize('text', ['我2025年2月30日住哪里', '我去年和今年住哪里', '我上周住哪里', '我朋友住哪里',
                                  '我2026/05/01住哪里', '我三个月前住哪里', '我明天住哪里', '我2025年初住哪里', '我什么时候喜欢中文', '我好友住哪里', '我1800年住哪里'])
 def test_ambiguous_or_invalid_query_clarifies(text):
     assert parse_query(text)['requires_clarification']
@@ -81,7 +81,7 @@ def test_claim_query_views_and_conditions_do_not_fall_through(state):
     for expected in ('retrieve', 'view'):
         response = asyncio.run(orchestrator.access(QueryRequest(query='我用什么语言回答')))
         assert response['path'] == expected
-        assert response['selection']['covered'] == ['response_language']
+        assert response['selection']['covered'] == ['slot:response_language']
     approve(state, proposal(state, '英文', scope={'activity':'interview'}))
     response = asyncio.run(orchestrator.access(QueryRequest(query='我用什么语言回答')))
     assert response['path'] == 'clarify' and not response['selection']['payload']['evidence']
@@ -205,9 +205,10 @@ def test_condition_extraction_is_opt_in_source_bound_pending_only(state):
     assert result['candidates'][0]['scope']=={'activity':'interview'} and result['automatic_approvals']==0
     async def dropped_condition(*args, **kwargs):
         return ChatResult(content=json.dumps({'claims':[{'predicate':'response_language','value':'英文','evidence_quote':text}]}), raw_message={})
-    with pytest.raises(ClaimError):
-        asyncio.run(claims.extract(SimpleNamespace(chat=dropped_condition), ExtractionRequest(message_id=msg['id'], infer_conditions=True, scope={'travel':True})))
-    assert len(claims.list())==1  # An unrelated caller condition cannot mask the lost interview condition.
+    inferred = asyncio.run(claims.extract(SimpleNamespace(chat=dropped_condition), ExtractionRequest(message_id=msg['id'], infer_conditions=True, scope={'travel':True})))
+    assert inferred['candidates'][0]['scope']=={'travel':True,'activity':'interview'}
+    assert len(claims.list())==2  # Source rules recover the condition even if the model omitted it.
+    assert all(c['status']=='pending' for c in claims.list())
 
 
 def test_separate_lane_modes_lexical_never_call_encoder_and_dense_does_not_fake_fallback(state):

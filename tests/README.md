@@ -79,3 +79,5 @@ Pop-Location
 ## 已有验收证据
 
 2026-10-12 Memory Studio 实现交付已记录全量 **405 passed / 91.20 s**、前端 **3 项**、vue-tsc/生产构建及隔离真实HTTP链路通过；这是此前实现的验收，不是本次 README 更新重新跑出的结果。以后实际数量/跳过项以当次输出为准，模块状态与局限见 [实现说明](../docs/implemented/MemoryStudio与统一记忆访问.md)。
+
+2026-10-12最新算法全量 **463 passed / 116.86s**；[test_algorithm_pipeline.py](test_algorithm_pipeline.py)验证有限条件/临时继承、粗日期/跨句、双时间/未来排除、同池/预算/trace、查询模型风险；[runner测试](test_research_workflow.py)验证gold隔离/未来来源拒绝和0调用replay。最后审查补齐英文条件、独立歧义门控与显式记录轴，相关199 passed / 60.90s后再全量通过；临时输入不是质量分数或真实人物。

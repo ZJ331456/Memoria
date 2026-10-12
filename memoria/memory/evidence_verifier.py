@@ -7,6 +7,7 @@ import unicodedata
 from datetime import datetime, timedelta, timezone
 
 from ..claims import ClaimError
+from .claim_normalizer import mentions, preference_desire
 
 VERSION = "claim-evidence-rules-v1"
 THIRD_PARTY = re.compile(r"朋友|同事|父亲|母亲|伴侣|室友|孩子|老板|同学|他|她|\b(?:my friend|he|she|they)\b", re.I)
@@ -63,22 +64,28 @@ class EvidenceVerifier:
                     "semantic_support_verified": False}
         memory._evidence(item)  # Role, account, revocation, public-data exclusion, SHA/span/parent.
         quotes = [e["quote"] for e in item["evidence"]]
+        context_text = "\n".join(e["quote"] for e in item.get("condition_evidence", []))
         text = "\n".join(quotes)
+        from .condition_parser import ConditionParser
+        value_contexts = [c for c in ConditionParser().clauses(context_text+"，"+text)
+                          if mentions(item["predicate"], item["value"], (context_text+"，"+text)[c.start:c.end])]
         value_clauses = [clause for q in quotes for clause in re.split(r"[。！？!?；;\n]", q)
-                         if literal_value(item["value"], [clause])]
-        contained = literal_value(item["value"], quotes)
+                         if mentions(item["predicate"], item["value"], clause)]
+        contained = any(mentions(item["predicate"], item["value"], q) for q in quotes)
         if not contained:
             blockers.append("value_not_literal; semantic_or_alias_review_required")
         if item["subject_id"] == "self" and THIRD_PARTY.search(text):
             blockers.append("subject_ambiguous_or_third_party")
-        if not item["scope"] and CONDITIONAL.search(text):
+        if not item["scope"] and (any(c.scope or c.ambiguous for c in value_contexts) or
+                                  (not value_contexts and CONDITIONAL.search(text))):
             blockers.append("possible_condition_dropped")
         for key, value in item["scope"].items():
-            if not (key == "activity" and value == "interview" and re.search(r"面试|interview", text, re.I)):
+            bound_scopes = [c.scope for c in value_contexts if not c.ambiguous]
+            if not bound_scopes or not all(k.get(key) == value and type(k.get(key)) == type(value) for k in bound_scopes):
                 blockers.append("scope_binding_requires_review:" + key)
         if item["modality"] == "inference":
             blockers.append("inference_is_not_asserted_state")
-        elif item["modality"] == "statement" and PLAN.search(text):
+        elif item["modality"] == "statement" and PLAN.search(text) and not preference_desire(item["predicate"], text):
             blockers.append("possible_plan_promoted_to_fact")
         # These are risk flags, not a universal negation parser.
         negation = bool(NEGATIVE.search(text))
@@ -105,6 +112,8 @@ class EvidenceVerifier:
                   '主语、条件或时间不明确时Insufficient。原话陈述不等于现实核验。')
         safe = {k: item.get(k) for k in ("subject_id", "predicate", "value", "scope", "polarity", "modality", "fact_start", "fact_end")}
         safe["quotes"] = [e["quote"] for e in item["evidence"]]
+        safe["condition_quotes"] = [e["quote"] for e in item.get("condition_evidence", [])]
+        safe["event_time"] = item.get("event_time")
         from ..claims import canonical
         content = canonical(safe)
         if len(content) > 12000:

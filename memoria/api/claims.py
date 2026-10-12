@@ -93,7 +93,7 @@ def claims_router(memory: ClaimMemory | None, llm=None, engine=None) -> APIRoute
 
     @router.post("/api/memory-query")
     async def query(body: QueryRequest):
-        return await MemoryAccessOrchestrator(memory, engine).access(body)
+        return await MemoryAccessOrchestrator(memory, engine, llm).access(body)
 
     @router.post("/api/claims/{claim_id}/analyze")
     async def analyze(claim_id: str, body: AnalysisRequest):

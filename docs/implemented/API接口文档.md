@@ -406,4 +406,4 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 | POST /api/claims/{id}/analyze | expected_revision，use_model默认false；更新/支持度建议，不写库、不批准；源或版本变化409 |
 | GET /api/research-runs、GET /api/research-runs/{run_id} | 仅本账号规范ID；白名单metadata及SHA/大小匹配的执行metrics，无gold/prompt/执行任务接口 |
 
-抽取增加infer_conditions严格布尔开关，默认旧契约，仅opt-in允许来源有证据的面试模拟scope。具体路由、区间语义、预算、模型成本与未完成项见[完整说明](MemoryStudio与统一记忆访问.md)。Swagger提供严格字段schema；匿名全部新业务401，不接受user_id覆盖服务器身份。
+抽取的infer_conditions/infer_time均为严格布尔、默认false；开启后有限默认/活动条件及分句继承写入独立condition_evidence，event_time保留年/月区间而不补造fact_start。analyze支持度仍为建议，不批准。query新增selector=mmr/evidence_coverage、budget_unit=chars/utf8_bytes/reader_tokens、evidence_budget及use_query_model默认false；无可核验远程tokenizer返回422，API不调用reader。新响应包含requirements、routing、四种同池comparison与逐候选trace；记录时间自然区间返回知识时间线。详见[本轮算法契约](条件时序抽取与预算证据选择.md)。Swagger提供严格字段schema；匿名业务401，不接受user_id覆盖服务器身份。

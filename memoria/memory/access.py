@@ -12,7 +12,9 @@ from ..claims import AccessRequest, ClaimError, ClaimMemory, Strict, canonical, 
 from ..observability.timing import StageTimings
 from ..store import normalize_time
 from .evidence_selector import select_evidence
-from .temporal_query import parse_query
+from .temporal_query import TemporalQueryParser, parse_query
+from .evidence import EvidenceBudget, requirements_for
+from .evidence.requirements import coverage
 
 
 def infer_query(text: str) -> QueryRequest | None:
@@ -37,10 +39,13 @@ class QueryRequest(Strict):
     fact_as_of: str | None = None
     recorded_as_of: str | None = None
     mode: Literal["unified", "claim", "keyword", "bm25", "dense", "rrf"] = "unified"
-    selector: Literal["topk", "coverage"] = "coverage"
+    selector: Literal["topk", "coverage", "mmr", "evidence_coverage"] = "coverage"
     budget_chars: int = Field(default=6000, ge=256, le=16000, strict=True)
+    budget_unit: Literal["chars", "utf8_bytes", "reader_tokens"] = "chars"
+    evidence_budget: int | None = Field(default=None, ge=256, le=16000, strict=True)
     top_k: int = Field(default=8, ge=1, le=32, strict=True)
     candidate_limit: int = Field(default=32, ge=1, le=64, strict=True)
+    use_query_model: bool = Field(default=False, strict=True)
 
     _conditions = field_validator("context")(conditions)
     _times = field_validator("fact_as_of", "recorded_as_of")(timestamp)
@@ -52,8 +57,9 @@ class QueryRequest(Strict):
 
 
 class MemoryAccessOrchestrator:
-    def __init__(self, claims: ClaimMemory, engine):
-        self.claims, self.engine = claims, engine
+    def __init__(self, claims: ClaimMemory, engine, llm=None, reader_tokenizer=None):
+        self.claims, self.engine, self.llm = claims, engine, llm
+        self.reader_tokenizer = reader_tokenizer
 
     def timeline(self, request: QueryRequest, parsed: dict) -> list[dict]:
         """Source-valid revisions; proposals are labelled and never turned into states."""
@@ -65,6 +71,15 @@ class MemoryAccessOrchestrator:
                                           (self.claims.user_id, request.subject_id)).fetchall()
             for row in roots:
                 history = self.claims.history(row[0])
+                if parsed["axis"] == "recorded" and start:
+                    # Baseline immediately BEFORE the interval plus revisions inside it.
+                    # Never use the present head to invent past knowledge.
+                    from datetime import timedelta
+                    before = (datetime.fromisoformat(start)-timedelta(microseconds=1)).isoformat()
+                    baseline = self.claims._head(row[0], effective=True, recorded=before)
+                    baseline_id = baseline["id"] if baseline and baseline["recorded_at"] < start else None
+                else:
+                    baseline_id = None
                 for item in history:
                     if parsed["predicates"] and item["predicate"] not in parsed["predicates"]:
                         continue
@@ -78,10 +93,21 @@ class MemoryAccessOrchestrator:
                     if any(k in parsed["context"] and (type(parsed["context"][k]) != type(v) or parsed["context"][k] != v) for k, v in scope.items()):
                         continue
                     # Unknown bounds stay visible as unknown, not evidence of residence in a year.
-                    if start and item.get("fact_end") and item["fact_end"] <= start:
+                    if parsed["axis"] == "recorded" and start:
+                        at = item["recorded_at"]
+                        if not (start <= at < end or item["revision_id"] == baseline_id):
+                            continue
+                    if parsed["axis"] == "fact" and start and item.get("fact_end") and item["fact_end"] <= start:
                         continue
-                    if end and item.get("fact_start") and item["fact_start"] >= end:
+                    if parsed["axis"] == "fact" and end and item.get("fact_start") and item["fact_start"] >= end:
                         continue
+                    if parsed["intent"] == "transition" and parsed.get("transition_from") and parsed.get("transition_to"):
+                        quotes = " ".join(e["quote"] for e in item["evidence"])
+                        if not any(anchor in item["value"] or anchor in quotes for anchor in (parsed["transition_from"], parsed["transition_to"])):
+                            continue
+                    cutoff = request.recorded_as_of or (end if parsed["axis"] == "recorded" else None)
+                    if cutoff and item.get("retired_at") and item["retired_at"] >= cutoff:
+                        item["retired_at"] = None
                     if request.recorded_as_of and item.get("retired_at") and item["retired_at"] > request.recorded_as_of:
                         item["retired_at"] = None  # Do not expose a future correction timestamp.
                     item["historical_state_verified"] = False
@@ -92,7 +118,20 @@ class MemoryAccessOrchestrator:
 
     async def access(self, request: QueryRequest) -> dict:
         started, timings = time.perf_counter(), StageTimings()
-        parsed = parse_query(request.query)
+        try:
+            tokenizer = self.reader_tokenizer
+            if request.budget_unit == "reader_tokens" and tokenizer is None:
+                from .evidence.reader_tokenizer import for_reader
+                tokenizer = for_reader(self.llm)
+            budget = EvidenceBudget(request.evidence_budget or request.budget_chars, request.budget_unit, tokenizer)
+        except ValueError as exc:
+            raise ClaimError(422, str(exc)) from exc
+        parsed = TemporalQueryParser().parse(request.query)
+        routing = {"origin":"rules", "model_calls":0}
+        if request.use_query_model:
+            from .query_router import route_slots
+            with timings.measure("access.query_model"):
+                routing = await route_slots(self.llm, request.query, parsed)
         inferred_context = dict(parsed["context"])
         parsed.update(subject_id=request.subject_id, predicates=request.predicates or parsed["predicates"],
                       context={**parsed["context"], **request.context})
@@ -110,11 +149,17 @@ class MemoryAccessOrchestrator:
             if parsed["reason"] == "subject_requires_explicit_entity_id":
                 parsed.update(requires_clarification=False, reason="explicit_subject")
         explicit_time = bool(request.fact_as_of or request.recorded_as_of)
-        if explicit_time and not parsed["subject_requires_clarification"] and parsed["reason"] not in {
+        if explicit_time and not parsed["subject_requires_clarification"] and not parsed["condition_requires_clarification"] and parsed["reason"] not in {
                 "explicit_context_conflicts_with_query", "explicit_scope_conflicts_with_query",
-                "default_scope_with_specific_context", "default_and_specific_context_ambiguous"}:
+                "default_scope_with_specific_context", "default_and_specific_context_ambiguous", "multiple_query_conditions"}:
             parsed.update(intent="history", requires_clarification=False, precision="exact",
                           range_start=None, range_end=None, reason="explicit_as_of")
+            parsed.update(fact_as_of=request.fact_as_of, recorded_as_of=request.recorded_as_of,
+                          fact_interval=None, recorded_interval=None, time_precision="exact")
+            if request.recorded_as_of and not request.fact_as_of:
+                parsed["axis"] = "recorded"
+            parsed["temporal_intent"] = "historical_knowledge" if parsed["axis"]=="recorded" else "historical_fact"
+        parsed["predicate"] = parsed["predicates"][0] if len(parsed["predicates"])==1 else None
         candidates, rejected, state, timeline = [], [], None, []
         history_range = bool(parsed["range_start"]) or parsed["intent"] == "transition"
         state_mode = request.mode in {"unified", "claim"}
@@ -134,7 +179,8 @@ class MemoryAccessOrchestrator:
                 args = AccessRequest(subject_id=request.subject_id, predicates=parsed["predicates"], context=parsed["context"],
                                      scope_mode=parsed["scope_mode"],
                                      fact_as_of=request.fact_as_of, recorded_as_of=request.recorded_as_of,
-                                     intent="history" if explicit_time else "current", budget_chars=request.budget_chars)
+                                     intent="history" if explicit_time else "current",
+                                     budget_chars=request.budget_chars if request.budget_unit=="chars" else 16000)
                 with timings.measure("access.claims"):
                     state = self.claims.access(args)
                 path, reason = state["path"], state["reason"]
@@ -191,8 +237,13 @@ class MemoryAccessOrchestrator:
                     if group:
                         candidates.insert(0, {"id": "claim:" + predicate, "kind": "claim", "score": 2,
                                               "covers": [predicate], "source_ids": sorted({e["message_id"] for c in group for e in c["evidence"]}), "data": group})
-        selected = select_evidence(candidates, parsed["predicates"], request.budget_chars, request.selector, request.top_k)
-        comparison = {s: select_evidence(candidates, parsed["predicates"], request.budget_chars, s, request.top_k) for s in ("topk", "coverage")}
+        requirements = requirements_for(request.query, parsed)
+        enriched = [{**c, "covers":coverage(c, requirements, parsed)} for c in candidates]
+        comparison = {}
+        with timings.measure("access.selection"):
+            for strategy in ("topk", "coverage", "mmr", "evidence_coverage"):
+                comparison[strategy] = select_evidence(enriched, requirements["facets"], request.budget_chars, strategy, request.top_k, budget=budget)
+        selected = comparison[request.selector]
         budget_missing = selected["uncovered"]
         if (state and (budget_missing or not state["payload"]["complete"])) or not selected["payload"]["evidence"]:
             path = "clarify"
@@ -200,8 +251,8 @@ class MemoryAccessOrchestrator:
                 reason += "; no evidence selected"
         return {"path": path, "reason": reason, "parsed": parsed, "state": state,
                 "timeline_count": len(timeline), "candidates": candidates, "rejected": rejected,
-                "selection": selected, "comparison": comparison, "retrieval": locals().get("diag", {}),
+                "selection": selected, "comparison": comparison, "requirements":requirements, "routing":routing, "retrieval": locals().get("diag", {}),
                 "elapsed_ms": round((time.perf_counter() - started) * 1000, 3), "timings": timings.public_dict(),
                 "automatic_approvals": 0, "reader_called": False,
-                "limitations": ["source candidates are not approved personal state", "character budget is not reader token budget",
+                "limitations": ["source candidates are not approved personal state", "budget covers evidence JSON only; byte/character counts are not reader tokens",
                                 "timeline overlapping a range does not prove a fact throughout that range"]}

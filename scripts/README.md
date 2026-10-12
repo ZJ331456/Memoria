@@ -52,3 +52,7 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 ```
 
 仅读取公开历史聚合表/注册协议/实现报告，生成PNG/SVG与SHA清单；不读取私有原话/gold，不调用模型或产生新评分。数据口径见[图表说明](../docs/assets/evaluation/README.md)。后台维护、备份恢复与完整注销仍是计划任务。
+
+## 同池证据选择
+
+`research.py --user USERNAME select-evidence --source-run RUN_ID --budget 1024 --unit chars`复用本账号已有原检索池，四策略各写新run，0模型调用；`score --run NEW_RUN_ID`另读gold。`run --evidence-selector`可接新QA，远程需--allow-remote。源run/冻结协议/SHA不存在时拒绝，不读取旧个人归档。见[完整契约](../docs/implemented/条件时序抽取与预算证据选择.md)。

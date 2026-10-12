@@ -12,6 +12,7 @@ from memoria.config import Settings
 from memoria.experiments.history import HistoryWorkspace, read_json, write_json
 from memoria.experiments.roles import ExperimentLLM
 from memoria.experiments.runner import execute, load_run, recover_run, score, score_template, select_history
+from memoria.experiments.evidence_eval import replay_selection
 from scripts.research import private_input
 
 
@@ -99,6 +100,40 @@ def test_compact_search_preserves_original_evidence_and_does_not_fallback():
     assert selected == [original] and selected[0] is original
     assert original["content"] == "甲 乙 丙 丁 戊"
     assert select_history([original, other], "不存在的内容", "B2_fts_compact", 8) == []
+
+
+def test_fixed_pool_replay_has_no_gold_or_model_calls_and_rejects_foreign_sources(setup):
+    workspace,settings,source=setup
+    freeze(workspace,source)
+    def forbidden(request): raise AssertionError('No model in selection/retrieval diagnostics')
+    original=asyncio.run(execute(workspace,settings,mode='retrieval',protocol_id='p1',
+                                client_factory=factory(forbidden)))
+    runs=replay_selection(workspace,original.name,budget=1200,root=settings.root)
+    pools=[]
+    for run in runs:
+        _,manifest,cases=load_run(workspace,run.name)
+        assert 'gold-only-marker' not in canonical_for_test(cases)
+        assert manifest['models']=={} and read_json(run/'metrics.json')['calls']==0
+        assert cases[0]['retrieved_ids']==['m1']
+        assert 'future-content-never-seen' not in canonical_for_test(cases)
+        pools.append(cases[0]['candidate_pool_sha256'])
+        assert score(workspace,run.name).is_file()
+    assert len(set(pools))==1
+    with pytest.raises(ValueError,match='original retrieval pool'):
+        replay_selection(workspace,runs[0].name,budget=1200,root=settings.root)
+    cases_path=original/'cases.jsonl'
+    captured=[json.loads(line) for line in cases_path.read_text(encoding='utf-8').splitlines()]
+    captured[0]['retrieved_ids']=['m2']
+    cases_path.write_text('\n'.join(json.dumps(c) for c in captured)+'\n',encoding='utf-8')
+    manifest=read_json(original/'manifest.json')
+    manifest['artifacts']['cases.jsonl']['sha256']=hashlib.sha256(cases_path.read_bytes()).hexdigest()
+    write_json(original/'manifest.json',manifest)
+    with pytest.raises(ValueError,match='future/foreign'):
+        replay_selection(workspace,original.name,budget=1200,root=settings.root)
+
+
+def canonical_for_test(value):
+    return json.dumps(value,ensure_ascii=False)
 
 
 def test_retrieval_only_mode_never_calls_reader_and_scores_separately(setup):

@@ -12,7 +12,10 @@
 | [planner.py](planner.py) | 问候门控及可选 fast 模型查询/类型/数量规划 |
 | [access.py](access.py) | QueryRequest/MemoryAccessOrchestrator：Claim、时间、来源复核、候选和选择解释 |
 | [temporal_query.py](temporal_query.py) | 有限中文年月日/相对日期解析，区间、身份和获知截止歧义处理 |
-| [evidence_selector.py](evidence_selector.py) | 同一池的 top-k/coverage 整组选择；完整 JSON 的字符成本 |
+| [evidence_selector.py](evidence_selector.py)、[evidence/](evidence/README.md) | Top-K/Coverage/词面MMR/成本归一覆盖；完整JSON字符/字节/可信reader tokenizer预算与全候选trace |
+| [claim_normalizer.py](claim_normalizer.py)、[condition_parser.py](condition_parser.py) | 原12槽位的有限别名、默认/活动条件与分句继承，独立条件证据 |
+| [temporal_resolver.py](temporal_resolver.py)、[query_router.py](query_router.py) | 明确源事件精度、规则双时间区间与opt-in模型槽位建议 |
+| [update_policy.py](update_policy.py) | Create/Reinforce/Transition/Review独立影子策略，不写库 |
 | [claim_analysis.py](claim_analysis.py) | 更新建议及明确开启的模型支持度建议；不批准、不持久化 |
 | [claim_relations.py](claim_relations.py) | typed scope/时间/多值关系与4类更新策略，完整目标复核 |
 | [evidence_verifier.py](evidence_verifier.py) | 来源硬校验、词面风险、事件边界与可选支持度模型 |
@@ -41,7 +44,7 @@ recorded_as_of 时跳过只有事实时间的普通记忆通道。中文年份/�
 
 明确平时/默认用scope_mode=default只读无条件状态，面试场景匹配activity；未给条件仍澄清。模式进缓存键，编译v2不复用旧视图，精确时间不覆盖条件冲突。
 
-Claim 同槽位条件/否定保持完整组。top-k/coverage 用同池/预算比较，不用 gold；字符预算含 JSON，不是 reader token。Dense 专用诊断不会伪装成词面结果，可用性依赖编码配置。API 诊断不调用 reader，通用条件、精确 token、MMR 与选择质量实验仍待完成。
+Claim同槽位条件/否定保持完整组。四选择器同池/同预算，不用gold；费用单位明确，远程reader tokenizer不可核验时422而不冒用BGE。Dense专用诊断不伪装词面结果。API默认0模型调用；opt-in查询模型仅读query，API仍不调用reader。有限条件/事件精度与知识区间已经接入，通用条件与真实QA/长期收益仍未知，详见[本轮说明](../../docs/implemented/条件时序抽取与预算证据选择.md)。
 
 ## 分层与来源生命周期
 

@@ -16,6 +16,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .store import Store, normalize_time, now
+from .memory.temporal_resolver import EventTime, TemporalResolver
 
 
 # True means multiple values may coexist at the same scope and fact time.
@@ -71,6 +72,8 @@ class Assertion(Strict):
     polarity: Literal["positive", "negative"] = "positive"
     modality: Literal["statement", "plan", "inference"] = "statement"
     evidence: list[Evidence] = Field(min_length=1, max_length=8)
+    condition_evidence: list[Evidence] = Field(default_factory=list, max_length=8)
+    event_time: EventTime | None = None
     fact_start: str | None = None
     fact_end: str | None = None
     time_precision: Literal["unknown", "day", "exact"] = "unknown"
@@ -124,6 +127,7 @@ class ExtractionRequest(Strict):
     subject_id: str = Field(default="self",pattern=r"^(self|entity:[a-zA-Z0-9_-]{1,64})$")
     scope: dict = Field(default_factory=dict)
     infer_conditions: bool = Field(default=False, strict=True)
+    infer_time: bool = Field(default=False, strict=True)
     _conditions = field_validator("scope")(conditions)
 
 
@@ -288,7 +292,7 @@ class ClaimMemory:
         for receipt in self.db.execute("SELECT receipt_json FROM dataset_imports"):
             for group in json.loads(receipt[0]).get("source_mapping", []):
                 imported_ids.update(group.get("message_ids", []))
-        for e in data["evidence"]:
+        for e in data["evidence"] + data.get("condition_evidence", []):
             row = self.db.execute("SELECT * FROM messages WHERE id=?", (e["message_id"],)).fetchone()
             if not row or row["role"] != "user":
                 raise ClaimError(422, "证据须来自本账号仍存在的用户原话")
@@ -304,7 +308,19 @@ class ClaimMemory:
                 raise ClaimError(422, "引用不是原文切片")
             evidence.append({k:e[k] for k in ("message_id", "start", "end", "content_sha256")})
             observed.append(row["created_at"])
-        data["evidence"] = list({canonical(e):e for e in evidence}.values())
+        condition_count = len(data.get("condition_evidence", []))
+        primary = evidence[:-condition_count] if condition_count else evidence
+        data["evidence"] = list({canonical(e):e for e in primary}.values())
+        data["condition_evidence"] = list({canonical(e):e for e in evidence[-condition_count:]}.values()) if condition_count else []
+        if data.get("event_time"):
+            event = EventTime.model_validate(data["event_time"])
+            texts = [self.db.execute("SELECT content FROM messages WHERE id=?", (e["message_id"],)).fetchone()[0][e["start"]:e["end"]] for e in primary]
+            from .memory.claim_normalizer import mentions
+            slots = [data["predicate"]] if "predicate" in data else SLOTS
+            bound = [c for text in texts for c in re.split(r"[。；;！？!?\n]", text)
+                     if any(mentions(p, data["value"], c) for p in slots)]
+            if not any((resolved := TemporalResolver().resolve(text)) and resolved.model_dump() == event.model_dump() for text in bound):
+                raise ClaimError(422, "事件区间不能由当前主引用唯一核验")
         data["observed_at"] = max(observed)
         data["support_group_ids"] = sorted({e["message_id"] for e in evidence})
         mid = data.get("memory_id")
@@ -343,7 +359,7 @@ class ClaimMemory:
         rid, recorded = uuid.uuid4().hex, recorded_at or now()
         self.db.execute("INSERT INTO claim_revisions VALUES(?,?,?,?,?,?,?,?)",
                         (rid,root["id"],revision,canonical(data),status,recorded,self.user_id,reason))
-        for mid in {e["message_id"] for e in data["evidence"]}:
+        for mid in {e["message_id"] for e in data["evidence"] + data.get("condition_evidence", [])}:
             self.db.execute("INSERT INTO claim_sources VALUES(?,?,?)", (rid,mid,data.get("memory_id")))
         return self._public(root, self._head(root["id"]))
 
@@ -354,7 +370,7 @@ class ClaimMemory:
         if not valid:
             data = {"value":None,"evidence":[],"source_available":False}
         else:
-            for e in data["evidence"]:
+            for e in data["evidence"] + data.get("condition_evidence", []):
                 text = self.db.execute("SELECT content FROM messages WHERE id=?", (e["message_id"],)).fetchone()[0]
                 e["quote"] = text[e["start"]:e["end"]]
             data["source_available"] = True
@@ -394,9 +410,9 @@ class ClaimMemory:
             "predicate必须取自："+", ".join(SLOTS)+"。承诺/计划不能当已发生事实，推断须标inference。"
         )
         if request.infer_conditions:
-            prompt += ("本次允许附加scope和condition_quote：仅支持原话明确的面试模拟条件activity=interview。"
-                       "condition_quote必须是包含面试模拟并约束该候选的唯一连续原话，且包含在evidence_quote中。"
-                       "默认/全局陈述scope为空。其他条件不能猜或丢掉，不能转换为无条件事实；不确定时跳过。")
+            prompt += ("允许scope和condition_quote：面试activity=interview、工作work、学习study、旅行travel=true、在家location=home、办公室office。"
+                       "按原话逗号/而且继承场景，平时/默认重置，全句结束重置；其他复杂条件跳过。"
+                       "引用应覆盖断言的完整语句；scope由程序按值所在原话核验。回答语言/详细度的希望属于偏好，不是未来事件计划。")
         try:
             response = await llm.chat([{"role":"system","content":prompt},
                                        {"role":"user","content":canonical({"subject_id":request.subject_id,"scope":request.scope,"source":text})}],
@@ -405,29 +421,42 @@ class ClaimMemory:
             raise ClaimError(502,"Claim抽取模型调用失败；未写入候选") from error
         try:
             output = ExtractionOutput.model_validate(json.loads(response.content))
-            drafts = []
+            drafts, extraction_trace = [], []
+            from .memory.claim_normalizer import ClaimNormalizer
+            from .memory.condition_parser import ConditionParser
             for candidate in output.claims:
                 quote = candidate.evidence_quote
                 start = text.find(quote)
                 if start<0 or text.find(quote,start+1)>=0:
                     raise ValueError("引用必须在原话中唯一匹配")
-                scope = dict(request.scope)
-                if request.infer_conditions and "面试模拟" in quote and not candidate.scope and request.scope.get("activity") != "interview":
-                    raise ValueError("条件不能被丢弃为无条件陈述")
-                if candidate.scope or candidate.condition_quote:
-                    if not request.infer_conditions or candidate.scope != {"activity":"interview"}:
-                        raise ValueError("不支持的模型条件")
-                    condition = candidate.condition_quote or ""
-                    at = text.find(condition) if condition else -1
-                    if "面试模拟" not in condition or at < 0 or text.find(condition,at+1)>=0 or condition not in quote:
-                        raise ValueError("条件证据无效")
-                    if "activity" in scope and scope["activity"] != "interview":
-                        raise ValueError("模型不能改变调用方条件")
-                    scope.update(candidate.scope)
+                normalized = ClaimNormalizer().normalize(candidate.predicate, candidate.value, candidate.modality, quote)
+                scope, condition_evidence = dict(request.scope), []
+                resolution = None
+                if request.infer_conditions:
+                    resolution = ConditionParser().resolve(text, start, start+len(quote), candidate.predicate, normalized["value"])
+                    if candidate.scope and canonical(candidate.scope) != canonical(resolution["scope"]):
+                        raise ValueError("模型条件与原话不符")
+                    for key, value in resolution["scope"].items():
+                        if key in scope and canonical(scope[key]) != canonical(value):
+                            raise ValueError("来源条件与调用方矛盾")
+                        scope[key] = value
+                    if resolution["binding"]:
+                        a, b = resolution["binding"]
+                        condition_evidence = [Evidence(message_id=request.message_id, start=a, end=b, quote=text[a:b], content_sha256=sha(text))]
+                elif candidate.scope or candidate.condition_quote:
+                    raise ValueError("条件推断尚未开启")
+                if candidate.condition_quote:
+                    at = text.find(candidate.condition_quote)
+                    if at < 0 or text.find(candidate.condition_quote, at+1) >= 0:
+                        raise ValueError("模型条件引用无效")
+                fields = TemporalResolver().assertion_fields(quote, candidate.predicate, normalized["value"]) if request.infer_time else {}
                 drafts.append(ClaimDraft(subject_id=request.subject_id,predicate=candidate.predicate,scope=scope,
-                    value=candidate.value,polarity=candidate.polarity,modality=candidate.modality,
+                    value=normalized["value"],polarity=candidate.polarity,modality=normalized["modality"],
                     evidence=[Evidence(message_id=request.message_id,start=start,end=start+len(quote),quote=quote,content_sha256=sha(text))],
+                    condition_evidence=condition_evidence, **fields,
                     proposal_origin="model",reason="模型生成的待审核候选，尚未核验语义支持度"))
+                extraction_trace.append({"normalization": normalized["trace"], "condition": resolution,
+                                         "temporal": fields.get("event_time").model_dump() if fields.get("event_time") else None})
         except (ValueError,TypeError) as error:
             raise ClaimError(422,"模型候选结构或引用无效；整批未写入") from error
         with self.store._memory_transaction():
@@ -440,8 +469,8 @@ class ClaimMemory:
         return {"candidates":created,"automatic_approvals":0,"semantic_support_verified":False,
                 "usage":response.usage or None,"elapsed_ms":round((time.perf_counter()-started)*1000,3),
                 "model":llm.settings.main.model if getattr(llm,"settings",None) else None,
-                "model_revision":None,"time_policy":"unknown; no model-generated event timestamps",
-                "shadow_updates":shadow,"shadow_model_calls":0}
+                "model_revision":None,"time_policy":"source-only explicit calendar/ISO; coarse ranges never become point states",
+                "shadow_updates":shadow,"shadow_model_calls":0,"extraction_trace":extraction_trace}
 
     def get(self, claim_id: str) -> dict:
         with self.store._memory_transaction():
@@ -480,9 +509,12 @@ class ClaimMemory:
             data = self._evidence(fields)
             if request.action == "reinforce":
                 for key in ("value","polarity","modality","fact_start","fact_end","time_precision","memory_id"):
-                    if data[key] != previous[key]:
+                    if data[key] != previous.get(key):
                         raise ClaimError(422,"强化不能改变值、时间、条件或关联记忆")
                 data["evidence"] = list({canonical(e):e for e in previous["evidence"]+data["evidence"]}.values())
+                if canonical(data.get("event_time")) != canonical(previous.get("event_time")):
+                    raise ClaimError(422,"强化不能改变事件精度或区间")
+                data["condition_evidence"] = previous.get("condition_evidence", [])+data.get("condition_evidence", [])
                 data = self._evidence(data)
             if request.action == "transition":
                 start = data["fact_start"]

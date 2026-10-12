@@ -13,6 +13,7 @@ from memoria.experiments.history import HistoryWorkspace, identifier, write_json
 from memoria.experiments.roles import load_roles
 from memoria.experiments.runner import activate_profile, execute, recover_run, score, score_template
 from memoria.experiments.access_eval import benchmark_access
+from memoria.experiments.evidence_eval import replay_selection
 from memoria.experiments.retrieval import BASELINES
 from scripts.user_paths import directory_for
 
@@ -55,6 +56,9 @@ def main():
     sub.add_argument("--baseline", choices=sorted(BASELINES), default="B0_recent")
     sub.add_argument("--history-limit", type=int, default=8)
     sub.add_argument("--context-chars", type=int, default=12000)
+    sub.add_argument("--evidence-selector", choices=["legacy","topk","coverage","mmr","evidence_coverage"], default="legacy")
+    sub.add_argument("--evidence-budget-unit", choices=["chars","utf8_bytes"], default="chars",
+                     help="Evidence JSON budget unit; remote reader tokens are not guessed")
     sub.add_argument("--embedding-device", choices=["auto","cuda","cpu"],help="Run-local BGE override; does not change production model settings")
     sub.add_argument("--roles")
     sub.add_argument("--allow-remote", action="store_true")
@@ -63,6 +67,10 @@ def main():
     sub = subs.add_parser("benchmark-access")
     sub.add_argument("--repeats",type=int,default=3)
     sub.add_argument("--iterations",type=int,default=50)
+    sub = subs.add_parser("select-evidence",help="Compare four selectors on a captured retrieval pool; zero model calls")
+    sub.add_argument("--source-run",required=True)
+    sub.add_argument("--budget",type=int,default=1024)
+    sub.add_argument("--unit",choices=["chars","utf8_bytes"],default="chars")
     for name in ("score-template", "score"):
         sub = subs.add_parser(name)
         sub.add_argument("--run", required=True)
@@ -100,12 +108,15 @@ def main():
         result = asyncio.run(execute(workspace, Settings.load(args.config), mode=args.mode,
                                     dataset=args.dataset, protocol_id=args.protocol, limit=args.limit,
                                     baseline=args.baseline, history_limit=args.history_limit, context_chars=args.context_chars,
+                                    evidence_selector=args.evidence_selector, evidence_budget_unit=args.evidence_budget_unit,
                                     embedding_device=args.embedding_device,
                                     allow_remote=args.allow_remote,
                                     profile=args.profile, extraction_protocol=args.extraction_protocol,
                                     roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
     elif args.command == "benchmark-access":
         result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)
+    elif args.command == "select-evidence":
+        result = replay_selection(workspace,args.source_run,budget=args.budget,unit=args.unit,root=ROOT)
     elif args.command == "score-template":
         output = workspace.path("research", "drafts", identifier(args.run) + ".scores.json")
         output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)

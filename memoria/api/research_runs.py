@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 RUN_ID = re.compile(r"^\d{8}T\d{6}Z-[0-9a-f]{8}$")
 METRICS = {"automatic_memory_writes", "calls", "errors", "quality", "requested_cases", "statuses", "usage_known_calls", "usage_unknown_calls"}
-PROTOCOL = {"baseline", "mode", "scope", "dataset_id", "history_limit", "history_sha256", "context_char_budget", "budget_unit", "limit", "selection", "source_kind"}
+PROTOCOL = {"baseline", "mode", "scope", "dataset_id", "history_limit", "history_sha256", "context_char_budget", "budget_unit", "limit", "selection", "source_kind", "evidence_selector", "budget_scope", "requirements_origin"}
 
 
 def numeric_tree(value):

@@ -14,6 +14,7 @@
 | [records.py](records.py) | 代码/dirty 指纹、环境/模型/数据 SHA、阶段/usage 与产物账本 |
 | [roles.py](roles.py) | reader/extractor/decider/judge 参数与实际调用 |
 | [access_eval.py](access_eval.py) | 实际账号一致副本的 Claim 访问/缓存/失效成本和来源资格 |
+| [evidence_eval.py](evidence_eval.py) | 复用真实已捕获前缀候选池，四选择器同池/预算，独立gold评分，不重复调用模型 |
 
 ## 本地 CLI
 
@@ -23,6 +24,7 @@
 .\.venv\Scripts\python.exe scripts/research.py --user USERNAME --help
 .\.venv\Scripts\python.exe scripts/research.py --user USERNAME run --help
 .\.venv\Scripts\python.exe scripts/research.py --user USERNAME benchmark-access --help
+.\.venv\Scripts\python.exe scripts/research.py --user USERNAME select-evidence --help
 .\.venv\Scripts\python.exe scripts/evaluate_retrieval.py --help
 ```
 
@@ -48,3 +50,5 @@ access_eval 用真实账号副本，0 Claim 仅为空状态开销，不证明正
 ```
 
 隔离临时输入与故障替身只验证协议/泄漏/恢复，不充当用户历史或研究成绩。
+
+2026-10-12新增[预算证据选择诊断](../../docs/implemented/条件时序抽取与预算证据选择.md)：原RRF候选、64开发QA、三档字符预算×四策略，12run/768题次，0新embedding/LLM调用。同池SHA一致、gold仅独立评分；2048字符Top-K/Coverage完整覆盖40/41，MMR38/41、新覆盖39/41，不切换默认策略。`run --evidence-selector`可接入新QA；生产审批和未知语义质量保留。

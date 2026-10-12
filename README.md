@@ -275,3 +275,18 @@ git diff --check
 ```
 
 2026-10-12的6ea773f工程基线405 passed / 91.20s、前端3项及构建通过；文档刷新不产生新的质量实验。凭据/数据库/原话/模型/运行依赖不进Git。AI读AGENTS，按授权在main遵循[GitHub规范](docs/implemented/github提交规范.md)。
+
+## 10. 最新算法深化与选择诊断
+
+已完成原12槽位的有限条件继承/别名、独立条件证据、源事件精度、自然语言双时间区间与影子更新策略；统一Claim/RRF访问保留冲突澄清，新增Top-K/Coverage/词面MMR/成本归一覆盖的同池预算比较。字符/字节单位明确，可信本地reader可用离线tokenizer，远程不可验证则拒绝精确Token请求。API不调用reader，模型路由显式opt-in，生产仍明确审批。
+
+全量工程 **463 passed / 116.86s**；真实LCCC固定候选诊断12run/768题次、64独立开发QA、0模型调用：2048字符完整必要证据Top-K/Coverage40/41、MMR38/41、新覆盖39/41，**本批未显示收益，默认暂不切换**。512字符预算几乎无法容纳完整元数据，1024字符均20/41；数据为AI辅助gold，不能证明QA语义或长期效用，历史图表不覆盖。
+
+[算法契约与操作](docs/implemented/条件时序抽取与预算证据选择.md) · [聚合结果/指纹](docs/assets/evaluation/evidence-selection-20261012.json) · [接下来优先级与商用缺口](docs/plans/长期陪伴记忆研究与实验计划书.md)。优先补完整reader预算/引用验证与新预算QA，条件/演化F1需要真实连续资料及独立标签，人工项继续暂缓。
+
+```powershell
+.\.venv\Scripts\python.exe scripts/research.py --user qin select-evidence --help
+.\.venv\Scripts\python.exe scripts/research.py --user qin select-evidence --source-run 20261012T061426Z-e599965a --budget 1024 --unit chars
+```
+
+replay需要本机已有对应私有来源run与冻结协议；Git只包含无原话的聚合记录，干净克隆不能仅凭run ID重建历史私有产物。
