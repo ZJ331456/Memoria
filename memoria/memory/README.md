@@ -1,81 +1,57 @@
-# Memory：个人分层记忆与治理
+# Memory：记忆版本、统一访问与证据选择
 
-[返回核心包](../README.md) · [运行时](../runtime/README.md) · [共享治理](../../docs/implemented/记忆治理与多Agent共享记忆.md)
+[核心包](../README.md) · [运行时](../runtime/README.md) · [分层说明](../../docs/implemented/记忆分层与配置.md) · [Studio/统一访问](../../docs/implemented/MemoryStudio与统一记忆访问.md)
 
-本模块服务**个人对话运行时**。共享 Agent 空间另由 [../governance.py](../governance.py) 管理，尚未接入 `MemoryEngine.retrieve` 或个人 `memorize` 工具。
-
-## 分层总览
-
-参考用户提供的 *Agent Memory - The 5-Layer Playbook*，并核对 CoALA、MemGPT、LangGraph、Letta 等一手资料，采用以下职责分工。**遗忘是跨层治理机制**，不是再复制一份记忆。完整中文解释、PDF 思想改写和来源核验见[记忆分层 README](../../docs/implemented/记忆分层与配置.md)。
-
-| 层 | 本项目的实现 | 读取与治理 |
-| --- | --- | --- |
-| 工作记忆 | 最近消息、活动约束、增量摘要与本轮 context frame | 首条系统指令完整保留；最新用户请求和分层帧优先；全局及分区字符预算 |
-| 情景记忆 | `memory_episodes` 中的短任务、执行状态、结果、工具名与来源消息/trace ID | 中文二元词组/英文词元检索，默认 top 3；完成状态不等于验证成功 |
-| 语义记忆 | `memories` 的事实、偏好、目标、关系与有效版本 | 自动提取先审核；关键词/BM25/可选向量召回；纠正和替代可追溯 |
-| 程序性记忆 | 人工维护的 `skills/*/SKILL.md` | 按任务选择和按需加载；SHA-256 指纹进入 trace；不自动把经历晋升为技能 |
-| 遗忘与治理 | 情景 TTL/容量归档、事实版本状态、共享 ACL/过期/撤销 | 先过滤状态再召回；固定保留保护情景；来源删除与事实删除分别处理 |
+本包实现当前登录账号的普通记忆、情景记忆及其访问链路。结构化 Claim 的写入/审批位于 [claims.py](../claims.py)，共享空间由 [governance.py](../governance.py) 管理；三者不自动互相复制。
 
 ## 文件映射
 
 | 文件 | 职责 |
-|---|---|
-| [planner.py](planner.py) | `MemoryQueryPlanner` 门控、可选 fast 模型改写查询/类型/数量 |
-| [engine.py](engine.py) | `MemoryEngine` 写入去重、替代、纠正、关键词/BM25/可选向量检索、图扩展和时间查询 |
-| [embedding.py](embedding.py) | 远程 `/embeddings` 或本地 BGE 分派，区分查询与文档编码、分批与超时 |
-| [local_bge.py](local_bge.py) | 中文 BGE small v1.5 的离线 CUDA/CPU 编码、模型指纹和有界串行队列；[配置说明](../../docs/implemented/本地Embedding配置.md) |
-| [worker.py](worker.py) | 会话结束后领取持久任务，提取候选并写入审核队列 |
-| [episodic.py](episodic.py) | `EpisodicMemory` 记录真实来源任务、相关性召回、固定保留、归档和事件 |
-| [forgetting.py](forgetting.py) | 后台情景 TTL/容量维护；取消后再关闭数据库 |
-| [layer_settings.py](layer_settings.py) | `[memory.layers]` 平面配置的字段、类型与范围校验 |
-| [budget.py](budget.py) | 本轮记忆读取工具次数和累计返回字符配额，计入初始上下文帧 |
-| [layer.py](layer.py)、[markdown.py](markdown.py) | `MEMORY.md` 投影、`SELF.md` 和历史 `PENDING.md` 文件 |
-| [../store.py](../store.py)、[../vector_index.py](../vector_index.py) | SQLite、FTS、来源操作账本、可选 sqlite-vec |
+| --- | --- |
+| [engine.py](engine.py) | 普通记忆写入、强化/替代/纠正、有效区间、词面/BM25/Dense/RRF 和图扩展 |
+| [planner.py](planner.py) | 问候门控及可选 fast 模型查询/类型/数量规划 |
+| [access.py](access.py) | QueryRequest/MemoryAccessOrchestrator：Claim、时间、来源复核、候选和选择解释 |
+| [temporal_query.py](temporal_query.py) | 有限中文年月日/相对日期解析，区间、身份和获知截止歧义处理 |
+| [evidence_selector.py](evidence_selector.py) | 同一池的 top-k/coverage 整组选择；完整 JSON 的字符成本 |
+| [claim_analysis.py](claim_analysis.py) | 更新建议及明确开启的模型支持度建议；不批准、不持久化 |
+| [embedding.py](embedding.py) | HTTP/本地 BGE、查询指令、文档分块、批次和向量校验 |
+| [local_bge.py](local_bge.py)、[token_chunks.py](token_chunks.py) | 离线 CUDA/CPU、模型指纹、tokenizer 分块、连续原文 span 和完整覆盖 |
+| [worker.py](worker.py) | 持久租约抽取任务及普通记忆审核队列 |
+| [episodic.py](episodic.py)、[forgetting.py](forgetting.py) | 来源任务情景、相关性召回、固定、TTL/容量归档 |
+| [layer_settings.py](layer_settings.py)、[budget.py](budget.py) | 分层配置、读取次数和累计字符配额 |
+| [layer.py](layer.py)、[markdown.py](markdown.py) | MEMORY.md 投影、SELF.md 和历史 PENDING.md 容器 |
 
-## 自动提取与人工审核
+## 写入和一致性
 
-`AgentRuntime` 保存回复后，以用户消息 ID 为 `source_ref` 投递 `memory_jobs`。`MemoryJobWorker` 使用租约与 heartbeat 领取任务，调用 [LLMClient](../llm/client.py) 提取候选，存入 `memory_reviews`。**任务完成只表示提取完成，候选尚未生效**；未批准内容不参与检索或 prompt。
+自动对话抽取由 MemoryJobWorker 写入 memory_reviews，先待审，批准才调用 remember；任务完成只代表抽取完成。手动 API 和明确授权的 memorize 直接写普通记忆，不能等同于 Claim 审批。
 
-用户通过 `GET /api/memory-reviews` 查看候选与来源 ID，再用消息来源接口核对原始对话，可编辑正文、类型和重要度后调用 `POST /api/memory-reviews/{id}/approve`，或拒绝。批准才调用 `MemoryEngine.remember`；审核状态在 `pending → applying → approved` 间推进，失败或重启时恢复待审。`GET /api/messages/{id}/source` 与带 `anchor_id` 的会话消息接口定位来源。撤销已批准来源可先用 `POST /api/memories/undo` 的 dry-run 预览。详见[审核与来源定位](../../docs/implemented/自动记忆审核与来源定位.md)。
+普通记忆的创建、纠正、替代及来源撤销在 Store 事务内维护 `[valid_at, invalid_at)` 区间。恢复旧版本新建区间，保留中间变化；as_of 后词面、BM25、向量与图扩展均受时间过滤。正文相同会强化；其他候选可由同类型预筛后的 fast 决策器保守分类。详见 [一致性](../../docs/implemented/记忆一致性与检索审查.md)。
 
-## 写入、检索和版本
+向量按模型命名空间与维度隔离。本地 BGE 长记忆保存连续 tokenizer 块、独立向量和原文 span，以父版本最佳块召回；更正、删除、撤销和时间查询同步限制块。批次完整校验后事务保存，延迟回填重验版本/正文/模型。HTTP 模型端点有输入限额，完整分块能力见 [长记忆索引](../../docs/implemented/实验记录与长记忆分块索引.md)。
 
-手动 API 与个人 `memorize` 工具直接调用 `remember`；规范化正文完全相同的记忆会强化。其他候选按文本/向量相似度交给 fast 模型选择创建、强化或替代；没有决策器时，对部分可变类型有规则式矛盾替代。旧版本与原因保存在替代表；用户纠正产生新版本，可查看时间线。部分写入会生成实体/关键词属性与相关链接；`valid_at/invalid_at` 支持时间查询。个人记忆的 `source_ref` 和操作账本用于来源追踪及撤销。
+## 统一读取
 
-`retrieve` 从 FTS/关键词种子和当前有效记忆取候选，清理问句尾词后计算词面分、BM25 分和可选向量相似度，按 RRF 融合；再小幅扩展相关记忆图并限制各记忆类型的数量。embedding 不可用时可降级为文本检索；`POST /api/memories/reindex` 可补向量。`MemoryQueryPlanner` 会跳过问候和无关短请求，必要时使用 fast 模型改写查询。检索和个人工具仍只面对个人 `memories` 表。
+`/api/memory-query` 支持 unified/claim/keyword/bm25/dense/rrf。统一模式优先已批准 Claim；不完整时补检普通记忆，只把仍有效、属于合法用户原话的来源列作未批准证据，不能消除 Claim 的缺项或冲突。公开导入、丢失和撤销来源被排除；模型 await 后重验来源/版本。
 
-创建、替代、纠正和来源撤销在 Store 事务内维护 `memory_validity_intervals`。区间采用 `[valid_at,invalid_at)`；撤销后恢复旧记忆会新增区间，不抹掉中间版本曾生效的历史。指定 `as_of` 后，FTS/词面、BM25、向量和图扩展都受时间约束；历史 Dense 在候选内扫描，图扩展按边权累计后重排。BM25 使用真实词频和词元长度。用户显式 `evolve` 会生成替代版本，自动规则只保守识别同一语句的否定或数值变化。
+recorded_as_of 时跳过只有事实时间的普通记忆通道。中文年份/月/日保留日历区间，以修订时间线展示，不编造某日期或把整个区间当已证明的状态。规则未覆盖、主体不明或获知区间需精确截止时返回 clarify。
 
-`memory_embeddings` 按模型命名空间和维度保留向量；切换模型不清空旧向量，同维度不同模型也隔离。本地 BGE 的长记忆按 tokenizer 分块，在 `memory_embedding_chunks` 保存完整原文 span 与独立向量，按父版本最大块相似度检索；父版本的更正、撤销、删除和时间查询同时约束块索引。Prompt 和 recall 工具优先使用命中片段。重索引除缺失/维度不符外，也会补旧单向量记忆缺失的块索引；批次校验失败不会部分保存，延迟回填校验父版本仍活动且正文一致。详情见[分块与实验记录](../../docs/implemented/实验记录与长记忆分块索引.md)。模型热切换后旧回填批次跳过，原模型向量不会误入新索引。迁移、召回窗口和完整双时态的边界见[一致性与检索审查](../../docs/implemented/记忆一致性与检索审查.md)。
+Claim 同槽位条件/否定保持完整组。top-k/coverage 用同池/预算比较，不用 gold；字符预算含 JSON，不是 reader token。Dense 专用诊断不会伪装成词面结果，可用性依赖编码配置。API 诊断不调用 reader，通用条件、精确 token、MMR 与选择质量实验仍待完成。
 
-`MEMORY.md` 从有效结构化记忆重建，不是独立写入源；`SELF.md` 可作为 prompt 上下文。`PENDING.md` 是历史 Markdown 层及 Drift 摘要容器，**自动提取审核队列以 SQLite 为准**。
+## 分层与来源生命周期
 
-## 情景记录与来源生命周期
+工作记忆是近期消息/摘要/帧，语义记忆是普通事实/偏好/目标有效版本，情景保存任务结果和来源，程序记忆加载 SKILL.md；遗忘是跨层治理。
 
-聊天轮次完成、失败或取消后记录简短情景；Drift 不生成自己的情景以避免反馈循环。任务最多 600 字符、结果最多 1200 字符、错误最多 300 字符，只存工具名称和消息/trace 指针，不存模型隐藏推理或原始工具参数。已有 trace 脱敏规则用于常见凭据，但不构成通用个人信息脱敏器。
+情景默认 TTL 90 天、活动上限 1000、召回 top 3；固定记录可超过上限。管理可读归档，运行时只召回活动且未过期/固定记录。删除会话清理原话、情景、压缩、任务与候选，不代表删除全部已批准普通事实；完整遗忘需删除/撤销。Claim 原话失效隐藏值并使依赖视图失效。
 
-情景默认 90 天过期，检索立即排除未固定的过期记录；后台按 TTL 与 1000 条活动容量软归档，固定记录受保护，全部固定时可以超过容量。管理视图能查看过期归档，召回工具不读取这些历史。维护 `dry_run` 只预览，归档事件保留原因。
+MEMORY.md 从有效普通记忆重建，不是另一权威数据库；SELF.md 可注入，PENDING.md 不替代 SQLite 审核。默认分层总帧 12000 字符，每轮相关只读工具最多 6 次/12000 字符，初始帧计入。关闭语义见分层说明。
 
-删除会话时，原始消息、对应情景、压缩摘要、抽取任务和审核候选一并清理。**已批准语义记忆与来源操作账本仍保留**，删除会话不代表已完成所有事实的遗忘；要移除事实需使用记忆删除/撤销 API。来源丢失的候选不能继续批准。
+## 验证
 
-`GET /api/memory-layers` 查看配置与统计，`GET /api/episodes` 管理记录，`GET /api/episodes/{id}` 取得来源指针，`PATCH /api/episodes/{id}` 固定或归档，`POST /api/episodes/maintenance` 预览或执行维护。详细请求见[API 文档](../../docs/implemented/API接口文档.md)。这些接口属于当前登录账号的个人数据域，使用用户 Bearer 或 Cookie，运行时、数据库和索引按账号隔离；单独共享 `X-Agent-Key` 不授予访问权限。
+在仓库根目录：
 
-## 配置与边界
-
-
-`[memory.layers]` 默认为语义 3000、情景 1800、程序 2400、摘要 2000、目录 1200、SELF 1200 字符，整体帧 12000 字符。每轮 `recall_memory/recall_episodes/search_history/load_skill` 最多 6 次，初始帧和读取返回共享 12000 字符配额；这些都是近似成本控制，不是精确 token。`enabled=false` 关闭新增分层装配与配额，`episodic_enabled=false` 只关闭新情景记录/召回/维护；既有个人事实审核保持可用。
-
-## 从仓库根目录验证
-
-```bash
-python -m pytest -q tests/test_memory_review.py tests/test_memory_retrieval_scale.py tests/test_core.py
-python -m pytest -q tests/test_episodic_memory.py tests/test_layered_context_budget.py tests/test_memory_layers_integration.py
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_memory_consistency.py tests/test_review_source_transactions.py tests/test_document_memory.py tests/test_token_chunks.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_claims.py tests/test_memory_studio.py tests/test_episodic_memory.py tests/test_memory_layers_integration.py
 ```
 
-## 与Claim状态的边界
-
-[../claims.py](../claims.py)使用独立根/修订/来源/缓存表，限定槽位和条件不转成普通memories或向量。普通memories的worker/召回保持原有语义；源撤销正式事务额外使关联Claim/视图失效。access_claims与普通读取共享本轮配额，结构化结果超额时整体省略。[状态说明](../../docs/implemented/Claim条件视图与访问路由.md)。
-
-## Memory Studio迭代
-
-access.py为MemoryAccessOrchestrator/严格QueryRequest，temporal_query.py做有限中文区间解析，evidence_selector.py执行整组字符预算topk/coverage，claim_analysis.py提供可选但不写状态的更新/模型支持度建议。engine.retrieve增加显式keyword/bm25/dense/rrf诊断模式；旧默认rrf保持。公开/撤销/丢失来源不进入个人补检状态，recorded_as_of跳过普通语义路径。[完整说明](../../docs/implemented/MemoryStudio与统一记忆访问.md)。
+临时用例不代表真实模型质量。BGE 见 [Embedding](../../docs/implemented/本地Embedding配置.md)，真实研究走 [experiments/](../experiments/README.md)。

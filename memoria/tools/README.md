@@ -1,32 +1,39 @@
-# Tools：工具注册、发现与执行
+# Tools：注册、发现、授权与限额
 
-[返回核心包](../README.md) · [运行时](../runtime/README.md) · [MCP](../mcp/README.md) · [Skills](../skills/README.md)
+[核心包](../README.md) · [运行时](../runtime/README.md) · [MCP](../mcp/README.md) · [技能](../skills/README.md)
 
 ## 文件映射
 
 | 文件 | 职责 |
-|---|---|
-| [registry.py](registry.py) | `Tool` 元数据、`ToolRegistry` 注册/校验/限时执行、`ToolResult` |
-| [builtin.py](builtin.py) | 个人记忆、会话搜索、时间、计算、技能加载和 HTTP GET 内置工具 |
-| [search.py](search.py) | `ToolPresentation` 按需展示 schema，`tool_search` 与 `tool_call` 解码 |
-| [policy.py](policy.py) | `ToolPolicy` 从用户输入授予本轮 `memorize/forget_memory` 写权限 |
-| [loop_guard.py](loop_guard.py) | 对重复工具批次计算稳定签名并阻断第三次执行 |
-| [http_get.py](http_get.py) | HTTP GET 初始主机白名单与输出截断 |
+| --- | --- |
+| [registry.py](registry.py) | Tool 元数据、严格参数校验、hooks、授权、超时与输出限额 |
+| [builtin.py](builtin.py) | 个人记忆/Claim、历史、情景、时间、计算、技能与 HTTP GET |
+| [search.py](search.py) | 按需 schema、tool_search/tool_call 解码 |
+| [policy.py](policy.py) | 识别明确记住/遗忘意图，授予本轮相应个人写工具 |
+| [loop_guard.py](loop_guard.py) | 稳定批次签名与第三次重复阻断 |
+| [http_get.py](http_get.py) | 初始 URL 主机白名单、文本获取和截断 |
 
-`build_registry` 注册 `recall_memory`、`memorize`、`forget_memory`、`search_history`、`current_time`、`calculate`、`load_skill`、`http_get`。开启 `[agent.tools].search_enabled` 后，模型直接看到 `always_on` 工具及 `tool_search/tool_call`；其他工具先搜索 schema，再通过 `tool_call` 执行。关闭后直接暴露全部普通工具 schema。外部 MCP 工具由 [McpHost](../mcp/README.md) 接入同一注册表。
+## 能力与配额
 
-`ToolRegistry.execute` 检查风险级别和本轮写授权，严格校验 JSON 参数，再执行 pre-hook 与异步 executor；结果统一为文本与耗时，默认输出上限 12000 字。取消异常向上传播，其他执行异常写入失败结果。`ToolPolicy` 只识别个人记忆的显式“记住/遗忘”意图；`memorize` 直接写个人记忆，**不向多 Agent 共享空间写提议**。共享记忆有独立的 Agent key、ACL 和审批流程。
+build_registry 注册 recall_memory/memorize/forget_memory/search_history/current_time/calculate/load_skill/http_get；有情景服务时增加 recall_episodes，有 Claim 服务时增加只读 access_claims。Claim 工具使用严格主体/槽位/条件/双时间请求，不包含创建或批准。
 
-启用情景层时额外注册只读 `recall_episodes`，按任务文本检索活动经历并返回来源 ID。运行时的 `recall_memory/recall_episodes/search_history/load_skill` 共享本轮读取配额（默认 6 次，初始帧和返回内容合计 12000 字符）；Tool Search 包装调用会按解码后的实际工具名计数，超额返回明确拒绝。独立 API 工具调试不属于聊天轮次，仍受单次校验/超时/输出上限约束。
+search_enabled 开启时常驻工具及搜索/调用包装器直接展示，其余 schema 按需发现；关闭则暴露普通工具。MCP 接同一注册表并受相同校验/权限/超时/输出限制。
 
-`[agent.tools].http_allowed_hosts` 只检查请求的初始主机；`http_get` 使用 httpx 跟随重定向，因此不要把它视作完整的重定向目标隔离。`calculate` 解析 AST 并只允许基本算术。`load_skill` 返回 `SKILL.md` 正文，不执行技能目录里的脚本。
+每轮 recall_memory/recall_episodes/search_history/load_skill/access_claims 共享默认 6 次/12000 字符，初始帧计入。包装调用按真实解码名称记账，Claim 超额整体省略。API 调试没有聊天轮次配额，但有单次校验/限额，写调试需 confirm_write=true。
 
-## 从仓库根目录验证
+## 写入与网络边界
 
-```bash
-python -m pytest -q tests/test_optimizations.py::test_tool_permissions_hooks_validation_and_output_cap tests/test_core.py::test_tool_loop_guard_uses_stable_argument_signature tests/test_round10_tool_search_mcp.py::test_tool_search_presentation
+memorize 直接写普通记忆，forget_memory 删除普通记忆；技能指令、执行成功、Claim 批准和共享提案是不同动作。共享使用独立 Agent key/ACL/审批。
+
+calculate 仅 AST 基本算术，load_skill 返回正文不执行脚本。HTTP 白名单只检查初始主机且跟随重定向，当前不是完整 SSRF/目标隔离或商用网络沙箱。结果/原话也不是可信指令。
+
+## 验证
+
+在仓库根目录：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_round10_tool_search_mcp.py tests/test_skills.py tests/test_claims_api.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_optimizations.py::test_tool_permissions_hooks_validation_and_output_cap tests/test_core.py::test_tool_loop_guard_uses_stable_argument_signature
 ```
 
-## 只读结构化状态工具
-
-有Claim服务时注册access_claims，参数为严格AccessRequest（主体、槽位、条件、当前/历史时间与字符预算）。工具通过发现提供，不授予创建/批准权限；按解码后名称计入本轮读取额度，输出整条保留或明确省略。[Claim说明](../../docs/implemented/Claim条件视图与访问路由.md)。
+真实外部服务另由 [check_mcp.py](../../scripts/check_mcp.py) 检查，不由替身测试证明。

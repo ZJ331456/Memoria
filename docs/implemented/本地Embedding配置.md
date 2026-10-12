@@ -1,8 +1,8 @@
 # 本地中文 Embedding：BGE small zh v1.5
 
-2026-10-11 更新：本机当前已改为 Qwen/BGE 共用 `http://127.0.0.1:8080/v1`，见[本地与远程 OpenAI 统一接口](本地与远程OpenAI统一接口.md)。下文保留 2026-10-10 的进程内方案与当时测量；`local://cuda` 仍可选，不能把当时配置或耗时当作当前 HTTP 部署的测量。
+2026-10-12 更新：支持进程内 `local://cpu/cuda/auto` 和本机 OpenAI 兼容 HTTP 两种方式。默认示例为 Qwen/BGE 共用 `http://127.0.0.1:8080/v1`；远程 LLM 也可搭配进程内 BGE。完整启动顺序见[根 README](../../README.md#3-模型方案选择一种)与[统一接口](本地与远程OpenAI统一接口.md)。本页的文件规模与环境数字是 2026-10-10 的下载/环境记录，不是最新部署性能测量。
 
-本机方案使用项目根目录 `model/bge-small-zh-v1.5/` 存储模型，由项目 `.venv` 进程内编码。本地接入属于尚未提交的工作区能力，不能视为远程 main 已有状态。main 保留既有 DeepSeek `deepseek-v4-flash`，fast 保留原有 Qwen `qwen3.6-flash` 配置；本次验证没有调用付费 LLM API。模型文件、环境、私有 override 与原始报告均为 Git 忽略项。
+模型存储在项目根目录 `model/bge-small-zh-v1.5/`，依赖安装到项目 `.venv`。接入代码已在 main；模型文件、环境、私有 override 与原始报告不随 clone 提供。main/fast 的实际配置取决于默认配置及账号覆盖，本页不固定它们的供应商。
 
 ## 文件与环境
 
@@ -10,9 +10,9 @@
 Memoria-Agent/
 ├─ model/bge-small-zh-v1.5/      # Safetensors、tokenizer、配置与下载校验清单
 ├─ .venv/                      # 独立 Python 环境，不继承 base site-packages
-├─ data/config/models.override.toml   # 本机模型槽位配置，含凭据，已忽略
+├─ data/users/<UUID>/config/models.override.toml  # 当前账号槽位覆盖，忽略
 ├─ scripts/download_embedding.py
-└─ scripts/check_local_embedding.py
+└─ scripts/serve_local_llm.py    # 可选独立 HTTP 推理服务
 ```
 
 下载源为 [ModelScope BAAI/bge-small-zh-v1.5](https://www.modelscope.cn/models/BAAI/bge-small-zh-v1.5)。默认固定提交 `8399f11f8da998fe932df2684586c92024219d05`，选择 12 个模型/配置文件，合计 96,406,042 字节（约 91.94 MiB）。权重文件 `model.safetensors` 是 95,827,648 字节；重复的 `.bin` 权重不下载。
@@ -44,11 +44,11 @@ Get-Content .venv/pyvenv.cfg
 
 `include-system-site-packages` 应为 `false`。项目不会修改 conda base 的依赖。
 
-本机实际环境见[环境报告](../data/reports/local_embedding_environment.json)：Python 3.13.5、PyTorch 2.9.0+cu126、Transformers 5.5.3、SQLite 3.50.2，独立 `.venv` 不继承 base site-packages；`pip check` 已通过。向量后端配置为 `auto`，`sqlite-vec` 未安装，不能声称验证了该扩展。报告只保留模型槽位状态，不包含 API Key。
+当时核验环境为 Python 3.13.5、PyTorch 2.9.0+cu126、Transformers 5.5.3、SQLite 3.50.2，独立 `.venv` 不继承 base site-packages；`pip check` 通过。向量后端为 `auto`，当时未安装 `sqlite-vec`，不能声称验证了该扩展。私有报告不链接到公开仓库；SQLite 运行时升级的商业验收见[计划第18节](../plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
 
 ## 配置与启动
 
-本机实际配置通过已有 `data/config/models.override.toml` 保存，Embedding 槽位为：
+进程内方案在私密 `config.toml` 中设置；账号已有 `data/users/<UUID>/config/models.override.toml` 时，该文件覆盖默认槽位：
 
 ```toml
 [memory.embedding]
@@ -64,9 +64,9 @@ base_url = "local://cuda"
 .\.venv\Scripts\python.exe main.py
 ```
 
-已有后端进程需要用此解释器重启后才会应用代码和启动配置。前端的模型设置页也支持保存这两个字段并测试本地编码；如果后端使用的是其他解释器，切换设置不能自动安装 CUDA 依赖。
+已有业务进程需要重启才会应用启动配置。当前 Memory Studio 面向记忆管理，旧聊天前端和模型设置页已移除；模型配置由私密配置及管理员工具管理。切换配置不能自动安装 CUDA 依赖。
 
-应用启动时先预热本地模型再开始接收请求，以免首次编码加载超过普通请求超时。预热独立使用 `max(120 秒, 常规 timeout_seconds)`，不修改之后的请求超时；远程模型不会被这一步调用。预热失败会报告错误，应先检查设备、模型路径和依赖。前端本地 Embedding 提示“本地推理 · 无需 API Key”；main/fast 仍按实际密钥状态判断配置是否就绪。
+账号运行时初始化时预热进程内 BGE。预热独立使用 `max(120 秒, 常规 timeout_seconds)`，不修改之后的请求超时；HTTP/远程 Embedding 不由这一步调用。预热失败记录警告、保留配置修复入口，应检查设备、模型路径和依赖；服务存活不等于模型已就绪。main/fast 按各自配置判断可用性。
 
 ## 编码约定与索引隔离
 
@@ -81,7 +81,7 @@ base_url = "local://cuda"
 
 模型切换后，原远程 Embedding 向量保留在自己的命名空间，不参与 BGE 相似度计算；新 BGE 向量按现有回填/重新索引流程生成。正式实验要使用隔离数据库并冻结模型文件；更新模型建议下载到新目录后切换配置。当前项目仍在读取时做有限回填，此次接入没有完成实验计划中的后台索引改造。
 
-**输入截断和相似度阈值仍需实验校准。** 当前后端在 512 token 处截断；长事件/长 Markdown 分块尚需按 tokenizer 重做。原检索引擎的相似度阈值仍保留，不能把接入成功当作记忆质量已经提高。该模型主要用于中文；英文公开基准应另固定适合语言的模型。
+**相似度阈值与质量仍需校准。** 生产文档编码已按 tokenizer 完整分块，保留 span 并检索命中块；单块限 512 token，直接超长编码不会静默截断。长事件/Markdown 的实现见[分块说明](实验记录与长记忆分块索引.md)。接入成功不证明长期记忆质量提高；该模型主要用于中文，其他语言研究需另固定模型。
 
 ## 当前验证入口与边界
 

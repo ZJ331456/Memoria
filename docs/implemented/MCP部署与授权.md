@@ -19,10 +19,13 @@ GitHub 使用 `--read-only` 并限制 toolsets；launcher 从 Git Credential Man
 在仓库根目录、已有项目 `.venv` 中执行；要求 Windows x86_64、Node.js 20+、Git 和可用网络。
 
 ```powershell
+.\.venv\Scripts\python.exe scripts/install_mcp.py --help
 .\.venv\Scripts\python.exe scripts/install_mcp.py
 .\.venv\Scripts\python.exe scripts/configure_mcp.py --user qin
 .\.venv\Scripts\python.exe scripts/check_mcp.py --user qin
 ```
+
+安装脚本无参数时才执行部署；2026-10-12补齐参数解析，`--help`仅显示帮助，未知参数退出且不安装。已核对两种参数路径及本地运行目录未被它们修改；这不是一次新的MCP业务授权或联网调用验证。
 
 - npm 依赖仅安装在 `.mcp/node`，版本与完整依赖锁在 `deploy/mcp/`；GitHub exe 位于 `.mcp/github`，下载按官方 release SHA256 校验。
 - 安装清单 `.mcp/installation.json`，实际调用记录 `data/users/<UUID>/reports/mcp-check.json`；这些本机文件不提交 Git。

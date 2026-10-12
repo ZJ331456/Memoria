@@ -1,45 +1,42 @@
-# Runtime：个人 Agent 对话编排
+# Runtime：个人 Agent 轮次编排
 
-[返回核心包](../README.md) · [生命周期](../lifecycle/README.md) · [Prompting](../prompting/README.md) · [共享治理](../../docs/implemented/记忆治理与多Agent共享记忆.md)
+[核心包](../README.md) · [记忆](../memory/README.md) · [上下文](../prompting/README.md) · [生命周期](../lifecycle/README.md)
 
-## 文件映射
+## 文件与入口
 
 | 文件 | 职责 |
-|---|---|
-| [agent.py](agent.py) | `AgentRuntime.run`、工具调用循环、流式回调、取消和 trace |
-| [compaction.py](compaction.py) | `SessionCompactor` 对较早消息生成并复用结构化摘要 |
-| [__init__.py](__init__.py) | 导出运行时接口 |
-| [../service.py](../service.py) | 构建运行时依赖，向 API 暴露聊天服务 |
+| --- | --- |
+| [agent.py](agent.py) | AgentRuntime.run、访问/工具循环、流式事件、取消、配额与 trace |
+| [compaction.py](compaction.py) | SessionCompactor 增量摘要、分片续读、来源覆盖与 CAS 保存 |
+| [../service.py](../service.py) | 装配依赖，向账号内 API 提供轮次服务 |
 
-## 一轮对话
+HTTP 聊天 API 保留；Memory Studio 是来源/状态管理界面，不提供聊天窗。运行时由登录网关选择当前账号，不能通过客户端参数指定他人目录。
 
-1. 创建 `TurnContext` 与 `TurnTracer`，触发 `before_turn`，保存用户消息。
-2. 增量压缩超出 `memory_window` 的历史；[MemoryQueryPlanner](../memory/planner.py) 决定是否召回个人事实，[EpisodicMemory](../memory/episodic.py) 召回相关任务经历。结果和摘要按各层上限进入 [PromptAssembler](../prompting/assembler.py) 的候选上下文帧。
-3. 注入可用 Skills 和工具目录，追加最近消息，触发 `before_reasoning`。
-4. 每次主聊天模型调用前执行 [ContextBudget](../prompting/budget.py)；模型返回工具调用时按 [ToolPolicy](../tools/policy.py) 的本轮授权执行，多个调用可并发。记忆/历史/技能读取共享本轮 [TurnMemoryBudget](../memory/budget.py)。结果以 tool message 回送模型，触发 `after_step`。
-5. 获得最终回复后触发 `after_reasoning`，保存助手消息，投递自动提取任务，再触发 `after_turn` 并持久化 trace；以真实消息与 trace ID 记录简短情景。可选回调把模型增量与阶段/工具事件传给 SSE。
+## 一轮路径
 
-`SessionCompactor` 从最早未覆盖的消息逐批推进，用旧摘要加新消息更新，避免只压缩最近 500 条或覆盖早期约束。每次 ensure 最多 2 批、每批最多 80 条、输入最多 24000 字符；超长单消息用 `partial_message_id/partial_offset` 续读，完整读入后才标记 covered。游标与覆盖列表校验同会话真实前缀，来源删除或旧版错误覆盖会重建摘要。未出现新旧消息时直接复用，不反复调用模型。模型与回退摘要均最多 6000 字符，输入预算较小时自动下调，保证后续批次仍能推进；并发保存使用 CAS。原始消息仍在会话历史；两种摘要均可能丢失细节，不保证保留每条原话。覆盖列表校验与 JSON 重写成本随历史长度增长，尚未做长期大库的常数时间游标设计。
+1. 创建上下文与 tracer，执行 before_turn 并保存用户消息。
+2. 少量明确个人状态问题走 MemoryAccessOrchestrator，跳过旧摘要和 fast 查询规划；一般任务执行增量摘要、普通记忆规划/召回及情景召回。
+3. 组装低信任上下文帧、技能和工具目录，追加近期消息，执行 before_reasoning。
+4. 主模型调用前应用字符预算；工具校验/风险授权/配额通过后可并行执行，完整工具组回送模型，触发 after_step。
+5. 回复形成后执行 after_reasoning，保存助手消息及抽取任务；执行 after_turn，保存完成/失败/取消 trace 与来源短情景。
 
-模型报告上下文过长时使用 45% 的紧急字符预算重试。工具批次重复第三次由 `ToolLoopGuard` 阻断，并在预算内请求模型结束本轮。trace 保存分层裁剪、读取配额、情景来源和技能版本，技能加载不被标记为任务成功。
+有限个人问题的 reader 只取得 selection、缺项和限制，未选中调试候选不另行注入。缺条件/冲突/未经批准来源仍须未知；原子省略不能留下脱离条件的值。access_claims 仍接受明确槽位，不授予写权限。
 
-## 配置与边界
+## 压缩、预算与取消
 
-`[agent].max_iterations` 控制工具步骤；值为 0 时仍受 **200 步硬上限**，正值也最多 200。`[agent.context]` 控制 `memory_window` 和 `char_budget`。`run(..., turn_kind="drift", skip_memory_enqueue=True)` 供 [Drift](../drift/README.md) 复用，另有有限步数和写工具白名单。
+增量压缩从未覆盖前缀推进，默认每次最多 2 批、每批 80 条、输入 24000 字符、摘要 6000 字符。超长消息以 partial_message_id/partial_offset 续读，完整读入才 covered；来源失效重建、无新增复用、CAS 防并发覆盖。摘要有损，覆盖列表成本随历史增长，不是长期大库常数时间方案。
 
-异常、取消分别记录 failed/cancelled trace 与短情景；`completed` 仅是执行结束状态。情景记录异常只写日志，不覆盖主响应；`turn_kind="drift"` 不录制情景。自动事实提取发生在后台，批准前不生效。此运行时没有 `agent_id/space_id` 参数；多 Agent 共享记忆由独立 [MemoryGovernance](../governance.py) 和 `/api/shared/*` 提供，当前不会自动注入此对话。
+max_iterations=0 仍受 200 步硬上限，正值最多 200。上下文超限以 45% 紧急字符预算重试；第三次重复工具批次阻断。相关读取共享默认 6 次/12000 字符，初始帧计入；字符预算不保证适配每个 tokenizer。
 
-## 从仓库根目录验证
+取消向上传播并保存 cancelled，情景异常不覆盖主响应。turn_kind=drift 复用运行时但不生成自身情景/普通抽取。共享空间没有贯穿此轮次的 agent_id/space_id，独立治理权限不替代个人工具策略。
 
-```bash
-python -m pytest -q tests/test_round7_akashic.py tests/test_optimizations.py::test_sse_chat_endpoint_emits_delta_and_complete tests/test_core.py::test_builtin_tools_and_trace
-python -m pytest -q tests/test_incremental_compaction.py tests/test_memory_layers_integration.py
+## 验证
+
+在仓库根目录：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_core.py tests/test_incremental_compaction.py tests/test_memory_layers_integration.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_claims_api.py tests/test_memory_studio.py tests/test_optimizations.py::test_sse_chat_endpoint_emits_delta_and_complete
 ```
 
-## 结构化状态访问
-
-明确识别的少量中文居住/语言/详细度问题走Claim路由，跳过会话摘要编译、fast查询规划及普通语义召回；完整状态作为低信任StructuredState段呈现，trace记录claim.access。一般自然语言仍走既有流程，可通过access_claims显式请求槽位/条件/时间。原子预算保护条件/引用不被截半，reader正确性仍需真实评测。[说明](../../docs/implemented/Claim条件视图与访问路由.md)。
-
-## Memory Studio迭代
-
-本轮有限个人状态问题改用MemoryAccessOrchestrator，结合中文区间、来源补检与整组选择；reader只接收selection及缺项/限制，未选中调试候选不额外注入。trace保存ID/过滤/阶段，原子省略仍保留；通用任务和工具契约不扩大。[边界](../../docs/implemented/MemoryStudio与统一记忆访问.md)。
+真实 reader 是否遵守引用和未知边界另做 [研究评测](../experiments/README.md)，不由工具循环测试推断。

@@ -1,52 +1,52 @@
-# API：HTTP 与治理边界
+# API：登录网关、记忆与治理
 
-[返回核心包](../README.md) · [个人运行时](../runtime/README.md) · [共享治理](../../docs/implemented/记忆治理与多Agent共享记忆.md) · [完整接口](../../docs/implemented/API接口文档.md)
+[核心包](../README.md) · [完整接口](../../docs/implemented/API接口文档.md) · [用户隔离](../../docs/implemented/用户登录与数据隔离.md)
+
+正式入口 `main.py` 调用本包导出的 `create_app`。`gateway.py` 验证用户登录后，以服务器账号 UUID 路由到独立租户应用；不要直接暴露 `_create_tenant_app` 作为业务入口。
 
 ## 文件映射
 
 | 文件 | 职责 |
-|---|---|
-| [gateway.py](gateway.py) | 正式 create_app、账号登录和独立用户运行时调度 |
-| [app.py](app.py) | 内部 `_create_tenant_app`、Pydantic 契约、中间件、系统/会话/聊天/个人记忆/工具/Drift/MCP/Skills 路由、JSON 服务入口 |
-| [governance.py](governance.py) | Agent 注册与密钥管理、空间授权、共享记忆提议/审批/检索/撤回及审计路由 |
-| [__init__.py](__init__.py) | 稳定导出 `create_app` |
-| [../security.py](../security.py) | 请求体上限、Origin、可选服务 Token 和限流 |
+| --- | --- |
+| [gateway.py](gateway.py) | 注册/登录/退出、Cookie 或 Bearer 认证、按账号运行时、请求隐私边界、OpenAPI 和 `/studio/` 托管 |
+| [app.py](app.py) | 内部租户工厂、个人会话/记忆/情景/工具接口、SSE、错误契约和组件生命周期 |
+| [claims.py](claims.py) | Claim 原话、候选/修订/明确审核、条件视图、结构化访问、统一查询与分析建议 |
+| [governance.py](governance.py) | 账号内 Agent key、共享空间 ACL、提案/审批/版本/撤回及审计 |
+| [research_runs.py](research_runs.py) | 当前账号实验 manifest/metrics 只读清单与指纹核验；不启动脚本 |
+| [__init__.py](__init__.py) | 导出正式 `create_app` |
 
-## 请求流程
+## 主要入口
 
-1. 网关 create_app 加载账号库，验证登录令牌，再为该用户调用内部工厂构建 [Store](../store.py)、[AgentService](../service.py) 和 [MemoryGovernance](../governance.py)，将治理 router 挂入应用。
-2. 中间件分配 `X-Request-ID`、执行 `RequestGate` 并记录 HTTP 指标。请求体用 Pydantic 校验；校验错误与显式业务异常返回 `{code, message, request_id}`。
-3. 聊天路由调用 `AgentService.chat_with_trace`；流式路由发送 SSE。每个会话用独立锁限制并发 turn，取消路由停止活动任务。
-4. 个人记忆路由使用 [MemoryEngine](../memory/README.md) 和审核队列；共享路由由 `X-Agent-Key` 认证，再由治理层在每次操作时执行空间 ACL。管理员创建/禁用/轮换 Agent key 及导入旧记忆走 `/api/governance`。
-5. 生命周期启动/停止 MCP、自动记忆 worker、情景归档维护和 Drift worker；取消后台任务后关闭数据库；根路径返回 JSON 导航。
+| 路径 | 行为 |
+| --- | --- |
+| `/`、`/api/health`、`/docs`、`/openapi.json` | JSON 导航、服务存活、Swagger 与接口模式；健康成功不表示模型可用 |
+| `/api/auth/register`、`/api/auth/login`、`/api/auth/me`、`/api/auth/logout` | 账号注册、登录会话和退出 |
+| `/studio/` | 同源公开静态壳；页面数据仍需登录，未构建时返回 503 |
+| `/api/sessions`、`/api/sessions/{id}/chat/stream` | 当前账号会话、聊天和 SSE；聊天 API 保留，旧聊天前端已移除 |
+| `/api/memories`、`/api/memory-reviews`、`/api/messages/{id}/source` | 普通记忆、自动候选审核与原话回查 |
+| `/api/claim-slots`、`/api/claim-source/{id}`、`/api/claims` | 12 槽位、来源资格与结构化候选/版本/审核 |
+| `/api/claim-views`、`/api/memory-access` | 条件视图及明确槽位/条件/双时间访问 |
+| `/api/memory-query`、`/api/claims/{id}/analyze` | 有限中文解析、真实候选诊断/整组选择和明确请求的审核建议 |
+| `/api/memory-layers`、`/api/episodes` | 分层配置、活动情景及管理归档 |
+| `/api/shared/*`、`/api/governance/*` | 独立共享记忆治理；不能只凭 Agent key 绕过用户登录 |
+| `/api/research-runs` | 当前账号规范运行记录；不返回原始 prompt、gold 或密钥 |
+| `/api/tools`、`/api/mcp`、`/api/skills`、`/api/drift`、`/api/traces`、`/metrics` | 扩展状态与诊断；业务和指标需要登录 |
 
-## 主要路径与边界
+## 权限与生命周期
 
-| 路径 | 功能 |
-|---|---|
-| `/api/sessions`、`/api/sessions/{id}/chat/stream` | 会话管理、对话和 SSE |
-| `/api/memories`、`/api/memory-reviews` | 个人记忆与自动提取审核 |
-| `/api/memory-layers`、`/api/episodes` | 分层配置/统计与个人任务情景的回放、固定、归档和维护 |
-| `/api/governance/agents`、`/api/governance/spaces/{id}/import-memory/{id}` | 管理员身份与旧记忆导入 |
-| `/api/shared/spaces`、`/api/shared/proposals`、`/api/shared/memories`、`/api/shared/events` | 共享记忆空间、提议、查询和审计 |
-| `/api/tools`、`/api/mcp`、`/api/skills`、`/api/drift`、`/api/traces` | 扩展与诊断 |
-| `/docs`、`/openapi.json`、`/metrics` | 运行时接口文档与可选指标 |
+Cookie 为 HttpOnly/SameSite；网关校验 Origin、跨站请求与分块请求体大小，非回环远程业务要求 HTTPS。模型配置写接口由本机管理员维护，普通注册用户不能把服务密钥重定向至任意地址。配置中 `api_token` 为空不取消正式网关登录。当前租户池最多 32 个驻留账号运行时，未实现多节点调度。
 
-正式入口所有业务先验证用户会话，数据库及各运行时组件按账号隔离。`/api/shared/*` 还需要该账号库里的 Agent key，不能单凭 Agent key 登录。内部治理管理员接口保留本机回环限制。注册登录、qin 密码、数据目录和保护见 [用户隔离](../../docs/implemented/用户登录与数据隔离.md)。写工具调试执行另需 `confirm_write=true`，不等于共享空间审批。个人与共享记忆 API 的数据表、权限和召回路径保持分离。
+每个租户 lifespan 启停 MCP、候选抽取 worker、情景维护及 Drift；结束任务后再关闭 Store。会话轮次有锁与取消机制。个人记忆、Claim 和共享记忆表/权限分开；工具调试 `confirm_write=true` 不等同于 Claim 或共享提案批准。
 
-`/api/episodes` 是个人治理视图，能回放过期归档；`recall_episodes` 仍只召回活动、未过期或固定的记录。管理读取不会将归档重新注入。共享 Agent key 不绕过这些新路径的全局认证。情景关闭时响应明确报告不可用，不替用户删除现有数据。
+Claim 审批带预期修订号并重新核对来源；模型支持度仅是未持久化建议。`/api/memory-query` 不调用 reader、不写会话或自动批准。只读研究记录拒绝跨账号、路径跳转、链接目录与指纹不匹配产物。请求/响应完整字段以 Swagger 和接口文档为准。
 
-## 从仓库根目录验证
+## 验证
 
-```bash
-python -m pytest -q tests/test_core.py tests/test_memory_review.py tests/test_governance_api.py
-python -m compileall -q memoria
+在仓库根目录：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_user_privacy.py tests/test_claims_api.py tests/test_memory_studio.py tests/test_governance_api.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_memory_review.py tests/test_mcp_lifecycle.py
 ```
 
-## Claim接口
-
-[claims.py](claims.py)组装claim-slots、claims及抽取/审核/修订/历史、claim-views、memory-access路由。所有业务通过网关选择账号；请求不能覆盖user_id，ClaimError使用统一错误契约。schema-only路由只生成OpenAPI，不开启个人库。[完整说明](../../docs/implemented/Claim条件视图与访问路由.md)。
-
-## Memory Studio迭代
-
-新增/api/memory-query与Claim source/analyze入口由claims.py组装；research_runs.py只读服务器绑定账号的规范实验metadata/metrics。gateway同源托管构建后的/studio/公开壳，业务仍鉴权。详见[Memory Studio](../../docs/implemented/MemoryStudio与统一记忆访问.md)。
+这些测试验证权限、契约与事务，不证明真实 reader 效果或部署可用性。Studio 构建与使用见 [studio/](../../studio/README.md)。

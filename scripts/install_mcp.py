@@ -1,6 +1,7 @@
 """Install pinned MCP servers into a project-local runtime, never into base."""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import platform
@@ -18,6 +19,8 @@ ASSET = "github-mcp-server_Windows_x86_64.zip"
 
 
 def main():
+    # Parse before touching the local runtime: --help must not install anything.
+    argparse.ArgumentParser(description=__doc__).parse_args()
     if sys.platform != "win32" or platform.machine().lower() not in {"amd64", "x86_64"}:
         raise SystemExit("This installer targets Windows x86_64; use the corresponding official binary on other OSes.")
     RUNTIME.mkdir(exist_ok=True)

@@ -1,26 +1,24 @@
-# Drift：空闲后台轮次
+# Drift：默认关闭的空闲整理
 
-[返回核心包](../README.md) · [运行时](../runtime/README.md) · [Skills](../skills/README.md) · [可观测性](../observability/README.md)
+[核心包](../README.md) · [运行时](../runtime/README.md) · [技能](../skills/README.md) · [追踪](../observability/README.md)
 
-## 文件与调用流程
+[worker.py](worker.py) 的 DriftWorker 负责轮询/跳过/技能轮转/手动执行；[service.py](../service.py) 装配生命周期，[Store](../store.py) 保存 drift_runs 与接续摘要。
 
-| 文件 | 职责 |
-|---|---|
-| [worker.py](worker.py) | `DriftWorker` 调度、状态查询、技能轮转、执行与结果记录 |
-| [__init__.py](__init__.py) | 导出 `DriftWorker` |
-| [../service.py](../service.py) | 装配 worker，API lifespan 启停轮询 |
-| [../store.py](../store.py) | `drift_runs` 状态、预算统计和最近成功摘要 |
+启用后检查活跃用户 turn、静默、空闲、间隔、日预算和上一轮，再于独立整理会话复用 runtime。同技能成功摘要可续用，记录步骤/摘要/trace。
 
-启用后，`run_loop` 周期性检查用户 turn 是否在运行、静默时段、距最近用户消息的空闲时间、冷却间隔、当天预算和上一轮状态。满足条件才从配置的技能名单中轮转一个，在独立的“〔Drift〕空闲整理”会话调用 [AgentRuntime.run](../runtime/agent.py)。同一技能上一轮成功摘要作为接续参考；运行记录保存步骤、摘要、trace ID 与结果状态。
+skip_memory_enqueue=True 阻止自身普通抽取，Drift 也不生成自身情景。白名单收紧写工具，forget_memory 硬阻断。Markdown 开启时摘要可进入 PENDING.md 历史容器，不是批准 Claim 或 SQLite 审核。
 
-Drift 将 `skip_memory_enqueue=True`，不触发普通聊天的自动提取任务；写工具只允许配置白名单，`forget_memory` 被硬阻断。若 Markdown 层开启，完成摘要可追加到 `PENDING.md`，它不是 SQLite 审核队列。`GET /api/drift` 查询状态和近期运行；`POST /api/drift/run` 手动触发。`force=true` 可越过常规时间和预算门槛，仍不会与活跃用户 turn 或未结束的上一轮重叠。
+## 配置和边界
 
-## 配置与边界
+`[agent.drift]` 默认关闭，配置空闲/间隔/步数/日预算/静默/技能/写工具/时区。GET /api/drift 与 POST /api/drift/run 均需登录；force 越过时间/日预算，不与活跃 turn 或未完任务重叠。
 
-[config.example.toml](../../config.example.toml) 的 `[agent.drift]` 默认 `enabled=false`；可配置 `min_idle_seconds`、`interval_seconds`、`max_steps`、`daily_budget`、`quiet_hours`、`allowed_skills`、`allow_write_tools` 和 `timezone`。配置兼容旧 `[proactive.drift]` 字段。执行仍依赖模型与可用技能；Drift 不会自动向独立的 [多 Agent 共享记忆](../../docs/implemented/记忆治理与多Agent共享记忆.md)写提议。
+正式登录网关将账号 drift_enabled 设为 false，根模板开关不代表为注册用户开启自动任务。接口以实际跳过原因/状态为准。模型调用可能收费；未实现外部通知、持久分布式队列或共享空间自动提案，completed 只表示执行状态。
 
-## 从仓库根目录验证
+## 验证
 
-```bash
-python -m pytest -q tests/test_round11_drift.py
+```powershell
+# 仓库根目录
+.\.venv\Scripts\python.exe -m pytest -q tests/test_round11_drift.py
 ```
+
+工程开关/跳过/预算/接续测试不证明真实整理质量。

@@ -1,25 +1,18 @@
-# Weather：天气查询
+# Weather：在线天气文本
 
-[技能目录](../README.md) · [运行时指令](SKILL.md) · [HTTP 工具](../../memoria/tools/http_get.py)
+[技能目录](../README.md) · [运行时指令](SKILL.md) · [HTTP](../../memoria/tools/http_get.py)
 
-用于查询当前天气和简短预报，触发词包括“天气”“气温”“下雨”、`weather` 和 `forecast`。该技能通过 `http_get` 获取文本，不执行 shell，也不自带天气数据。
+由 http_get 请求文本，不执行 shell、不自带离线天气。触发词含天气/气温/下雨、weather/forecast。
 
-## 数据流程
+按用户城市优先 wttr.in 紧凑结果；必要时 Open-Meteo 需要可信经纬度，当前无地理编码工具。地点或网络不足时明确失败，不能生成天气当已查询。
 
-- 首选 wttr.in，按用户指定城市请求一行或紧凑预报。
-- 必要时使用 Open-Meteo；需要可信的经纬度输入，当前没有自动地理编码工具。
-- 输出地点、温度与天气状况，再给简短建议；数据不可用时明确说明获取失败。
+模板白名单 wttr.in/api.open-meteo.com/open-meteo.com；实际可用性依赖网络/管理员配置。只校验初始主机，不是完整重定向隔离；无 Key 不等于离线，不自动保存地点为个人事实。
 
-默认 `[agent.tools].http_allowed_hosts` 包含 `wttr.in`、`api.open-meteo.com` 和 `open-meteo.com`。数据源仍依赖网络、服务可用性和当前接口；“无需 API Key”不表示离线可用。
+## 验证
 
-## 使用与验证
-
-示例：“查一下上海现在的天气。”
-
-从仓库根目录运行：
-
-```bash
-python -m pytest -q tests/test_skills.py -k 'builtin_skills_directory_present or http_host_allowlist'
+```powershell
+# 仓库根目录
+.\.venv\Scripts\python.exe -m pytest -q tests/test_skills.py -k 'builtin_skills_directory_present or http_host_allowlist'
 ```
 
-这些测试验证目录存在与主机匹配规则，不会访问真实天气服务。
+仅目录与主机匹配检查，不访问天气服务或报告效果分数。

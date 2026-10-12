@@ -65,7 +65,7 @@ max_tokens = 1024
 | 流式工具 | 有 tools 的回合先完成生成、解析后返回带 `index` 的结构化调用；不会逐 token 发布尚未完成的工具参数 |
 | 完成与 usage | 正确区分 stop/length/tool_calls；`include_usage=true` 时最后单独返回 `choices=[]` usage chunk，然后 `[DONE]` |
 | `POST /v1/embeddings` | 单个字符串或 1–64 个非空字符串；512 维、FP32、CLS、L2；float 与 little-endian float32 base64 |
-| Embedding usage | 实际编码的 token 数，包括特殊 token，按 512-token 截断后的输入统计 |
+| Embedding usage | 实际编码的 token 数，包括特殊 token；单块最多 512 token，直接超长输入拒绝，生产文档先完整分块 |
 | 错误 | 参数错误 400、未知模型 404、队列满 429、超时 504；OpenAI 形状 `error.message/type/param/code` |
 
 当前为纯文本 CausalLM 推理；虽然 Qwen checkpoint 含视觉组件，这个后端不处理图片/视频/音频。`n>1`、stop sequences、seed、response_format、logprobs、strict schema decoding、强制 required/指定工具等不支持的参数返回 400，而不是假装生效。SDK/API 的完整兼容范围应以此表为准。
@@ -91,7 +91,7 @@ HTTP BGE 与原 `local://` BGE 使用不同索引命名空间，切换后旧向�
 ## 工程验证与当前边界
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_local_llm.py tests/test_local_embedding.py tests/test_embedding_client.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_local_llm_slots.py tests/test_llm_backends.py tests/test_openai_compat.py tests/test_local_embedding.py tests/test_embedding_client.py -q
 ```
 
 旧合成 smoke 脚本和报告已移除。生产接口继续使用 httpx，不要求 OpenAI SDK。真实长期记忆实验见 [计划](../plans/长期陪伴记忆研究与实验计划书.md)；接口兼容不等于模型抽取/回答质量已经达标。

@@ -1,23 +1,50 @@
-# 真实来源与人工评测
+# Experiments：来源、标注、runner 与评分
 
-`history.py` 管理账号独立的不可覆盖来源、同意范围、人物开发/测试划分、独立人工审核及仲裁，冻结后分离模型 inputs 与 scorer gold。`runner.py` 复用 `records.py` / `roles.py`，执行原话抽取诊断及 B0 最近窗口、B2 FTS5 trigram BM25 读取基线，评分单独执行，不修改生产记忆。
+[核心包](../README.md) · [研究操作](../../docs/implemented/真实历史标注与评测.md) · [研究计划](../../docs/plans/长期陪伴记忆研究与实验计划书.md)
 
-标注必须声明 `annotator.kind=human/ai_assisted`。真人填写稳定去标识化 `independence_id`，AI 填 tool 且不声明真人身份；模板默认 unspecified，不能直接提交。`annotation_seconds` 是实际标注会话墙钟，AI 时间不当人工工时。test 冻结须两名独立声明的真人；不同版本 ID 不代表不同人。协议和评分保留 gold 的审核来源。2026-10-12 已冻结 `lccc50-codex-dev-qa-20261012-v2`：50 段/206 原话审核覆盖、32 条陈述、64 QA（41 可知、23 不可知），仅 AI 辅助开发 gold，真人审核暂跳过、六轮真实 QA 调用已完成。
+本包在账号私有实验目录保存真实来源与不可覆盖产物。研究读取/标注/评分不修改生产记忆；公开匿名对话不得虚构稳定人物/日期或转为账号本人画像。
 
-本地管理员入口为 [research.py](../../scripts/research.py)，操作说明与格式见 [研究工具文档](../../docs/implemented/真实历史标注与评测.md)。50 段 LCCC 公开对话仅做独立来源的开发诊断，不构造个人连续经历。临时工程输入与 MockTransport 仅存在测试，不作为真实数据或成绩。
+## 文件映射
 
-`B2_fts_compact` 是逐字分隔语料的显式对照：临时检索键/查询 NFKC 去空白，返回原始消息与证据；原版 `B2_fts` 和无命中不回退行为保留。用户已选择跳过独立真人审核，允许使用当前 AI gold 开发对照；不解除真实连续历史的长期效果数据要求。
+| 文件 | 职责 |
+| --- | --- |
+| [history.py](history.py) | 来源/用途同意、人物划分、审核/仲裁、原文核验及 inputs/gold 分离冻结 |
+| [runner.py](runner.py) | extract/qa/retrieval-only、严格答案/引用、全部失败分母、回放恢复和独立评分 |
+| [retrieval.py](retrieval.py) | 每题可见前缀的 BGE Dense、compact 词面/RRF，ID/SHA/namespace 绑定缓存 |
+| [records.py](records.py) | 代码/dirty 指纹、环境/模型/数据 SHA、阶段/usage 与产物账本 |
+| [roles.py](roles.py) | reader/extractor/decider/judge 参数与实际调用 |
+| [access_eval.py](access_eval.py) | 实际账号一致副本的 Claim 访问/缓存/失效成本和来源资格 |
 
-两组各三轮、384 次真实 DeepSeek 调用已完成；逐轮结果、阶段耗时、token、引用越界和未测项见 [QA 对照结果](../../docs/implemented/真实QA对照评测结果.md)。受影响研究测试 38 passed / 22.31 s；研究原始产物留在账号私有目录，Git 只保存汇总。
+## 本地 CLI
 
-## 自动前缀与视图评测
+仓库根目录，USERNAME 替换为已有账号：
 
-[retrieval.py](retrieval.py)按每题可见原话前缀做本地BGE完整分块Dense及compact词面/Dense RRF(k=60)，向量缓存namespace/ID/SHA绑定，绝不扩大候选范围。runner支持retrieval-only（0 reader调用、独立gold scorer）和同输入qa；原版窗口/FTS保留。
+```powershell
+.\.venv\Scripts\python.exe scripts/research.py --user USERNAME --help
+.\.venv\Scripts\python.exe scripts/research.py --user USERNAME run --help
+.\.venv\Scripts\python.exe scripts/research.py --user USERNAME benchmark-access --help
+.\.venv\Scripts\python.exe scripts/evaluate_retrieval.py --help
+```
 
-[access_eval.py](access_eval.py)只读备份实际账号库，在副本比较空/实际状态下的无缓存、显式缓存及失效读取，记录成本/等价/真实来源资格。0 Claim只能测空状态开销。固定调用编排为[evaluate_retrieval.py](../../scripts/evaluate_retrieval.py)，要求clean固定代码；[说明](../../docs/implemented/DenseRRF自动评测与视图性能.md)。人工语义与偏好暂缓，自动指标不冒充真实长期效果。
+获准来源 → 标注模板/提交 → 独立审核或明确 AI 辅助开发 → 冻结 → reader 仅见 inputs/历史前缀 → scorer 单独见 gold。格式/参数见研究文档；远程研究调用须显式 --allow-remote。help 不执行模型。
 
-本轮固定21轮已完成：12轮纯召回/768题次，窗口/Dense/RRF各3轮实际QA/576调用；字面匹配166/161/158（各192题次），证据召回都100%，不是语义正确率。完整失败/成本及独立空状态5400次基准见[结果](../../docs/implemented/DenseRRF自动评测与视图性能.md)。评分human_scoring_policy_version=2：无judgments及无效预测保持human_correct=null，执行失败单独计status/字面失败分母；保存新修订、不改旧预测或旧score。
+B2_fts 无命中不暗退窗口，B2_fts_compact 只规范化临时检索键、保留原文。Dense 完整分块只见当前题前缀，跨题缓存不扩大历史，RRF 参数/范围进账本。retrieval-only 无 reader，qa 另做真实回答。
 
-## Memory Studio迭代
+## 标注和统计边界
 
-Memory Studio只读显示账号现有manifest/执行metrics并核验指纹，原始gold/prompt、独立score修订和逐题失败钻取不经该入口暴露；不通过网页启动研究脚本，不修改原始21轮成绩。[界面说明](../../docs/implemented/MemoryStudio与统一记忆访问.md)。
+标注声明 human/ai_assisted；真人用去标识化 independence_id，AI 声明 tool，不把不同版本号当独立人。模板 unspecified 不能提交，test 冻结需两名独立声明真人及仲裁；AI 墙钟不当人工工时。
+
+未提交/不可用人工评分保持 human_correct=null；失败进入 status/字面分母，不伪造人工 False。保留失败、未知 usage 与新评分修订，不覆盖旧运行。字面匹配/引用召回不等于语义质量、偏好遵守或长期效果。
+
+2026-10-12 既有开发协议 lccc50-codex-dev-qa-20261012-v2：50 匿名对话/206 原话/64 QA（41 可知、23 不可知），AI 辅助 gold，真实连续人物 0。此前六轮 384 次 QA 与后续固定 21 轮（768 纯召回题次、576 reader）为不同批次，不合并。后批窗口/Dense/RRF 字面匹配 166/161/158（各 192），召回补全没有带来本批字面收益。分母/来源见 [自动评测](../../docs/implemented/DenseRRF自动评测与视图性能.md)及 [此前 QA](../../docs/implemented/真实QA对照评测结果.md)。
+
+access_eval 用真实账号副本，0 Claim 仅为空状态开销，不证明正向视图加速。Studio 只读规范 manifest/执行 metrics，核验 owner/SHA，不展示原始 gold/prompt、独立 score 或逐题钻取，不启动 runner。人工项按用户选择暂缓，真实长期历史缺口仍保留。
+
+## 验证
+
+```powershell
+# 仓库根目录
+.\.venv\Scripts\python.exe -m pytest -q tests/test_research_workflow.py tests/test_source_retrieval.py tests/test_experiment_records.py tests/test_dataset_import.py tests/test_memory_studio.py
+```
+
+隔离临时输入与故障替身只验证协议/泄漏/恢复，不充当用户历史或研究成绩。

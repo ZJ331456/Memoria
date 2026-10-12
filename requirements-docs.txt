@@ -1,0 +1,2 @@
+# Optional README chart rendering only; not required to run the memory service.
+matplotlib==3.10.9

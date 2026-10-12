@@ -1,0 +1,33 @@
+{
+  "source_summary_sha256": "fb066686b9c86dff087bd3f7c98e0ed0692adda8d2e125ae998edcdcc310ea00",
+  "matplotlib": "3.10.9",
+  "measured_commit": "040427c386d989d20e1afdea380a83276e707c9c",
+  "new_model_calls": 0,
+  "new_scoring": false,
+  "files": {
+    "source-recall.png": {
+      "sha256": "9e330aa8fb23ff4816de0fade2dcf46771e56c668ff99d227f85a7cb9111e1c3",
+      "bytes": 88607
+    },
+    "source-recall.svg": {
+      "sha256": "33711ad3891f950d44154fd05783f51da2970b0ae29108917b47201b954f8313",
+      "bytes": 63214
+    },
+    "qa-literal-and-citations.png": {
+      "sha256": "506e25a9dcc1da970040c862de0e436917adcc02d6278155ced2ff2e885b6955",
+      "bytes": 88441
+    },
+    "qa-literal-and-citations.svg": {
+      "sha256": "8e8abd20cada1e1bfeb24f0762c96386e65d9019af27b97e32c602e0fa2b555b",
+      "bytes": 67416
+    },
+    "empty-claim-access.png": {
+      "sha256": "1a4985e7f58f9ca67d9600d06f9a5a2d16c7743d492f12aaf1a6b089345bd043",
+      "bytes": 83869
+    },
+    "empty-claim-access.svg": {
+      "sha256": "2be2ee5b216f7526c331e186c25fa6f993c3a3c038ae631068dc8c91c9df0944",
+      "bytes": 63138
+    }
+  }
+}

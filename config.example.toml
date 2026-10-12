@@ -96,7 +96,7 @@ directory = "data/markdown"
 # B) 本地 HTTP BGE（无需 API Key），serve_local_llm.py 默认提供 /v1/embeddings。
 # C) 进程内本地 BGE：model = "model/bge-small-zh-v1.5"，base_url = "local://cuda"
 #    设备也可用 local://cpu | local://auto。
-#    下载与环境见 docs/本地Embedding配置.md
+#    下载与环境见 docs/implemented/本地Embedding配置.md
 # ---------------------------------------------------------------------------
 [memory.embedding]
 model = "bge-small-zh-v1.5"
@@ -114,7 +114,7 @@ max_retries = 3
 backoff_seconds = 5
 
 # 分层预算是字符上限（不是精确 token），适合本地单用户运行的调优起点。
-# 说明与来源：docs/memory-layers/README.md。共享记忆仍独立使用空间权限。
+# 说明与来源：docs/implemented/记忆分层与配置.md。共享记忆仍独立使用空间权限。
 [memory.layers]
 enabled = true
 episodic_enabled = true
@@ -137,7 +137,7 @@ host = "127.0.0.1"
 port = 2237
 
 [server.security]
-# 留空保持本地免登录；生产环境建议设为 ${MEMORIA_API_TOKEN}。
+# 正式网关始终要求账号登录；此内部服务 Token 不替代用户登录。
 api_token = ""
 allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 rate_limit_per_minute = 0

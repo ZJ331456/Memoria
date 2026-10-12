@@ -31,7 +31,7 @@ BGE中文small v1.5原话完整tokenizer分块，父消息最佳块余弦；quer
 
 BGE本地CUDA/512维/FP32，权重SHA `354763b9b1357bc9c44f62c6be2276321081ed2567773608c0d0785b61d5a026`，namespace `embedding-local:fb2b88ca2ec04dc58274575b1e74358195015e24f8ecc3e98c1a8c5b32f9de65`。设备RTX 4060 Laptop 8188 MiB；Python3.13.5、torch2.9.0+cu126、transformers5.5.3。`--embedding-device auto`仅本次运行直读已有权重，未改生产HTTP配置/base环境。GPU/CPU资源峰值未采样。
 
-Reader为deepseek-flash非思考模式，温度0/top_p1、1024输出、无重试、并发1。服务端权重revision/供应商缓存行为未知，不能保证每次复现相同答案；远程结果不作为约1B或本地Qwen能力。原始prompt/response/error/usage仅在账号独立实验目录，不进Git。源检索评测接线不等于生产memory-access已加入Dense补检；生产Claim仍与匿名来源分域。
+Reader为deepseek-flash非思考模式，温度0/top_p1、1024输出、无重试、并发1。服务端权重revision/供应商缓存行为未知，不能保证每次复现相同答案；远程结果不作为约1B或本地Qwen能力。原始prompt/response/error/usage仅在账号独立实验目录，不进Git。本批040427c实验时，生产memory-access尚未接入Dense补检；后续6ea773f已实现普通记忆RRF来源补检，见[统一访问](MemoryStudio与统一记忆访问.md)，其质量不由本批成绩证明。生产Claim仍与匿名来源分域。
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/research.py --user qin run --mode retrieval --protocol lccc50-codex-dev-qa-20261012-v2 --baseline B2_rrf --embedding-device auto
@@ -104,7 +104,7 @@ TTFT记录实际首个可见流式文本，不是供应商服务端首token。ca
 
 自动来源资格核验：1个公开诊断包/206原话/0获准连续真实人物，旧归档未读。真实长期保持、真实变化恢复和越来越熟悉的效果均null/未测；根因是连续人物/日期资料不足，不能用匿名来源组或消息间距代替。
 
-人工支持度/语义QA/独立真人gold/成对陪伴偏好按用户要求暂缓；生产明确批准权限没有改成自动批准。后续有真实新资料才开展Claim写入与已审核状态的B5/B6质量/性能对照；生产Dense/RRF补检和一般事件回查另验收。当前来源召回已足，下一项自动诊断应定位回答/引用错误，保留旧gold/预测；修改协议时建立新版本，不根据本轮失败回改既有成绩。
+人工支持度/语义QA/独立真人gold/成对陪伴偏好按用户要求暂缓；生产明确批准权限没有改成自动批准。后续有真实新资料才开展Claim写入与已审核状态的B5/B6质量/性能对照；生产普通记忆RRF补检已接线，一般事件回查与实际质量仍另验收。当前来源召回已足，下一项自动诊断应定位回答/引用错误，保留旧gold/预测；修改协议时建立新版本，不根据本轮失败回改既有成绩。
 
 完整工程验证371 passed / 84.82 s。工程临时输入覆盖未来缓存门控、融合去重/原文、坏分块/向量拒绝、无reader纯检索、注册分母/基线拒绝、实际副本隔离与checkpoint SHA；不作为用户实验。此前两个dirty预检（64题Dense/RRF各一次）不计注册重复，未据预检调参数/改gold。
 

@@ -1,49 +1,54 @@
 # Memoria 核心包
 
-[返回项目首页](../README.md) · [系统架构](../docs/implemented/系统架构与实现说明.md) · [API 文档](../docs/implemented/API接口文档.md)
+[项目首页](../README.md) · [文档导航](../docs/README.md) · [系统架构](../docs/implemented/系统架构与实现说明.md) · [研究计划](../docs/plans/长期陪伴记忆研究与实验计划书.md)
 
-此目录承载本地个人 Agent 的对话运行时，以及独立的多 Agent 共享记忆治理层。HTTP 入口位于 [api/](api/README.md)；一轮个人对话由 [service.py](service.py) 装配 [runtime/](runtime/README.md)、工具、记忆和模型。共享记忆由 [governance.py](governance.py) 管理空间、授权、提议、审批、版本和审计，走 [api/governance.py](api/governance.py)；**它不会自动进入个人对话的记忆召回或工具写入路径**。已有个人记忆可由管理员发起导入提议，批准前仍不可被共享检索。
+此目录实现账号隔离的记忆 HTTP 服务。正式入口是 `main.py → api.create_app`；网关登录后以服务器生成的 UUID 选择独立数据库、运行时、Markdown 和 MCP 配置。Memory Studio 调用同一网关，不另建数据源。
 
 ## 模块导航
 
-| 模块 | 职责 |
-|---|---|
-| [api/](api/README.md) | FastAPI、SSE、鉴权、个人记忆接口与共享治理接口 |
-| [runtime/](runtime/README.md) | 一轮对话、工具循环、会话压缩与取消 |
-| [memory/](memory/README.md) | 个人语义事实、任务情景、分层配置/配额、过期归档与人工审核 |
-| [lifecycle/](lifecycle/README.md) | 对话五阶段异步扩展点 |
-| [prompting/](prompting/README.md) | 上下文帧组装和字符预算 |
-| [tools/](tools/README.md) | 工具注册、校验、执行、授权和按需发现 |
-| [mcp/](mcp/README.md) | 外部 stdio MCP server 接入工具注册表 |
-| [skills/](skills/README.md) | 仅扫描技能目录中的 `SKILL.md` 并选择注入 |
-| [drift/](drift/README.md) | 空闲时的限额后台 Agent 轮次 |
-| [observability/](observability/README.md) | 运行追踪、事件总线、请求上下文和指标 |
+| 目录 | 职责与入口 |
+| --- | --- |
+| [api/](api/README.md) | 登录网关、个人记忆与 Claim、共享治理、SSE、只读实验账本和 Studio 静态托管 |
+| [memory/](memory/README.md) | 普通记忆版本、长文分块、混合召回、统一访问、中文时间、整组证据选择及审核辅助 |
+| [llm/](llm/README.md) | 本地与远程 OpenAI 兼容客户端及本地文本/Embedding 服务 |
+| [runtime/](runtime/README.md) | 一轮对话、有限个人问题的统一访问、工具循环、压缩、取消与 trace |
+| [experiments/](experiments/README.md) | 真实来源、标注冻结、前缀隔离 runner、独立评分和实际账号副本基准 |
+| [prompting/](prompting/README.md) | 低信任上下文帧、分区字符预算、工具协议与原子状态保护 |
+| [tools/](tools/README.md) | 工具注册、按需发现、参数校验、授权、调用次数和输出限额 |
+| [mcp/](mcp/README.md) | 每账号外部 stdio MCP 生命周期与工具接入 |
+| [skills/](skills/README.md) | 扫描和加载项目 `skills/*/SKILL.md`，不执行技能脚本 |
+| [drift/](drift/README.md) | 默认关闭的限额空闲整理轮次 |
+| [lifecycle/](lifecycle/README.md) | 五个对话扩展阶段及处理器顺序 |
+| [observability/](observability/README.md) | 请求上下文、事件、trace、实际阶段耗时和 Prometheus 文本 |
 
 ## 根级文件
 
 | 文件 | 职责 |
-|---|---|
-| [config.py](config.py) | 加载 [config.example.toml](../config.example.toml) 与环境变量占位符 |
-| [llm/client.py](llm/client.py)、[models_config.py](models_config.py) | OpenAI-compatible 本地/远程调用、模型配置展示与更新 |
-| [service.py](service.py) | 组装个人运行时、抽取与情景维护 worker、Drift、Skills 与 MCP |
-| [store.py](store.py)、[vector_index.py](vector_index.py) | SQLite 数据、FTS、任务租约及可选 sqlite-vec 索引 |
-| [governance.py](governance.py) | 与个人 `memories` 表分离的 Agent 空间、权限和审核记录 |
-| [security.py](security.py) | 可选服务级 Token、Origin、请求大小和速率限制 |
+| --- | --- |
+| [config.py](config.py)、[models_config.py](models_config.py) | 配置加载、角色选择和管理员模型覆盖；公开返回不包含密钥 |
+| [accounts.py](accounts.py)、[private_files.py](private_files.py) | 密码散列、登录令牌、账号目录和本机私密 JSON 保护 |
+| [service.py](service.py) | 组装账号内 Store、LLM、记忆、Claim、runtime 与后台 worker |
+| [store.py](store.py)、[vector_index.py](vector_index.py) | SQLite、FTS、来源/有效区间、持久任务及可选 sqlite-vec |
+| [claims.py](claims.py) | 12 槽位 Claim、原话 span/SHA、明确审核、不可变修订、条件视图及双时间访问 |
+| [governance.py](governance.py) | 独立共享空间、Agent key、ACL、提案、审批、CAS 和审计 |
+| [security.py](security.py) | 内部路由的 Origin、请求体、可选服务 Token 与速率限制；不替代正式网关登录 |
+| [local_llm.py](local_llm.py) | 旧导入兼容入口；新模型执行代码位于 `llm/backends/process_engine.py` |
 
-个人对话的主路径是 `api → AgentService → AgentRuntime → MemoryEngine / ToolRegistry → Store / LLMClient`。共享治理的主路径是 `api/governance.py → MemoryGovernance → Store.db`，由 Agent key 识别主体，再按空间角色检查每次读写。两条路径共享 SQLite 连接，但使用不同表和访问规则；更多边界见[记忆治理与多 Agent 共享记忆](../docs/implemented/记忆治理与多Agent共享记忆.md)。
+## 数据与访问边界
 
-## 从仓库根目录验证
+普通 `memories`、结构化 Claim 和共享空间使用不同表和治理规则。Claim 不投影为普通记忆或向量；来源补检也不能把未批准原话变成已批准画像。共享空间需要登录及账号内的 Agent key/ACL，尚未自动注入个人对话运行时。
 
-```bash
-python -m pytest -q tests/test_core.py tests/test_governance_core.py tests/test_governance_api.py
+`MemoryAccessOrchestrator` 将已批准 Claim、有限中文时间区间、合法普通记忆来源和字符预算选择连接到 `/api/memory-query`。少量个人状态问题复用该路径，一般任务保持既有规划流程；API 只读诊断不调用 reader。详情见 [Claim](../docs/implemented/Claim条件视图与访问路由.md)与 [Studio/统一访问](../docs/implemented/MemoryStudio与统一记忆访问.md)。
+
+SQLite 与文件隔离已经实现，不等于商用多节点数据库、备份恢复、完整数据加密或服务 SLA。公开对话归属实验空间，不代表账号本人事实；长期质量和商用缺口见研究计划。
+
+## 验证
+
+在仓库根目录使用项目 `.venv`：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests/test_user_privacy.py tests/test_claims.py tests/test_claims_api.py tests/test_memory_studio.py
+.\.venv\Scripts\python.exe -m pytest -q tests/test_memory_consistency.py tests/test_governance_core.py tests/test_governance_api.py
 ```
 
-以上单元测试可在不配置在线模型的情况下运行；在线聊天仍需要有效模型配置。
-
-## 结构化状态
-
-[claims.py](claims.py)提供12槽位Claim、原话证据、明确审批/不可变修订、条件视图与四路访问；由service绑定服务器登录UUID，同账号Store保存但不投影为普通memories。完整边界见[说明](../docs/implemented/Claim条件视图与访问路由.md)。
-
-## Memory Studio迭代
-
-新增[studio](../studio/README.md)专用记忆控制台；memory/access.py将Claim、有限中文时间、来源补检和字符证据组连接到API与有限个人问题运行时。候选分析仍为建议、批准仍显式；[完整边界](../docs/implemented/MemoryStudio与统一记忆访问.md)。
+完整测试导航见 [tests/](../tests/README.md)。临时输入只验证工程边界，不写入实际账号，也不作为长期陪伴成绩。

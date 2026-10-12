@@ -1,28 +1,33 @@
-# Observability：追踪、事件与指标
+# Observability：耗时、trace 与指标
 
-[返回核心包](../README.md) · [运行时](../runtime/README.md) · [API](../api/README.md)
+[核心包](../README.md) · [运行时](../runtime/README.md) · [实验账本](../experiments/README.md) · [API](../api/README.md)
 
 ## 文件映射
 
 | 文件 | 职责 |
-|---|---|
-| [context.py](context.py) | `RequestContext` 用 ContextVar 绑定 request/session/turn ID |
-| [events.py](events.py) | 进程内 `EventBus`，订阅和派发 turn 事件 |
-| [tracing.py](tracing.py) | `TurnTracer` 记录状态、步骤、耗时、召回 ID、工具链及 metadata |
-| [timing.py](timing.py) | 请求内阶段墙钟计时、失败次数；嵌套耗时重叠，不相加 |
-| [metrics.py](metrics.py) | `MetricRegistry` 统计 HTTP 请求，生成 Prometheus 文本 |
-| [../store.py](../store.py) | 持久化 turn trace 和运行计数 |
+| --- | --- |
+| [context.py](context.py) | ContextVar request/session/turn ID |
+| [events.py](events.py) | 进程 EventBus 订阅/派发和监听异常处理 |
+| [tracing.py](tracing.py) | 状态/步骤/召回 ID/工具/metadata 与常见凭据脱敏 |
+| [timing.py](timing.py) | 实际阶段墙钟、调用/失败和公开统计 |
+| [metrics.py](metrics.py) | HTTP 进程计数/耗时和 Store 的 Prometheus 文本 |
 
-一轮对话由 [AgentRuntime](../runtime/agent.py) 创建 tracer，成功、失败和取消均写入不同状态的 trace；`GET /api/traces` 可按会话查询。工具记录包含参数、状态、耗时和结果预览；召回快照只存 ID、类型、重要度和来源，不复制记忆正文。写入前递归遮蔽常见密钥字段，并对文本中的 Bearer token 与 `sk-...` 模式脱敏。**这不是任意敏感数据的全面脱敏**：工具参数和错误文本仍需按使用场景控制访问与保留时间。
+## 读取与解释
 
-`EventBus` 派发 `turn.before`、`turn.after_step`、`turn.failed` 等事件；监听器异常会记录日志，不使 turn 失败。它仅在当前进程内运行，不是持久化消息队列。
+GET /api/traces 读当前账号持久 trace。召回快照保存 ID/类型/重要度/来源；工具保存脱敏参数/状态/耗时/预览，完成/失败/取消分开。来源/候选/选择 trace 不表示 reader 正确。
 
-trace metadata 新增 `stage_timings` 与 `ttft`：压缩/planner、检索/编码/候选/融合、prompt、reader 和工具执行按实际路径计时。TTFT 只观察非空可见流式文本，排除 reasoning/tool delta，非流式为 null。实验的抽取/决策/回答角色及写入分块耗时另见[实验记录](../../docs/implemented/实验记录与长记忆分块索引.md)，未执行阶段不伪造零耗时结果。
+stage_timings 只记录执行过的压缩、规划、编码/检索、融合、prompt、reader 和工具。嵌套墙钟可能重叠，不直接相加。TTFT 仅非空可见流式文本，排除 reasoning/工具增量；非流式或未输出为 null。
 
-API 中间件写入请求 ID 与 HTTP 计数；`GET /metrics` 根据进程计数和 Store 的统计生成文本指标。HTTP 计数随进程重启清零，trace 保存在 SQLite。`[observability].metrics_enabled` 控制指标端点是否开放；服务 Token 启用时端点受同一认证保护。
+正式 /metrics 需登录，metrics_enabled=false 返回 404。HTTP 计数重启清零，turn/runtime/jobs 从 Store 汇总；没有完整分位直方图、跨进程汇聚/告警或商用 SLO。EventBus 不是持久队列。
 
-## 从仓库根目录验证
+## 隐私与验证
 
-```bash
-python -m pytest -q tests/test_core.py::test_trace_redacts_credentials tests/test_optimizations.py::test_trace_metadata_and_eval_metrics tests/test_round7_akashic.py::test_event_bus_and_request_context
+递归遮蔽常见密钥字段、Bearer 和部分 sk 模式，不是完整个人信息脱敏。参数/错误/预览仍可能有用户内容，需要生产访问与保留策略。实验原始 prompt/响应留账号私有目录，Studio 只读账本摘要和已核验数值。
+
+```powershell
+# 仓库根目录
+.\.venv\Scripts\python.exe -m pytest -q tests/test_core.py::test_trace_redacts_credentials tests/test_optimizations.py::test_trace_metadata_and_eval_metrics tests/test_round7_akashic.py::test_event_bus_and_request_context
+.\.venv\Scripts\python.exe -m pytest -q tests/test_experiment_records.py tests/test_memory_studio.py
 ```
+
+pytest 墙钟不是线上延迟，实际模型阶段见 [实验记录](../../docs/implemented/实验记录与长记忆分块索引.md)。

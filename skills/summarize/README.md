@@ -1,26 +1,20 @@
-# Summarize：材料摘要
+# Summarize：真实材料摘要
 
-[技能目录](../README.md) · [运行时指令](SKILL.md)
+[技能目录](../README.md) · [运行时指令](SKILL.md) · [工具](../../memoria/tools/README.md)
 
-用于总结用户提供的文本、过去对话、个人记忆或已获取的网页内容。触发词包括“总结”“摘要”“链接”、`summarize` 和 `transcript`；触发词提到视频并不意味着系统具备视频下载或转写功能。
+用于文本、历史对话、普通记忆和已获取网页。触发词含总结/摘要/链接、summarize/transcript；视频关键词不代表支持下载或转写。
 
-## 工作流程
+1. search_history/recall_memory 查实际材料，网页用 http_get。
+2. 给结论、重点、待办和未知，明确未获取部分。
+3. 保存先给候选，明确授权后调用普通 memorize。
 
-1. 对话和记忆材料通过 `search_history` / `recall_memory` 取得。
-2. 网页通过 `http_get` 拉取，要求初始 URL 主机满足 `[agent.tools].http_allowed_hosts`。
-3. 输出一句话结论、关键要点、待办与未决问题；可列出值得保存的候选。
-4. 只有明确确认后才建议使用 `memorize` 保存个人记忆。
+默认主机白名单只有天气服务，其他网页需管理员配置；重定向目标未完整隔离。截断不代表全文，动态/付费/不可达内容不得补写。技能不创建或批准 Claim，不改共享空间。
 
-默认 HTTP 白名单只包含天气服务；总结任意网页前需要显式配置对应主机。工具返回长度受限，不代表取得整篇文章。获取失败、付费内容、动态网页和视频没有自动绕过或转写机制，不能据此编造摘要。
+## 验证
 
-## 使用与验证
-
-示例：“总结我们关于发布流程的历史讨论，列出尚未决定的事项。”
-
-从仓库根目录运行：
-
-```bash
-python -m pytest -q tests/test_skills.py
+```powershell
+# 仓库根目录
+.\.venv\Scripts\python.exe -m pytest -q tests/test_skills.py
 ```
 
-测试检查技能目录与加载机制，不评估真实摘要质量或外部网页可达性。
+测试目录/加载，真实摘要质量和网页可达性另测。

@@ -1,29 +1,24 @@
-# Skill Creator：编写技能说明
+# Skill Creator：编写 Memoria 技能
 
-[技能目录与格式](../README.md) · [运行时指令](SKILL.md) · [加载器](../../memoria/skills/README.md)
+[目录与格式](../README.md) · [运行时指令](SKILL.md) · [加载器](../../memoria/skills/README.md)
 
-用于指导创建或改写 Memoria 自身的技能，触发词包括“创建技能”“写技能”、`skill` 和 `SKILL.md`。它是一个编写流程，不是自动创建文件的插件。
-
-## 交付结构
+指导创建/改写项目 SKILL.md，触发词含创建技能/写技能、skill/SKILL.md。当前运行时无 shell/write_file，不自行写文件或安装插件。
 
 ```text
 skills/<name>/
-├── README.md       # 开发者说明
-└── SKILL.md        # 运行时读取的指令
+├── README.md       开发者用途、入口、限制和验证
+└── SKILL.md        一级目录读取的运行时指令
 ```
 
-可以保存额外参考材料，但当前加载器只读取 SKILL.md，不自动递归加载 references 或 README。运行时没有 shell / write_file；生成的内容需要在开发环境中落盘，再重载目录。
+先生成简洁正文/单行 metadata，由开发者保存重载并查 /api/skills。references、README 和脚本不自动递归读入；仅引用实际工具，不假设插件 API、复杂 YAML 或技能专属权限。
 
-编写时声明准确的触发词、依赖和已有工具名称，说明失败时的处理；不要假设存在 Akashic 插件 API、未注册的工具或复杂 YAML 解析能力。正文宜短，长材料避免占用每轮上下文。
+正式接口需用户登录，服务 Token 不替代登录。revision 为完整 SKILL.md SHA-256，加载/创建不等于任务质量验收。
 
-## 使用与验证
+## 验证
 
-示例：“帮我设计一个发布复盘技能，先给出 SKILL.md 内容。”
-
-从仓库根目录运行：
-
-```bash
-python -m pytest -q tests/test_skills.py
+```powershell
+# 仓库根目录
+.\.venv\Scripts\python.exe -m pytest -q tests/test_skills.py tests/test_layer_settings_config.py
 ```
 
-随后通过 `POST /api/skills/reload` 和 `GET /api/skills` 检查新增项；使用全局 token 的服务需要附认证头。
+测试目录/格式/指纹，新业务仍需来源及效果验证。
