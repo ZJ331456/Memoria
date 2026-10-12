@@ -248,6 +248,9 @@ def test_errors_preserve_all_cases_and_replay_uses_fresh_run(setup):
     assert manifest["status"] == "failed" and len(cases) == 2
     scores = read_json(score(workspace, runs[0].name))
     assert scores["requested_cases"] == 2 and scores["exact_answer_rate_all_cases"] == 0
+    assert scores["human_submitted_items"] == 0 and scores["human_unknown_cases"] == 2
+    assert scores["human_correct_rate_known"] is None
+    assert all(row["human_correct"] is None for row in scores["cases"])
 
 
 def test_cancelled_and_unattempted_denominator_is_recorded(setup):

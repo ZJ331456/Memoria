@@ -15,3 +15,5 @@
 [retrieval.py](retrieval.py)按每题可见原话前缀做本地BGE完整分块Dense及compact词面/Dense RRF(k=60)，向量缓存namespace/ID/SHA绑定，绝不扩大候选范围。runner支持retrieval-only（0 reader调用、独立gold scorer）和同输入qa；原版窗口/FTS保留。
 
 [access_eval.py](access_eval.py)只读备份实际账号库，在副本比较空/实际状态下的无缓存、显式缓存及失效读取，记录成本/等价/真实来源资格。0 Claim只能测空状态开销。固定调用编排为[evaluate_retrieval.py](../../scripts/evaluate_retrieval.py)，要求clean固定代码；[说明](../../docs/implemented/DenseRRF自动评测与视图性能.md)。人工语义与偏好暂缓，自动指标不冒充真实长期效果。
+
+本轮固定21轮已完成：12轮纯召回/768题次，窗口/Dense/RRF各3轮实际QA/576调用；字面匹配166/161/158（各192题次），证据召回都100%，不是语义正确率。完整失败/成本及独立空状态5400次基准见[结果](../../docs/implemented/DenseRRF自动评测与视图性能.md)。评分human_scoring_policy_version=2：无judgments及无效预测保持human_correct=null，执行失败单独计status/字面失败分母；保存新修订、不改旧预测或旧score。

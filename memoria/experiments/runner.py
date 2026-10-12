@@ -474,7 +474,8 @@ def score(workspace, run_id, judgments=None):
                      "exact_answer": valid and normalize(case["answer"]) in {normalize(a) for a in g["accepted_answers"]},
                      "evidence_message_recall": len(expected & presented) / len(expected) if expected and "presented_ids" in case else None,
                      "citation_message_recall": len(expected & cited) / len(expected) if expected else None,
-                     "human_correct": manual.get(case["id"]) if valid else False})
+                     # Structural execution failure is not a submitted human judgment.
+                     "human_correct": manual.get(case["id"]) if valid else None})
     known = [r["human_correct"] for r in rows if r["human_correct"] is not None]
     result = {"run_id": run_id, "scope": protocol["scope"], "source_kind": protocol["source_kind"],
               "gold_human_reviewed": protocol.get("human_reviewed"),
@@ -483,6 +484,7 @@ def score(workspace, run_id, judgments=None):
               "exact_answer_rate_all_cases": sum(r["exact_answer"] for r in rows) / len(rows),
               "exact_answer_warning": "literal normalized matching only; not semantic QA correctness",
               "human_submitted_items": len(manual),
+              "human_scoring_policy_version": 2,
               "human_reviewed_cases": sum(manual.get(c["id"]) is not None for c in cases if c["status"] == "success"),
               "human_unknown_cases": sum(r["human_correct"] is None for r in rows),
               "human_correct_rate_known": sum(known) / len(known) if known else None,

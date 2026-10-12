@@ -55,3 +55,5 @@
 [test_claims.py](test_claims.py)覆盖来源/公开归属拒绝、不可变版本、审批OCC、双时间/变化、条件/多值冲突、撤回/恢复、依赖失效、并发/回滚、TTL/缓存上限、抽取待审及来源await竞态；[test_claims_api.py](test_claims_api.py)覆盖真实网关两账号隔离、路由契约、有限状态问题与运行时/工具原子预算。全部临时输入只用于工程验证，不导入生产或报告为用户实验。2026-10-12最终全量359 passed / 84.08 s；[实现边界](../docs/implemented/Claim条件视图与访问路由.md)。
 
 [test_source_retrieval.py](test_source_retrieval.py)覆盖未来消息缓存不得进入早期prefix、原文ID/词面/Dense融合、模型空间与内容绑定、坏分块及无效向量拒绝；研究工作流新增无reader纯召回和副本checkpoint/SHA检查。全部为临时工程输入；当前全量371 passed / 84.82 s，不是研究分数。
+
+固定自动评测代码全量371 passed / 84.82 s；之后扩展既有错误分母用例，确认未提交judgments的工程错误不得变为人工False，受影响研究回归55 passed / 28.69 s。真实9轮评分派生修订另核验576项human_correct=null，0新模型调用，旧评分/预测及字面/证据指标保持。

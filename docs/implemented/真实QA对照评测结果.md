@@ -60,3 +60,5 @@ deepseek-flash，thinking disabled，温度0，top_p1，输出1024 token，历�
 预登记 SHA：`a18dacc5787a9b5b43ce8d7c4ea3c2b1165c87d5c70b04751823e70bcc0e7f8e`；inputs SHA：`5c707e39ce1ba30ca0a9704a119ec0122e8a950f7860ae9018b59068ab6a062b`；gold SHA：`1e352376a81d401bc41256886fe3e07d2c00b4a95b131b42208bd5e9224d8967`。
 
 实现与命令：[研究工具](真实历史标注与评测.md)；下一阶段：[研究计划](../plans/长期陪伴记忆研究与实验计划书.md)。
+
+2026-10-12后续自动Dense/RRF批次已在新clean040427c上另行完成，包含同时重跑窗口；见[新报告](DenseRRF自动评测与视图性能.md)。本文原六轮数据不覆盖，新旧批次不混算；新批次仍为AI gold开发诊断，人工语义与真实连续长期效果未测。
