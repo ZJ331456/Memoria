@@ -12,6 +12,8 @@ from memoria.config import Settings
 from memoria.experiments.history import HistoryWorkspace, identifier, write_json
 from memoria.experiments.roles import load_roles
 from memoria.experiments.runner import activate_profile, execute, recover_run, score, score_template
+from memoria.experiments.access_eval import benchmark_access
+from memoria.experiments.retrieval import BASELINES
 from scripts.user_paths import directory_for
 
 
@@ -46,17 +48,21 @@ def main():
     sub.add_argument("--reviewers", nargs="+", required=True)
     sub.add_argument("--adjudication")
     sub = subs.add_parser("run")
-    sub.add_argument("--mode", choices=["extract", "qa"], required=True)
+    sub.add_argument("--mode", choices=["extract", "qa", "retrieval"], required=True)
     sub.add_argument("--dataset")
     sub.add_argument("--protocol")
     sub.add_argument("--limit", type=int, default=50, help="Extraction only; QA uses every frozen probe")
-    sub.add_argument("--baseline", choices=["B0_recent", "B2_fts", "B2_fts_compact"], default="B0_recent")
+    sub.add_argument("--baseline", choices=sorted(BASELINES), default="B0_recent")
     sub.add_argument("--history-limit", type=int, default=8)
     sub.add_argument("--context-chars", type=int, default=12000)
+    sub.add_argument("--embedding-device", choices=["auto","cuda","cpu"],help="Run-local BGE override; does not change production model settings")
     sub.add_argument("--roles")
     sub.add_argument("--allow-remote", action="store_true")
     sub.add_argument("--profile", help="Private encrypted research model profile")
     sub.add_argument("--extraction-protocol", choices=["production_turn", "source_grounded"], default="production_turn")
+    sub = subs.add_parser("benchmark-access")
+    sub.add_argument("--repeats",type=int,default=3)
+    sub.add_argument("--iterations",type=int,default=50)
     for name in ("score-template", "score"):
         sub = subs.add_parser(name)
         sub.add_argument("--run", required=True)
@@ -89,14 +95,17 @@ def main():
         result = workspace.freeze(args.dataset, args.protocol, args.reviewers,
                                   private_input(args.adjudication, directory) if args.adjudication else None)
     elif args.command == "run":
-        if (args.mode == "extract" and not args.dataset) or (args.mode == "qa" and not args.protocol):
+        if (args.mode == "extract" and not args.dataset) or (args.mode in {"qa","retrieval"} and not args.protocol):
             parser.error("extract requires --dataset; qa requires --protocol")
         result = asyncio.run(execute(workspace, Settings.load(args.config), mode=args.mode,
                                     dataset=args.dataset, protocol_id=args.protocol, limit=args.limit,
                                     baseline=args.baseline, history_limit=args.history_limit, context_chars=args.context_chars,
+                                    embedding_device=args.embedding_device,
                                     allow_remote=args.allow_remote,
                                     profile=args.profile, extraction_protocol=args.extraction_protocol,
                                     roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
+    elif args.command == "benchmark-access":
+        result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)
     elif args.command == "score-template":
         output = workspace.path("research", "drafts", identifier(args.run) + ".scores.json")
         output.parent.mkdir(parents=True, exist_ok=True, mode=0o700)

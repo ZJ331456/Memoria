@@ -9,3 +9,9 @@
 `B2_fts_compact` 是逐字分隔语料的显式对照：临时检索键/查询 NFKC 去空白，返回原始消息与证据；原版 `B2_fts` 和无命中不回退行为保留。用户已选择跳过独立真人审核，允许使用当前 AI gold 开发对照；不解除真实连续历史的长期效果数据要求。
 
 两组各三轮、384 次真实 DeepSeek 调用已完成；逐轮结果、阶段耗时、token、引用越界和未测项见 [QA 对照结果](../../docs/implemented/真实QA对照评测结果.md)。受影响研究测试 38 passed / 22.31 s；研究原始产物留在账号私有目录，Git 只保存汇总。
+
+## 自动前缀与视图评测
+
+[retrieval.py](retrieval.py)按每题可见原话前缀做本地BGE完整分块Dense及compact词面/Dense RRF(k=60)，向量缓存namespace/ID/SHA绑定，绝不扩大候选范围。runner支持retrieval-only（0 reader调用、独立gold scorer）和同输入qa；原版窗口/FTS保留。
+
+[access_eval.py](access_eval.py)只读备份实际账号库，在副本比较空/实际状态下的无缓存、显式缓存及失效读取，记录成本/等价/真实来源资格。0 Claim只能测空状态开销。固定调用编排为[evaluate_retrieval.py](../../scripts/evaluate_retrieval.py)，要求clean固定代码；[说明](../../docs/implemented/DenseRRF自动评测与视图性能.md)。人工语义与偏好暂缓，自动指标不冒充真实长期效果。

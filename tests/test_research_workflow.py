@@ -101,6 +101,64 @@ def test_compact_search_preserves_original_evidence_and_does_not_fallback():
     assert select_history([original, other], "不存在的内容", "B2_fts_compact", 8) == []
 
 
+def test_retrieval_only_mode_never_calls_reader_and_scores_separately(setup):
+    workspace,settings,source = setup
+    freeze(workspace,source)
+    def no_calls(request):
+        raise AssertionError("Retrieval-only mode must not contact a reader")
+    output = asyncio.run(execute(workspace,settings,mode="retrieval",protocol_id="p1",baseline="B2_fts_compact",
+                                 client_factory=factory(no_calls)))
+    manifest = read_json(output/"manifest.json")
+    assert read_json(output/"metrics.json")["calls"]==0
+    assert not (output/"prompts.jsonl").exists()
+    assert manifest["protocol"]["mode"]=="retrieval"
+    result = read_json(score(workspace,output.name))
+    assert result["evidence_message_recall_macro"]==1
+    assert result["longitudinal_effect"] is None
+    assert result["cases"][0]["semantic_correctness"] is None
+
+
+def test_access_benchmark_uses_actual_snapshot_and_closes_before_hashing(setup):
+    from memoria.experiments.access_eval import benchmark_access
+    from memoria.experiments.records import digest_file
+    from memoria.store import Store
+    workspace,settings,source = setup
+    path = workspace.path("memory","memoria.db")
+    original = Store(path,vector_backend="json")
+    session = original.create_session("Temporary engineering source")
+    original.add_message(session["id"],"user","Temporary engineering input")
+    original.close()
+    before = digest_file(path)
+    result = benchmark_access(workspace,settings,repeats=1,iterations=1)
+    metrics = read_json(result/"metrics.json")
+    manifest = read_json(result/"manifest.json")
+    assert metrics["requested_cases"]==36 and metrics["errors"]==0
+    assert metrics["approved_revisions"]==0 and not metrics["positive_view_benefit_measured"]
+    assert metrics["longitudinal_eligibility"]["eligible_continuous_participants"]==1
+    assert metrics["production_writes"]==0 and metrics["actual_model_calls"]==0
+    assert digest_file(path)==before
+    assert digest_file(result/"account-snapshot.db")==manifest["artifacts"]["account-snapshot.db"]["sha256"]
+
+
+@pytest.mark.parametrize("invalid",["denominator","baseline"])
+def test_registered_evaluation_rejects_inconsistent_workload_before_calls(setup,monkeypatch,invalid):
+    from scripts import evaluate_retrieval
+    workspace,settings,source = setup
+    freeze(workspace,source)
+    protocol,_,_ = workspace.protocol("p1")
+    registration = source.parent/"registration.json"
+    fields = {key:protocol[key] for key in ("input_sha256","gold_sha256","history_sha256")}
+    fields.update(protocol_id="p1",expected_cases=1,concurrency=1,rrf_k=60,
+                  qa_order=["B0_recent"],retrieval_order=["B0_recent"],planned_reader_calls=1)
+    if invalid=="denominator":fields["planned_reader_calls"]=2
+    else:fields["qa_order"]=["unsupported"]
+    write_json(registration,fields)
+    monkeypatch.setattr(evaluate_retrieval,"code_identity",lambda root:{"dirty":False,"commit":"engineering-code"})
+    with pytest.raises(ValueError,match="denominator|unsupported"):
+        asyncio.run(evaluate_retrieval.evaluate(workspace,None,registration,allow_remote=True))
+    assert not workspace.path("experiments").exists()
+
+
 @pytest.mark.parametrize("alter", ["consent", "timezone", "order", "speaker"])
 def test_rejects_unconsented_or_rewritten_identity_inputs(setup, alter):
     workspace, _, source = setup
