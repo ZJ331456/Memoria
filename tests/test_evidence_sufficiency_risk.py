@@ -215,3 +215,25 @@ def test_supplement_never_discards_prior_evidence_to_make_room_for_new_ranked_it
                          method='targeted',reader_system=bench.SYSTEM,select_context=bench.select_context))
     assert set(chosen['presented_ids'])<=set(row['presented_ids'])
     assert history[0]['id'] in row['adaptive_retrieval'][0]['selection']['presented_ids']
+
+
+def test_repair_cannot_release_a_second_answer_with_refusal_text():
+    from memoria.experiments.locomo_risk import run_case
+    text='Original temporary source.'
+    history=[dict(id='c/D1',content=text,text=text,content_sha256=bench.sha(text),source_text_sha256=bench.sha(text),
+                  speaker='Temporary speaker',session_id='s1',session_date_raw='source date')]
+    chosen=bench.select_context(history,history,question='Temporary question')
+    class Client:
+        calls=[]
+        async def call(self,role,messages,**kwargs):
+            self.calls.append({})
+            value={'state':'missing_fact','requirements':[{'fact':'missing','status':'missing','sources':[]}],
+                   'missing_queries':[],'reason':'No fact'} if messages[0]['content'].startswith('Assess') else {
+                   'status':'answer','answer':'Not mentioned.','evidence_ids':['c/D1']}
+            return ChatResult(content=json.dumps(value))
+    async def retrieve(query,limit):return history,{}
+    row={};settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    asyncio.run(run_case(Client(),settings,load_roles(None),'Temporary question',history,history,chosen,row,retrieve,
+                        method='targeted',reader_system=bench.SYSTEM,select_context=bench.select_context))
+    assert row['answer_status']=='abstain' and row['evidence_ids']==[]
+    assert len(row['policy_contract_errors'])==4 and row['adaptive_policy']['calls']==5

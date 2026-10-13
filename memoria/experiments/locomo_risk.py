@@ -86,6 +86,7 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
                         raise ValueError('Refusal status contradicts answer text')
                 except ValueError as exc:
                     row['policy_contract_errors'].append({'stage': 'reader_repair', 'error': type(exc).__name__})
+                    parsed = None
         return parsed or dict(UNKNOWN)
 
     async def support(answer, evidence):
