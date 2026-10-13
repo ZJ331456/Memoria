@@ -17,6 +17,7 @@ import httpx
 
 from ...config import ModelConfig
 from ..types import ChatResult, ContentSafetyError, ContextLengthError, ProviderError
+from ..tls import async_verified_context
 
 logger = logging.getLogger(__name__)
 _CONTEXT_HINTS = (
@@ -130,7 +131,8 @@ class OpenAICompatBackend:
         last_error: Exception | None = None
         started = time.perf_counter()
         timeout = httpx.Timeout(self.timeout_seconds)
-        async with httpx.AsyncClient(timeout=timeout, transport=self.transport, trust_env=not selected.is_local_http()) as client:
+        verify = True if self.transport is not None else await async_verified_context(not selected.is_local_http())
+        async with httpx.AsyncClient(timeout=timeout, transport=self.transport, trust_env=not selected.is_local_http(), verify=verify) as client:
             for attempt in range(self.max_retries + 1):
                 try:
                     response = await client.post(
@@ -192,10 +194,12 @@ class OpenAICompatBackend:
             saw_choice = False
             finish_reason = None
             try:
+                verify = True if self.transport is not None else await async_verified_context(not selected.is_local_http())
                 async with httpx.AsyncClient(
                     timeout=httpx.Timeout(self.timeout_seconds),
                     transport=self.transport,
                     trust_env=not selected.is_local_http(),
+                    verify=verify,
                 ) as client:
                     async with client.stream(
                         "POST",

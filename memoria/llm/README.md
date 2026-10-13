@@ -46,3 +46,5 @@ Invoke-RestMethod http://127.0.0.1:8080/v1/models
 工程替身不发起付费调用，不证明实际权重效果；真实记录见模型文档/研究账本。
 
 [完整预算与引用契约](../../docs/implemented/完整Reader预算与生产引用校验.md)说明配置与范围；新增[test_reader_contract.py](../../tests/test_reader_contract.py)核验HTTP实际body与计数一致、流式、绑定失败和输出预留。
+
+HTTP普通/流式调用使用[tls.py](tls.py)缓存CA验证上下文，冷载在线程；证书路径/文件/目录变化刷新，hostname/CERT_REQUIRED保留，不共享用户HTTP会话/凭据。用于修复Windows重复载CA阻塞异步循环。[实测与边界](../../docs/implemented/LoCoMo全量评测与英文检索修复.md)。

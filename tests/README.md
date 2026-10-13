@@ -89,3 +89,5 @@ Pop-Location
 2026-10-13后续LoCoMo入口相关23 passed / 7.37s，最终受影响研究/Reader范围**98 passed / 59.04s**；没有将前述495项旧全量写成新增全量。本轮固定10题实际模型运行另见[诊断报告](../docs/implemented/LoCoMo十题真实调用诊断.md)。
 
 本轮新增test_locomo_eval.py验证英文BM25词干、候选先于邻句、预算/同会话/来源篡改、全题/对抗题、异常gold不修写、并发编号与gold隔离。test_local_embedding.py补英文指令/384维/协议指纹；临时输入不代表研究效果。[验收](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+
+TLS新增CA优先级/缓存轮换/目录变化/冷载不阻塞/缺失失败测试；LoCoMo补停止检查点继承、来源篡改拒绝和0重复reader调用。工程验收见[运行期修复](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。

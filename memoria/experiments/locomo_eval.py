@@ -19,7 +19,7 @@ from ..config import ModelConfig
 from ..memory.embedding import EmbeddingClient
 from ..observability.timing import StageTimings
 from ..prompting.reader_budget import ReaderBudget
-from .history import canonical
+from .history import canonical, identifier
 from .locomo import SOURCE_SHA256, SOURCE_URL, parse_answer, sha, smoke_cases
 from .records import RunRecorder, digest_file
 from .retrieval import PrefixRetriever
@@ -283,10 +283,49 @@ class CaseRecorder:
                                        'call': self.case_id + ':' + str(row['call'])})
 
 
+def checkpoint_rows(workspace, run_id, protocol, cases, histories):
+    """Only consume a stopped, fingerprinted checkpoint belonging to this account."""
+    source = workspace.path('experiments', identifier(run_id))
+    from ..memory.reader import strict_json
+    manifest = strict_json((source/'manifest.json').read_text(encoding='utf-8'))
+    if manifest['status'] != 'interrupted' or manifest['protocol']['owner_user_id'] != workspace.owner:
+        raise ValueError('Resume requires an explicitly stopped same-owner checkpoint')
+    for name, expected in manifest['artifacts'].items():
+        if digest_file(source/name) != expected['sha256']:
+            raise ValueError('Checkpoint artifact changed')
+    for field in ('id','source_sha256','inputs_sha256','histories_sha256','gold_sha256','case_ids'):
+        if manifest['protocol'][field] != protocol[field]:
+            raise ValueError('Checkpoint protocol/input differs')
+    rows = [strict_json(l) for l in (source/'cases.jsonl').read_text(encoding='utf-8').splitlines()]
+    if len({r['id'] for r in rows}) != len(rows):
+        raise ValueError('Duplicate checkpoint cases')
+    lookup = {c['id']: c for c in cases}
+    inherited = {}
+    for row in rows:
+        if row['id'] not in lookup:
+            raise ValueError('Foreign checkpoint case')
+        if row['status'] in {'not_attempted','cancelled'}:
+            continue
+        case = lookup[row['id']]
+        known = {m['id']: m for m in histories[case['conversation_id']]}
+        if row.get('question',case['question']) != case['question'] or set(row.get('presented_ids',[]))-set(known):
+            raise ValueError('Checkpoint evidence/query differs')
+        for mid, digest in row.get('source_shas',{}).items():
+            if mid not in known or known[mid]['source_text_sha256'] != digest:
+                raise ValueError('Checkpoint source SHA differs')
+        if row['status']=='success':
+            from ..llm import ChatResult
+            parse_answer(ChatResult(content=canonical({'status':row['answer_status'],'answer':row['answer'],
+                         'evidence_ids':row['evidence_ids']})), row['presented_ids'])
+        inherited[row['id']] = {**row, 'inherited_from_run': run_id}
+    calls = [strict_json(l) for l in (source/'calls.jsonl').read_text(encoding='utf-8').splitlines()]
+    return manifest, inherited, calls
+
+
 async def execute(workspace, settings, source, *, scope='full', profile=None, roles=None,
                   allow_remote=False, embedding_device='auto', concurrency=4, candidate_limit=40,
                   anchor_limit=40, evidence_chars=12000, embedding_model='bge-small-en-v1.5', fallback='full_history', client_factory=ExperimentLLM,
-                  embedding_factory=EmbeddingClient):
+                  embedding_factory=EmbeddingClient, resume_from=None):
     if not 1 <= concurrency <= 8 or not 1 <= anchor_limit <= candidate_limit <= 100:
         raise ValueError('Invalid concurrency/retrieval limits')
     if not 256 <= evidence_chars <= 16000 or embedding_device not in {'auto', 'cpu', 'cuda'}:
@@ -330,6 +369,30 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
     print('Registered ' + recorder.run_id + '; requested=' + str(len(cases)), flush=True)
     semaphore, retrieval_lock = asyncio.Semaphore(concurrency), asyncio.Lock()
     rows, calls, fatal = {}, [], None
+    inherited_count, prior_documents = 0, 0
+    if resume_from:
+        try:
+            previous, rows, calls = checkpoint_rows(workspace,resume_from,protocol,cases,histories)
+            for field in ('baseline','selector','candidate_limit','anchor_limit','evidence_chars','context_radius',
+                          'rrf_k','lexical','reader_system_sha256','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit'):
+                if previous['protocol'][field] != recorder.manifest['protocol'][field]:
+                    raise ValueError('Checkpoint inference settings differ')
+            if previous['models'] != recorder.manifest['models'] or previous['model_snapshots'] != recorder.manifest['model_snapshots']:
+                raise ValueError('Checkpoint reader/embedding assets differ')
+        except Exception:
+            recorder.finish({'requested_cases':len(cases),'errors':len(cases)},error='CheckpointRejected')
+            raise
+        inherited_count = len(rows)
+        calls = [{**c, '_inherited':True} for c in calls]
+        prior_documents = previous.get('checkpoint',{}).get('source_documents_encoded',0)
+        recorder.manifest['resume'] = {'source_run':resume_from,'inherited_cases':inherited_count,
+                                      'source_code':previous['code'], 'source_artifacts':previous['artifacts'],
+                                      'source_elapsed_ms':previous['elapsed_ms'],
+                                      'source_inflight_calls_unknown':previous.get('checkpoint',{}).get('inflight_calls_unknown',0)}
+        recorder._save_manifest()
+        for row in rows.values():
+            recorder.append('cases.jsonl',row)
+        recorder.append('events.jsonl', {'event':'checkpoint_inherited','source_run':resume_from,'cases':inherited_count})
     async def run_case(case):
         async with semaphore:
             began, timings = time.perf_counter(), StageTimings()
@@ -417,7 +480,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                                 'errors': sum(r['status'] != 'success' for r in rows.values())}
                     (recorder.path/'progress.json').write_text(canonical(progress)+'\n', encoding='utf-8')
                     print(canonical(progress), flush=True)
-    tasks = [asyncio.create_task(run_case(c)) for c in cases]
+    tasks = [asyncio.create_task(run_case(c)) for c in cases if c['id'] not in rows]
     try:
         await asyncio.gather(*tasks)
     except BaseException as exc:
@@ -451,7 +514,8 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                        fallback_errors=sum(r.get('fallback_status') == 'error' for r in rows.values()),
                        contract_repair_cases=sum(bool(r.get('contract_repair_attempted')) for r in rows.values()),
                        secondary_initial_validation_errors=sum(bool(r.get('fallback_initial_validation_error')) for r in rows.values()),
-                       source_documents_encoded=retriever.document_encodes, query_calls=retriever.query_encodes,
+                       inherited_cases=inherited_count, new_reader_calls=sum(not c.get('_inherited') for c in calls),
+                       source_documents_encoded=retriever.document_encodes+prior_documents, query_calls=retriever.query_encodes,
                        usage_known_calls=sum(u is not None for u in usages),
                        tokens_known={key: sum(u.get(key, 0) or 0 for u in usages if u)
                                      for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')},

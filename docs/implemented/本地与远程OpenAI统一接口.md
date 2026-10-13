@@ -100,3 +100,7 @@ HTTP BGE 与原 `local://` BGE 使用不同索引命名空间，切换后旧向�
 ## 完整请求预算的后续接入
 
 LLMClient普通/流式调用先检查完整payload字节上限，记录输出预留；local://按真实模板核验输入+输出+安全量。本地HTTP可在agent.context显式启用reader_local_count；只访问配置信任的回环计数接口，模型/指纹/协议不可核验时拒绝。远程DeepSeek仍使用请求字节门槛，精确输入Token与窗口未知；不能用BGE代替。调用构造器和模板与计量共用，实际Qwen tokenizer已核对292输入Token、0生成调用，详见[完整预算与引用说明](完整Reader预算与生产引用校验.md)。资产或配置变更需重启服务。
+
+## HTTP证书上下文复用
+
+2026-10-13修复本机HTTPX每次建client重复加载CA耗时数秒并阻塞asyncio的问题；普通/流式用同证书策略上下文缓存，冷载移到线程。SSL_CERT_FILE优先于SSL_CERT_DIR，再到certifi；证书路径/metadata/目录变化刷新，hostname与CERT_REQUIRED保留。仅缓存CA，不跨账号共享HTTP会话/凭据。实际耗时/检查点记录见[评测说明](LoCoMo全量评测与英文检索修复.md)。

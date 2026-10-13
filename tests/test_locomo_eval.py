@@ -170,3 +170,17 @@ def test_concurrent_reader_call_ids_and_fallback(tmp_path, monkeypatch, first_ou
     assert metrics['primary_validation_errors'] == (10 if first_output == 'invalid' else 0)
     assert metrics['fallback_errors'] == 0
     assert metrics['errors'] == 0 and metrics['automatic_memory_writes'] == 0
+    # Explicitly stopped checkpoint: completed cases must not call the model again.
+    manifest=json.loads((path/'manifest.json').read_text())
+    manifest['status']='interrupted'
+    (path/'manifest.json').write_text(json.dumps(manifest),encoding='utf-8')
+    resumed=asyncio.run(bench.execute(workspace,settings,source,scope='full',concurrency=4,
+                 client_factory=Reader, embedding_factory=lambda cfg:Embedding(), roles=load_roles(None), resume_from=path.name))
+    resumed_metrics=json.loads((resumed/'metrics.json').read_text())
+    assert resumed_metrics['inherited_cases']==40 and resumed_metrics['new_reader_calls']==0
+    assert resumed_metrics['reader_calls']==expected
+    assert not (resumed/'calls.jsonl').exists()
+    (path/'cases.jsonl').write_text('tampered',encoding='utf-8')
+    bundle,protocol,cases,histories=bench.prepare(workspace,source,'full')
+    with pytest.raises(ValueError,match='artifact'):
+        bench.checkpoint_rows(workspace,path.name,protocol,cases,histories)
