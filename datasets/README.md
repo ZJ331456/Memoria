@@ -13,14 +13,14 @@ lccc-base.manifest.json记录LCCC公开来源版本、选样及指纹。Git仅�
 
 公开可下载不等于已完成商业训练/展示/再分发权益核验。商业发布前核对原始语料、模型及依赖许可和授权范围；不把下载脚本或数据构建代码的许可证当成原话权利许可。[商用计划](../docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
 
-## 2026-10-13实际评测范围
+## LCCC开发诊断范围
 
 本机注册的是1个真实来源数据集LCCC子集（50段/206消息），同源QA v1/v2各64题，v2现行；Window/Dense/RRF是三种方法，不是三个数据集。已下载验证归档有20000条非空记录，当前未全量评估原始归档；每轮现行QA完整64题，仍受合法前缀和输入预算约束。AI辅助gold与匿名短对话不能给出连续个人长期效果或Claim F1。[不含原话的清单核对](../docs/assets/evaluation/dataset-scope-20261013.json)。
 
-## 后续LoCoMo接入
+## LoCoMo-10：主benchmark与完整消融
 
-[locomo10.manifest.json](locomo10.manifest.json)记录用户指定的官方构建benchmark（LLM生成并人工编辑、CC-BY-NC-4.0）：原文件2805274字节/10对话/1986题、SHA冻结。原始副本在忽略目录data/benchmarks/locomo/raw/，与qin的50段LCCC和生产个人事实分开；inputs/gold在账号research/benchmarks，真实10题run在experiments。仅固定每段1题，未全量跑1540普通题/446对抗题。[结果与命令](../docs/implemented/LoCoMo十题真实调用诊断.md)。
+[locomo10.manifest.json](locomo10.manifest.json)记录官方构建的研究benchmark（LLM生成并人工编辑、CC-BY-NC-4.0）：原文件2805274字节、10对话/5882原话/1986题、SHA冻结。普通1540题、对抗446题分开计分；它不是qin的50段LCCC，也不是获准连续本人历史。
 
-LoCoMo正式入口新增locomo-run（完整1986题，1540普通/446对抗独立），源码SHA固定，清单不承载原始语料；data/benchmarks原文件、账号research/benchmarks冻结包和experiments结果分开。旧十题开发诊断不覆盖；异常gold保留，文本模式不读图像搜索字段。[完整协议](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+原始副本在忽略的data/benchmarks/locomo/raw/，账号research/benchmarks保存冻结inputs/histories/gold，experiments保存逐题结果与调用，Git仅存来源清单、公开指标和指纹。异常标签原样保留，全文本模式不读图像搜索/视觉字段。
 
-完整LoCoMo1986题已实测，清单full_benchmark_evaluated=true；1540普通/446对抗独立结果。文本/官方构建与自然来源LCCC分开，9标签异常主评分原样保留。[范围与结果](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+原RRF首次/全历史复核已完成全1986题，[历史结果](../docs/implemented/LoCoMo全量评测与英文检索修复.md)保持；P0定向和充分性/风险自适应另各完成全量执行，最后0/1工程失败保留分母和全部恢复成本。[四方法聚合](../docs/assets/evaluation/locomo-risk-full-20261014.json) · [实现与未达目标](../docs/implemented/证据充分性与风险感知回答.md)。304题开发范围和10题冒烟只用于开发/协议验证，不冒充全量。

@@ -66,6 +66,8 @@ locomo-run --resume-from RUN_ID只继承同账号已停止且SHA/输入/规则/�
 
 `--resume-from RUN --retry-errors`允许从已结束run仅重试执行/回退错误，递归验证祖先产物并保留所有调用usage；成功结果不重跑，不依据QA分数筛题，原失败保留。
 
-LoCoMo正式全1986完成：最终0执行/回退错误，原三执行/两回退ConnectError和检查点保留；普通1540 F1=58.65%、对抗短语分92.38%，不是语义准确率。原十题8回答2拒答，候选选择召回下降0题；整体多批次/成本见[完整结果](../../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+LoCoMo原全历史协议全1986完成：最终0执行/回退错误，原三执行/两回退ConnectError和检查点保留；普通1540 F1=58.65%、对抗短语分92.38%，不是语义准确率。原十题8回答2拒答，候选选择召回下降0题；整体多批次/成本见[完整结果](../../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
 
 新P0消融：`--fallback targeted|adaptive_risk`，开发范围`--scope development`为原顺序前两段全部304题，完整范围保持full。新方法独立登记，不把完整历史送给Reader；`locomo-audit --source-run`仅离线分类/归因Token，`locomo-compare --baseline-run --runs`核验同题/同Reader/Embedding及全部成本。方法、限制与费用见[充分性与风险](../../docs/implemented/证据充分性与风险感知回答.md)，原成绩不改写。
+
+P0 v2完整1986题对照已完成：定向57.47%普通F1/92.83%对抗短语分/7290.80已知Token每题，风险自适应51.15%/95.96%/12663.62，最终0/1工程失败留完整分母。两新run来自干净0e0df1a，工程恢复/全部祖先费用和267次中间契约拒绝保留；原首轮/全历史是同批阶段，非四次同预算或独立未见实验。综合目标未达、生产默认保持，下一步校准必要事实状态一致性与Reader+支持整段预算，详见[完整P0结论](../../docs/implemented/证据充分性与风险感知回答.md#v2完整1986题消融2026-10-14)。

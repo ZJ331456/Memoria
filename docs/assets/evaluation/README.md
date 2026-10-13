@@ -40,3 +40,17 @@ PNG用于GitHub显示，SVG可导出。三张图已做视觉检查，无裁切�
 ![LoCoMo分类结果](locomo-full-20261013.png)
 
 [SVG](locomo-full-20261013.svg) · [来源/图片SHA](locomo-full-20261013-chart.json)。图用scripts/render_locomo_chart.py从已冻结公开聚合重绘，0私有读取/0新评分/0模型调用；不混进旧3张LCCC图的source index。
+
+## P0四方法全量消融（2026-10-14）
+
+[locomo-risk-full-20261014.json](locomo-risk-full-20261014.json)核验原同批RRF首次/全历史阶段及两个新独立run，同冻结1986题、声明Reader配置与本地英文BGE快照；原代码/祖先错误/usage/预算/契约重放指纹保留。普通F1、对抗官方短语分与已知Token/题分开展示，未知usage/在途费用不计零成本，最后自适应1题length失败留完整分母。
+
+[PNG](locomo-risk-full-20261014.png) / [SVG](locomo-risk-full-20261014.svg)是质量/拒答与成本双面板，[chart.json](locomo-risk-full-20261014-chart.json)记录图源及图片SHA、4方法数值与Matplotlib版本。图已做视觉检查，无裁切/图例遮挡；方法显示顺序按名称固定，调整报告顺序不会错贴标签。只重绘聚合，不读取私有原文/gold、0新模型调用/0新评分。
+
+```powershell
+.\.venv\Scripts\python.exe scripts/render_locomo_risk_chart.py
+# 可选：已冻结的v1开发聚合；304题，不能标为全量结果
+.\.venv\Scripts\python.exe scripts/render_locomo_risk_chart.py --aggregate docs/assets/evaluation/locomo-risk-development-v1-20261013.json --output data/reports/system/locomo-risk-development-v1
+```
+
+[旧266题分类汇总](locomo-original-triage-20261014.json)仅规则队列，166拒答/100已答零F1不作语义裁决。[实现/结论](../../implemented/证据充分性与风险感知回答.md)及[下一步校准](../../plans/长期陪伴记忆研究与实验计划书.md#242-v2完整消融结果与下一步校准)：定向省已知Token但损失F1，风险组更谨慎却普通F1退步，综合目标未达、生产默认保持。所有题已用于诊断，未做独立真人审核，不宣称真实本人长期效果。

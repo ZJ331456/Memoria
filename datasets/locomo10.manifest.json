@@ -23,5 +23,25 @@
   "full_run": "20261013T123154Z-c27f2463",
   "evaluation_text_only": true,
   "full_result": "docs/assets/evaluation/locomo-full-20261013.json",
-  "full_evaluation_note": "All 1986 QA; ordinary F1 and adversarial refusal separately; adaptive full-history recheck, checkpoint and engineering retries preserved"
+  "full_evaluation_note": "All 1986 QA; ordinary F1 and adversarial refusal separately; adaptive full-history recheck, checkpoint and engineering retries preserved",
+  "risk_full_evaluations": [
+    {
+      "method": "targeted",
+      "protocol": "locomo-sufficiency-risk-v2-targeted-full",
+      "run": "20261013T173925Z-d5b0a2e9",
+      "requested_cases": 1986,
+      "final_errors": 0,
+      "result": "docs/assets/evaluation/locomo-risk-full-20261014.json",
+      "production_default_changed": false
+    },
+    {
+      "method": "adaptive_risk",
+      "protocol": "locomo-sufficiency-risk-v2-adaptive_risk-full",
+      "run": "20261013T185130Z-4d5d7960",
+      "requested_cases": 1986,
+      "final_errors": 1,
+      "result": "docs/assets/evaluation/locomo-risk-full-20261014.json",
+      "production_default_changed": false
+    }
+  ]
 }

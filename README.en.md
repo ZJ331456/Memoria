@@ -6,27 +6,33 @@ Source-backed memory management for small-model companionship: reviewed Claims, 
 
 ## LoCoMo full evaluation
 
-Completed on 2026-10-13: all **1,986 original questions**, 10 long conversations and 5,882 utterances. Reader: **DeepSeek `deepseek-flash`, non-thinking**; embedding: local **`bge-small-en-v1.5`**. This evaluates English source retrieval and answering, without production Claim/View access.
+The 2026-10-13 original run and 2026-10-14 P0 ablations use all **1,986 original QA**: 10 constructed conversations, 5,882 utterances, 1,540 ordinary and 446 adversarial questions. Reader: **DeepSeek `deepseek-flash`, non-thinking**; embedding: local **`bge-small-en-v1.5`**. English text only, without images or production Claim/View access.
 
-The first four categories and ordinary Overall use upstream-compatible **Answer F1 (%)**. Overall averages all 1,540 ordinary questions, excludes adversarial questions and is not an equal-weight category average.
+The four ordinary categories and Ordinary Overall use upstream-compatible **Answer F1 (%)**. Overall averages all 1,540 ordinary questions and excludes adversarial questions; it is not an equal-weight category average.
 
-| Method | Multi-hop<br>282 | Temporal<br>321 | Open-domain<br>96 | Single-hop<br>841 | Ordinary Overall<br>1,540 | Adversarial refusal†<br>446 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Memoria-Agent: RRF + neighbors, primary answer | 43.44 | 52.12 | 19.55 | 66.08 | 56.12 | **94.17** |
-| Memoria-Agent: RRF + neighbors + full-history recheck | **45.09** | **55.95** | **22.47** | **68.37** | **58.65** | 92.38 |
+| Method | Multi-hop<br>282 | Temporal<br>321 | Open-domain<br>96 | Single-hop<br>841 | Ordinary Overall<br>1,540 | Adversarial refusal†<br>446 | Known tokens/QA‡ |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Memoria-Agent: RRF + neighbors, primary answer | 43.44 | 52.12 | 19.55 | 66.08 | 56.12 | 94.17 | 3986.38 |
+| Memoria-Agent: RRF + full-history recheck | 45.09 | 55.95 | 22.47 | 68.37 | 58.65 | 92.38 | 18414.96 |
+| Memoria-Agent: RRF + targeted retrieval | 44.30 | 56.29 | 21.20 | 66.48 | 57.47 | 92.83 | 7290.80 |
+| Memoria-Agent: sufficiency + risk + adaptive retrieval | 37.45 | 46.49 | 11.07 | 62.10 | 51.15 | 95.96 | 12663.62 |
 
-† The adversarial column follows the official literal refusal rule, not F1 or semantic accuracy. Final structured abstention is 410/446 (91.93%). Rows are primary and final outputs from the same cases, not independent experiments or matched external-method baselines.
+† Official literal refusal score, not F1, semantic accuracy or structured abstention. Structured refusal: full history 410/446, targeted 413/446, risk adaptive 428/446. The first two rows are original same-batch phases; the last two are independent runs. Frozen QA, declared Reader configuration and local embedding snapshots match; context/call budgets differ. No matched external-method ranking is claimed.
 
-Primary retrieval combines English BM25 and Dense with RRF, retains ranked candidates and then adds neighboring utterances within a 12,000-character evidence budget. Primary abstention/clarification or invalid output can trigger one complete-history recheck, bounded separately by 240,000 UTF-8 request bytes; exact remote tokens/window remain unknown. The final row therefore uses additional context and calls, and is not a pure RRF or equal-token-budget result.
+‡ Known usage from every Reader, planner, verifier and engineering retry divided by all 1,986 questions. These are lower bounds, not invoices: unknown historical/in-flight usage is retained, including 1/7 missing-usage calls in the new targeted/adaptive lineages.
 
-All 1,986 final cases passed execution/JSON/citation-ID contracts, while 166 ordinary cases still abstained; these checks do not establish answer entailment. Ordinary F1 improved from 56.12% to 58.65%, while adversarial refusal declined from 94.17% to 92.38%. Historical connection failures and unknown in-flight billing remain recorded. See the [full report](docs/implemented/LoCoMo全量评测与英文检索修复.md) and [frozen aggregate](docs/assets/evaluation/locomo-full-20261013.json).
+Original primary evidence is bounded at 12,000 characters; one full-history recheck can use up to 240,000 UTF-8 request bytes. Targeted retrieval supplements once. Risk adaptive supplements at most twice, with 12,000/16,000/20,000-character evidence stages, at most 6 model calls and 160,000 cumulative input bytes per case attempt. New methods never send the full history to the Reader. Exact remote token windows remain unknown.
+
+**The combined P0 objective is not met.** Relative to full history, targeted uses 60.41% fewer known tokens but loses 1.18 F1 points. Risk adaptive uses 31.23% fewer, improves adversarial refusal by 3.59 points, and loses 7.50 ordinary F1 points. Ordinary abstentions increase 166 → 201 → 400; answered-zero-F1 cases decrease 100 → 90 → 55, without proving fewer hallucinations. Targeted has zero final execution errors; adaptive retains one length-limited verifier failure in the complete denominator. All original failures and recovery costs remain recorded.
+
+Production defaults remain. Optional `use_answer_risk` enables pre/post checks; production adaptive retrieval is pending. See the [P0 report](docs/implemented/证据充分性与风险感知回答.md), [original report](docs/implemented/LoCoMo全量评测与英文检索修复.md) and [plan](docs/plans/长期陪伴记忆研究与实验计划书.md#242-v2完整消融结果与下一步校准). Real longitudinal effects and extraction F1 still require authorized continuous personal sources; independent human review remains deferred.
 
 <details>
-<summary>Category chart</summary>
+<summary>Four-method quality, refusal and token cost</summary>
 
-![LoCoMo full category results](docs/assets/evaluation/locomo-full-20261013.png)
+![LoCoMo full P0 ablation](docs/assets/evaluation/locomo-risk-full-20261014.png)
 
-[Figure provenance and reproduction](docs/assets/evaluation/README.md#locomo完整1986题2026-10-13); no new inference or scoring.
+[Aggregate](docs/assets/evaluation/locomo-risk-full-20261014.json) · [SVG](docs/assets/evaluation/locomo-risk-full-20261014.svg) · [Provenance and reproduction](docs/assets/evaluation/README.md#p0四方法全量消融2026-10-14). No new inference or scoring is performed by the chart renderer.
 
 </details>
 

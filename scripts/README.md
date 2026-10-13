@@ -74,3 +74,5 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 `render_locomo_chart.py`仅从公开locomo-full-20261013.json重绘PNG/SVG与SHA清单，不访问私有数据、不重评分/调用模型；依赖requirements-docs.txt中的matplotlib。`--help`仅说明命令。
 
 LoCoMo渲染器写标准LF并规范SVG行尾，图源SHA与Git实际blob一致，PNG/SVG可重绘复核；数值和原始实验不改。
+
+`render_locomo_risk_chart.py`只读取公开四方法聚合，生成质量/拒答和已知Token双面板PNG/SVG及SHA指纹，不读私有gold或增加模型调用；完整1986题结果与负面取舍见[评测图说明](../docs/assets/evaluation/README.md#p0四方法全量消融2026-10-14)。`locomo-compare`离线核验同题/Reader/BGE与祖先调用费用，不覆盖同名冻结比较目录。

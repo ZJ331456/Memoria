@@ -1,0 +1,1157 @@
+{
+  "cases": 1986,
+  "ordinary_cases": 1540,
+  "adversarial_cases": 446,
+  "baseline": [
+    {
+      "method": "original_rrf_primary",
+      "run_id": "20261013T123154Z-c27f2463",
+      "code": {
+        "commit": "a51f686d1e3b437a96c5a6f8e5d91d173bc2eca6",
+        "branch": "main",
+        "dirty": false,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": []
+      },
+      "ordinary_f1": 0.5611998968108594,
+      "adversarial_refusal": 0.9417040358744395,
+      "cost": {
+        "cases": 1986,
+        "attempts": 1994,
+        "known_usage_calls": 1991,
+        "unknown_usage_calls": 3,
+        "failed_calls": 3,
+        "tokens_known": {
+          "prompt_tokens": 7840572,
+          "completion_tokens": 76387,
+          "total_tokens": 7916959
+        },
+        "mean_known_tokens_per_case": 3986.384189325277,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "inflight_usage_unknown": 3
+    },
+    {
+      "method": "original_full_history",
+      "run_id": "20261013T123154Z-c27f2463",
+      "code": {
+        "commit": "a51f686d1e3b437a96c5a6f8e5d91d173bc2eca6",
+        "branch": "main",
+        "dirty": false,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": []
+      },
+      "ordinary_f1": 0.586542281771223,
+      "adversarial_refusal": 0.9237668161434978,
+      "cost": {
+        "cases": 1986,
+        "attempts": 2652,
+        "known_usage_calls": 2647,
+        "unknown_usage_calls": 5,
+        "failed_calls": 5,
+        "tokens_known": {
+          "prompt_tokens": 36478873,
+          "completion_tokens": 93238,
+          "total_tokens": 36572111
+        },
+        "mean_known_tokens_per_case": 18414.960221550857,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "inflight_usage_unknown": 3
+    }
+  ],
+  "new_methods": [
+    {
+      "method": "targeted",
+      "run_id": "20261013T173925Z-d5b0a2e9",
+      "code": {
+        "commit": "0e0df1a8bf1801f94440dcdd933f8ace67b5393d",
+        "branch": "main",
+        "dirty": true,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": [
+          {
+            "path": "docs/assets/evaluation/locomo-original-triage-20261014.json",
+            "sha256": "627c4eae8567c569efa1552957ec7700e33e10f1d2554eb6166e37500069b7e2"
+          },
+          {
+            "path": "scripts/render_locomo_risk_chart.py",
+            "sha256": "222c35ee10a1d039fd62911a7c055e2e3d9d76f4893ae566305ee1f9a4ec48bd"
+          }
+        ]
+      },
+      "protocol": {
+        "id": "locomo-sufficiency-risk-v2-targeted-full",
+        "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "source_url": "https://github.com/snap-research/locomo/blob/main/data/locomo10.json",
+        "mode": "locomo_full_v2",
+        "scope": "full",
+        "requested_cases": 1986,
+        "selection": "all original QA in source order",
+        "source_kind": "official_constructed_benchmark",
+        "text_only": true,
+        "human_reviewed_by_project": false,
+        "automatic_memory_writes": 0,
+        "inputs_sha256": "a22319ff44e56dfd13e39f6cfc5c6a7a7754aae3586df056432566e5a5cc9c9c",
+        "histories_sha256": "1a8ae59a060d3cded4ffeedad5a0aecc18090c0c627d39990f9c890855052bec",
+        "gold_sha256": "12de1d7a75bc4cda012c0e8ab6690689e63bd98ec12bd48fab91fe2ca725a392",
+        "inference_excludes": [
+          "QA answers",
+          "QA category",
+          "gold evidence",
+          "adversarial_answer",
+          "image search query",
+          "observation",
+          "session_summary",
+          "event_summary"
+        ],
+        "time_policy": "raw session dates; no invented event dates/timezone/recorded axis",
+        "sufficiency_system_sha256": "267dc72612e5680b1ebfed916a2c60f1dd8249b1f4102fe9c3292ec67a587646",
+        "support_system_sha256": "ae0e0d4d3bfcbd2f9cd513f24554b533248e11583e3304cecfbe1d33fd1dce93",
+        "supplement_policy": "retain_previous_evidence_then_up_to_80_rrf_supplements",
+        "stop_policy": "unsupported/conflict after first supplement; no complete-history Reader",
+        "adaptive_limits": {
+          "evidence_chars": [
+            12000,
+            16000
+          ],
+          "max_calls": 6,
+          "max_case_input_bytes": 160000,
+          "max_queries_per_round": 2,
+          "full_history_reader_allowed": false
+        },
+        "baseline": "B2_rrf_english_v2",
+        "selector": "ranked_anchor_context",
+        "concurrency": 2,
+        "candidate_limit": 40,
+        "anchor_limit": 40,
+        "evidence_chars": 12000,
+        "context_radius": 1,
+        "rrf_k": 60,
+        "fallback": "targeted",
+        "fallback_trigger": "abstain/clarify or invalid primary output",
+        "fallback_call_limit": 5,
+        "fallback_budget": "bounded evidence stages and cumulative case bytes; no complete-history Reader",
+        "contract_repair_call_limit": 1,
+        "contract_repair": "same evidence, regenerate invalid secondary JSON/citations; never insert citations",
+        "lexical": "FTS5 Porter unicode61 BM25 OR non-stopword query tokens",
+        "reader_system_sha256": "23572f440b273e2d9e0d5614a501d34595dd95a26ca25b8874d7a5cc41ab98aa",
+        "embedding_model": "model/bge-small-en-v1.5",
+        "embedding_language_warning": null,
+        "retrieval_scope": "source Dense+English BM25; no production Claim/View access"
+      },
+      "metrics": {
+        "requested_cases": 1986,
+        "ordinary_cases": 1540,
+        "adversarial_cases": 446,
+        "ordinary_answer_f1": 0.5747397738431032,
+        "primary_ordinary_answer_f1": 0.5574717870564828,
+        "by_category": {
+          "1": {
+            "cases": 282,
+            "answer_f1": 0.44303610833757606,
+            "primary_score": 0.42973823599715055,
+            "execution_statuses": {
+              "success": 282
+            },
+            "answer_statuses": {
+              "answer": 257,
+              "abstain": 25
+            },
+            "candidate_gold_recall_macro": 0.6567934517682558,
+            "primary_presented_gold_recall_macro": 0.6612776231897173,
+            "presented_gold_recall_macro": 0.673787473465525,
+            "citation_gold_recall_macro": 0.49544750281032474
+          },
+          "2": {
+            "cases": 321,
+            "answer_f1": 0.562894719361058,
+            "primary_score": 0.5190662275574883,
+            "execution_statuses": {
+              "success": 321
+            },
+            "answer_statuses": {
+              "answer": 254,
+              "abstain": 67
+            },
+            "candidate_gold_recall_macro": 0.9047248182762202,
+            "primary_presented_gold_recall_macro": 0.8787642782969886,
+            "presented_gold_recall_macro": 0.893821391484943,
+            "citation_gold_recall_macro": 0.7676531671858774
+          },
+          "3": {
+            "cases": 96,
+            "answer_f1": 0.2119706152025368,
+            "primary_score": 0.1875658532977749,
+            "execution_statuses": {
+              "success": 96
+            },
+            "answer_statuses": {
+              "answer": 50,
+              "abstain": 46
+            },
+            "candidate_gold_recall_macro": 0.6095481670929241,
+            "primary_presented_gold_recall_macro": 0.5470481670929241,
+            "presented_gold_recall_macro": 0.5760336743393009,
+            "citation_gold_recall_macro": 0.33152173913043476
+          },
+          "4": {
+            "cases": 841,
+            "answer_f1": 0.6648331571853023,
+            "primary_score": 0.6571864310977966,
+            "execution_statuses": {
+              "success": 841
+            },
+            "answer_statuses": {
+              "answer": 778,
+              "abstain": 62,
+              "clarify": 1
+            },
+            "candidate_gold_recall_macro": 0.9104240982956797,
+            "primary_presented_gold_recall_macro": 0.9389615537059056,
+            "presented_gold_recall_macro": 0.9484740388426476,
+            "citation_gold_recall_macro": 0.8606817281014666
+          },
+          "5": {
+            "cases": 446,
+            "official_refusal_phrase_rate": 0.9282511210762332,
+            "primary_score": 0.9394618834080718,
+            "execution_statuses": {
+              "success": 446
+            },
+            "answer_statuses": {
+              "abstain": 413,
+              "answer": 33
+            },
+            "candidate_gold_recall_macro": 0.9663677130044843,
+            "primary_presented_gold_recall_macro": 0.9573991031390134,
+            "presented_gold_recall_macro": 0.9573991031390134,
+            "citation_gold_recall_macro": 0.18161434977578475
+          }
+        },
+        "execution_statuses": {
+          "success": 1986
+        },
+        "answer_statuses": {
+          "answer": 1372,
+          "abstain": 613,
+          "clarify": 1
+        },
+        "unresolved_gold_entries": 9,
+        "scoring_protocol": "upstream-compatible Porter F1 categories1-4; category5 literal refusal rule",
+        "metric_source": "https://github.com/snap-research/locomo/blob/main/task_eval/evaluation.py",
+        "semantic_accuracy": null,
+        "independent_human_accuracy": null,
+        "errors": 0,
+        "reader_calls": 3336,
+        "failed_calls": 1,
+        "primary_validation_errors": 21,
+        "fallback_cases": 659,
+        "fallback_errors": 0,
+        "contract_repair_cases": 0,
+        "secondary_initial_validation_errors": 0,
+        "inherited_cases": 1985,
+        "new_reader_calls": 3,
+        "source_documents_encoded": 6511,
+        "query_calls": 3247,
+        "new_query_calls": 3,
+        "encoding_counter_scope": "confirmed lineage lower bound; current run counters exact; interrupted in-flight encoding unknown",
+        "usage_known_calls": 3335,
+        "tokens_known": {
+          "prompt_tokens": 14171191,
+          "completion_tokens": 308343,
+          "total_tokens": 14479534
+        },
+        "monetary_cost": null,
+        "case_latency": {
+          "samples": 1986,
+          "p50_ms": 1884.47,
+          "p95_ms": 7050.641
+        },
+        "automatic_memory_writes": 0,
+        "algorithm": "targeted",
+        "policy_contract_errors": 83,
+        "adaptive_retrieval_rounds": {
+          "0": 1327,
+          "1": 659
+        },
+        "sufficiency_states": {
+          "missing_fact": 392,
+          "sufficient": 9,
+          "unsupported": 253,
+          "conflict": 5
+        },
+        "support_verdicts": {},
+        "observed_mean_known_tokens_per_case": 7290.802618328298,
+        "token_mean_scope": "all recorded Reader/planner/verifier attempts including retries; missing usage remains unknown",
+        "semantic_entailment_verified": false
+      },
+      "cost": {
+        "cases": 1986,
+        "attempts": 3336,
+        "known_usage_calls": 3335,
+        "unknown_usage_calls": 1,
+        "failed_calls": 1,
+        "tokens_known": {
+          "prompt_tokens": 14171191,
+          "completion_tokens": 308343,
+          "total_tokens": 14479534
+        },
+        "mean_known_tokens_per_case": 7290.802618328298,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "artifacts": {
+        "annotation-anomalies.json": {
+          "sha256": "0f585371f83b2f45b27a3f54b0da8531b2b4a6e1ecdad6e6de5b8ce7a33d941c",
+          "bytes": 1920
+        },
+        "calls.jsonl": {
+          "sha256": "a139d76535a16bd0d335421c4a453898cbfd85b40fac4003363fa90ebb5f8039",
+          "bytes": 3265
+        },
+        "cases.jsonl": {
+          "sha256": "d567840f29fa83f0935f4eab9f3409d935155d97943651e5985f62bafdb0a242",
+          "bytes": 151717136
+        },
+        "events.jsonl": {
+          "sha256": "9b28dcb0fb9fad5cc740466b6617eb3e0507166da47de13f7c7eb26ba0e2907d",
+          "bytes": 211
+        },
+        "metrics.json": {
+          "sha256": "25f76dc260390859f039fed8af2c81decc5de18e08c388a8e7d9dce0d5b5d66f",
+          "bytes": 4575
+        },
+        "progress.json": {
+          "sha256": "e04fb24dc4a2cda281c31d1494013fe686aff630bd9382b507c45fd7ec19a1d8",
+          "bytes": 92
+        },
+        "prompts.jsonl": {
+          "sha256": "230270116d858a8bdd6784249194f268f52ce962d9c608a214e28c27d13f24fe",
+          "bytes": 47978
+        },
+        "score.json": {
+          "sha256": "ad04a3bc4396dd55662fdc77b9c8bc545074a03b474f10a955ab05e29ee68c59",
+          "bytes": 946880
+        }
+      },
+      "models": {
+        "reader": {
+          "slot": "main",
+          "max_tokens": 1024,
+          "temperature": 0,
+          "top_p": 1,
+          "timeout_seconds": 120,
+          "max_retries": 0,
+          "thinking": "disabled_by_deepseek_api",
+          "model": "deepseek-flash",
+          "endpoint": "https://api.deepseek.com/v1"
+        },
+        "assessor": {
+          "slot": "main",
+          "max_tokens": 1536,
+          "temperature": 0,
+          "top_p": 1,
+          "timeout_seconds": 120,
+          "max_retries": 0,
+          "thinking": "disabled_by_deepseek_api",
+          "model": "deepseek-flash",
+          "endpoint": "https://api.deepseek.com/v1"
+        }
+      },
+      "model_snapshots": {
+        "embedding": {
+          "available": true,
+          "path": "model/bge-small-en-v1.5",
+          "revision": {
+            "model_id": "BAAI/bge-small-en-v1.5",
+            "requested_revision": "master",
+            "revision_pinning": "branch_or_tag",
+            "verification": "all selected files match remote SHA256 and byte size"
+          },
+          "artifacts": [
+            {
+              "file": "config.json",
+              "bytes": 743,
+              "sha256": "094f8e891b932f2000c92cfc663bac4c62069f5d8af5b5278c4306aef3084750"
+            },
+            {
+              "file": "config_sentence_transformers.json",
+              "bytes": 124,
+              "sha256": "940d5f50db195fa6e5e6a4f122c095f77880de259d74b14a65779ed48bdd7c56"
+            },
+            {
+              "file": "configuration.json",
+              "bytes": 76,
+              "sha256": "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd"
+            },
+            {
+              "file": "model.safetensors",
+              "bytes": 133466304,
+              "sha256": "3c9f31665447c8911517620762200d2245a2518d6e7208acc78cd9db317e21ad"
+            },
+            {
+              "file": "modules.json",
+              "bytes": 349,
+              "sha256": "84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf"
+            },
+            {
+              "file": "sentence_bert_config.json",
+              "bytes": 52,
+              "sha256": "84e39fda68ccbff05bfa723ae9c0e70e23e2ec373b76e0f8c6e71af72a693cbf"
+            },
+            {
+              "file": "special_tokens_map.json",
+              "bytes": 125,
+              "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+            },
+            {
+              "file": "tokenizer.json",
+              "bytes": 711396,
+              "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+            },
+            {
+              "file": "tokenizer_config.json",
+              "bytes": 366,
+              "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+            },
+            {
+              "file": "vocab.txt",
+              "bytes": 231508,
+              "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+            }
+          ],
+          "tokenizer_sha256": "9ef7954804a26a25ae774d26fd2849f572f9d0af361a2f6daee464840e748b76"
+        }
+      },
+      "elapsed_ms_current_run": 50795.246,
+      "recovery_lineage": {
+        "source_run": "20261013T164214Z-0a26d2a4",
+        "inherited_cases": 1985,
+        "retry_errors": true,
+        "source_execution_statuses": {
+          "success": 1985,
+          "error": 1
+        },
+        "source_code": {
+          "commit": "0e0df1a8bf1801f94440dcdd933f8ace67b5393d",
+          "branch": "main",
+          "dirty": false,
+          "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed_files": [],
+          "untracked": []
+        },
+        "source_artifacts": {
+          "annotation-anomalies.json": {
+            "sha256": "0f585371f83b2f45b27a3f54b0da8531b2b4a6e1ecdad6e6de5b8ce7a33d941c",
+            "bytes": 1920
+          },
+          "calls.jsonl": {
+            "sha256": "620fcc8c04d0bf5c3c28093cdc5d2c5790a9b0469d4ed4500212eb56479861b6",
+            "bytes": 3319269
+          },
+          "cases.jsonl": {
+            "sha256": "92a7cef3d7b0ee817e250ab845e852a96596a7608d52246d6759363e3ec19acd",
+            "bytes": 151491374
+          },
+          "events.jsonl": {
+            "sha256": "f5f57ba97d37361cf044d01c7f5164dae5e35c924ce190af69d4e5e338673a3e",
+            "bytes": 236118
+          },
+          "metrics.json": {
+            "sha256": "dfaf75250c3ff5209b6aed61732a9a27feeb7487eaa6280ab0aa9343b149d562",
+            "bytes": 4666
+          },
+          "progress.json": {
+            "sha256": "33634d0e0204cebd17b57105799f301ba89b2ff9d688ad55be1b48f3a7612c9d",
+            "bytes": 92
+          },
+          "prompts.jsonl": {
+            "sha256": "4bd623961272de14e2befd47e8a00c5a172a459a412fc2a45c8b52aaf62cef13",
+            "bytes": 50697076
+          },
+          "score.json": {
+            "sha256": "3121a5161c54bf9aab5513aefa8ce22ac4326f609ab0f66f93ff968ed9b6d749",
+            "bytes": 946920
+          }
+        },
+        "source_elapsed_ms": 3317988.371,
+        "source_inflight_calls_unknown": 0
+      }
+    },
+    {
+      "method": "adaptive_risk",
+      "run_id": "20261013T185130Z-4d5d7960",
+      "code": {
+        "commit": "1659240a7ed1388ae11ebac83f4b63f23ce7f2b5",
+        "branch": "main",
+        "dirty": true,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": [
+          {
+            "path": "scripts/render_locomo_risk_chart.py",
+            "sha256": "349c09b85c03886d7160d725bea871a453cff0dc69488091b40690b7ff16abb4"
+          }
+        ]
+      },
+      "protocol": {
+        "id": "locomo-sufficiency-risk-v2-adaptive_risk-full",
+        "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "source_url": "https://github.com/snap-research/locomo/blob/main/data/locomo10.json",
+        "mode": "locomo_full_v2",
+        "scope": "full",
+        "requested_cases": 1986,
+        "selection": "all original QA in source order",
+        "source_kind": "official_constructed_benchmark",
+        "text_only": true,
+        "human_reviewed_by_project": false,
+        "automatic_memory_writes": 0,
+        "inputs_sha256": "a22319ff44e56dfd13e39f6cfc5c6a7a7754aae3586df056432566e5a5cc9c9c",
+        "histories_sha256": "1a8ae59a060d3cded4ffeedad5a0aecc18090c0c627d39990f9c890855052bec",
+        "gold_sha256": "12de1d7a75bc4cda012c0e8ab6690689e63bd98ec12bd48fab91fe2ca725a392",
+        "inference_excludes": [
+          "QA answers",
+          "QA category",
+          "gold evidence",
+          "adversarial_answer",
+          "image search query",
+          "observation",
+          "session_summary",
+          "event_summary"
+        ],
+        "time_policy": "raw session dates; no invented event dates/timezone/recorded axis",
+        "sufficiency_system_sha256": "267dc72612e5680b1ebfed916a2c60f1dd8249b1f4102fe9c3292ec67a587646",
+        "support_system_sha256": "ae0e0d4d3bfcbd2f9cd513f24554b533248e11583e3304cecfbe1d33fd1dce93",
+        "supplement_policy": "retain_previous_evidence_then_up_to_80_rrf_supplements",
+        "stop_policy": "unsupported/conflict after first supplement; no complete-history Reader",
+        "adaptive_limits": {
+          "evidence_chars": [
+            12000,
+            16000,
+            20000
+          ],
+          "max_calls": 6,
+          "max_case_input_bytes": 160000,
+          "max_queries_per_round": 2,
+          "full_history_reader_allowed": false
+        },
+        "baseline": "B2_rrf_english_v2",
+        "selector": "ranked_anchor_context",
+        "concurrency": 2,
+        "candidate_limit": 40,
+        "anchor_limit": 40,
+        "evidence_chars": 12000,
+        "context_radius": 1,
+        "rrf_k": 60,
+        "fallback": "adaptive_risk",
+        "fallback_trigger": "insufficient quoted requirements or unsupported answer",
+        "fallback_call_limit": 5,
+        "fallback_budget": "bounded evidence stages and cumulative case bytes; no complete-history Reader",
+        "contract_repair_call_limit": 1,
+        "contract_repair": "same evidence, regenerate invalid secondary JSON/citations; never insert citations",
+        "lexical": "FTS5 Porter unicode61 BM25 OR non-stopword query tokens",
+        "reader_system_sha256": "23572f440b273e2d9e0d5614a501d34595dd95a26ca25b8874d7a5cc41ab98aa",
+        "embedding_model": "model/bge-small-en-v1.5",
+        "embedding_language_warning": null,
+        "retrieval_scope": "source Dense+English BM25; no production Claim/View access"
+      },
+      "metrics": {
+        "requested_cases": 1986,
+        "ordinary_cases": 1540,
+        "adversarial_cases": 446,
+        "ordinary_answer_f1": 0.5115119874690983,
+        "primary_ordinary_answer_f1": 0.5023274741336351,
+        "by_category": {
+          "1": {
+            "cases": 282,
+            "answer_f1": 0.37449828235922117,
+            "primary_score": 0.34186590874449363,
+            "execution_statuses": {
+              "success": 281,
+              "error": 1
+            },
+            "answer_statuses": {
+              "answer": 197,
+              "abstain": 83,
+              "clarify": 1,
+              "unavailable": 1
+            },
+            "candidate_gold_recall_macro": 0.744517193747317,
+            "primary_presented_gold_recall_macro": 0.6612776231897173,
+            "presented_gold_recall_macro": 0.7312399107051962,
+            "citation_gold_recall_macro": 0.3942992420875959
+          },
+          "2": {
+            "cases": 321,
+            "answer_f1": 0.46494049187836983,
+            "primary_score": 0.4420476699201273,
+            "execution_statuses": {
+              "success": 321
+            },
+            "answer_statuses": {
+              "answer": 202,
+              "abstain": 116,
+              "clarify": 3
+            },
+            "candidate_gold_recall_macro": 0.9280893042575287,
+            "primary_presented_gold_recall_macro": 0.8787642782969886,
+            "presented_gold_recall_macro": 0.927570093457944,
+            "citation_gold_recall_macro": 0.5924195223260643
+          },
+          "3": {
+            "cases": 96,
+            "answer_f1": 0.11065334367982473,
+            "primary_score": 0.1229750506268471,
+            "execution_statuses": {
+              "success": 96
+            },
+            "answer_statuses": {
+              "answer": 21,
+              "abstain": 74,
+              "clarify": 1
+            },
+            "candidate_gold_recall_macro": 0.6758602650546385,
+            "primary_presented_gold_recall_macro": 0.5470481670929241,
+            "presented_gold_recall_macro": 0.6350170502983802,
+            "citation_gold_recall_macro": 0.10597826086956522
+          },
+          "4": {
+            "cases": 841,
+            "answer_f1": 0.6209884972543296,
+            "primary_score": 0.6224437776400865,
+            "execution_statuses": {
+              "success": 841
+            },
+            "answer_statuses": {
+              "answer": 719,
+              "abstain": 121,
+              "clarify": 1
+            },
+            "candidate_gold_recall_macro": 0.9229092350376535,
+            "primary_presented_gold_recall_macro": 0.9389615537059056,
+            "presented_gold_recall_macro": 0.9556084026952041,
+            "citation_gold_recall_macro": 0.7980578676179151
+          },
+          "5": {
+            "cases": 446,
+            "official_refusal_phrase_rate": 0.9596412556053812,
+            "primary_score": 0.9641255605381166,
+            "execution_statuses": {
+              "success": 446
+            },
+            "answer_statuses": {
+              "abstain": 419,
+              "answer": 18,
+              "clarify": 9
+            },
+            "candidate_gold_recall_macro": 0.9730941704035875,
+            "primary_presented_gold_recall_macro": 0.9573991031390134,
+            "presented_gold_recall_macro": 0.9641255605381166,
+            "citation_gold_recall_macro": 0.011210762331838564
+          }
+        },
+        "execution_statuses": {
+          "success": 1985,
+          "error": 1
+        },
+        "answer_statuses": {
+          "answer": 1157,
+          "abstain": 813,
+          "clarify": 15,
+          "unavailable": 1
+        },
+        "unresolved_gold_entries": 9,
+        "scoring_protocol": "upstream-compatible Porter F1 categories1-4; category5 literal refusal rule",
+        "metric_source": "https://github.com/snap-research/locomo/blob/main/task_eval/evaluation.py",
+        "semantic_accuracy": null,
+        "independent_human_accuracy": null,
+        "errors": 1,
+        "reader_calls": 6156,
+        "failed_calls": 9,
+        "primary_validation_errors": 7,
+        "fallback_cases": 936,
+        "fallback_errors": 0,
+        "contract_repair_cases": 0,
+        "secondary_initial_validation_errors": 0,
+        "inherited_cases": 1978,
+        "new_reader_calls": 27,
+        "source_documents_encoded": 8608,
+        "query_calls": 4466,
+        "new_query_calls": 12,
+        "encoding_counter_scope": "confirmed lineage lower bound; current run counters exact; interrupted in-flight encoding unknown",
+        "usage_known_calls": 6149,
+        "tokens_known": {
+          "prompt_tokens": 23533269,
+          "completion_tokens": 1616676,
+          "total_tokens": 25149945
+        },
+        "monetary_cost": null,
+        "case_latency": {
+          "samples": 1986,
+          "p50_ms": 6773.816,
+          "p95_ms": 13521.337
+        },
+        "automatic_memory_writes": 0,
+        "algorithm": "adaptive_risk",
+        "policy_contract_errors": 267,
+        "adaptive_retrieval_rounds": {
+          "0": 1051,
+          "2": 528,
+          "1": 407
+        },
+        "sufficiency_states": {
+          "sufficient": 1363,
+          "missing_fact": 1506,
+          "unsupported": 558,
+          "conflict": 23
+        },
+        "support_verdicts": {
+          "supported": 1200,
+          "insufficient": 103,
+          "contradicted": 11
+        },
+        "observed_mean_known_tokens_per_case": 12663.617824773413,
+        "token_mean_scope": "all recorded Reader/planner/verifier attempts including retries; missing usage remains unknown",
+        "semantic_entailment_verified": false
+      },
+      "cost": {
+        "cases": 1986,
+        "attempts": 6156,
+        "known_usage_calls": 6149,
+        "unknown_usage_calls": 7,
+        "failed_calls": 9,
+        "tokens_known": {
+          "prompt_tokens": 23533269,
+          "completion_tokens": 1616676,
+          "total_tokens": 25149945
+        },
+        "mean_known_tokens_per_case": 12663.617824773413,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "artifacts": {
+        "annotation-anomalies.json": {
+          "sha256": "0f585371f83b2f45b27a3f54b0da8531b2b4a6e1ecdad6e6de5b8ce7a33d941c",
+          "bytes": 1920
+        },
+        "calls.jsonl": {
+          "sha256": "051841efc63b944f8b0f943699eedc076d4d7d077155050c1921fc8cb0aaf94b",
+          "bytes": 51298
+        },
+        "cases.jsonl": {
+          "sha256": "297fb9087a8a4115ef6448c3fdac489d76334665a1935dc506aa77425b50bc23",
+          "bytes": 231846312
+        },
+        "events.jsonl": {
+          "sha256": "42f437b68cfeb10a0b77e1a20ad06e127010701ec4e14d2353efd9d20d62d6eb",
+          "bytes": 1025
+        },
+        "metrics.json": {
+          "sha256": "c8830c3cc5c7097a48223bf74970cbb738ce995b3fda180e859391c70b4bf570",
+          "bytes": 4870
+        },
+        "progress.json": {
+          "sha256": "82a44ebac76fb8c435cf9870ce21e8cba4410cae95883baf187c910288575fe4",
+          "bytes": 92
+        },
+        "prompts.jsonl": {
+          "sha256": "aa46f8594bc09502444914554a94b1c349d07637b1c8bde6dd95966b537b1cb9",
+          "bytes": 328176
+        },
+        "score.json": {
+          "sha256": "5963842ffe6d1ba1771f67d214820b0144fba9349c8c23d8197b2b5cba976d8c",
+          "bytes": 937246
+        }
+      },
+      "gate_proxy": {
+        "labels": "official category5 negatives; category4 answer literal in primary text positives",
+        "counts": {
+          "tp": 382,
+          "fn": 35,
+          "tn": 400,
+          "fp": 20,
+          "unknown_negative": 26,
+          "unknown_positive": 10
+        },
+        "evaluated": 873,
+        "excluded": 1113,
+        "unknown_decisions": 36,
+        "analysis_version": "gate-proxy-v2-unknown-contract-errors-not-credited-as-negatives",
+        "macro_f1": 0.9148256518458984,
+        "positive_recall": 0.8946135831381733,
+        "negative_recall": 0.8968609865470852,
+        "independent_semantic_gold": false,
+        "model_confidence_used": false
+      },
+      "models": {
+        "reader": {
+          "slot": "main",
+          "max_tokens": 1024,
+          "temperature": 0,
+          "top_p": 1,
+          "timeout_seconds": 120,
+          "max_retries": 0,
+          "thinking": "disabled_by_deepseek_api",
+          "model": "deepseek-flash",
+          "endpoint": "https://api.deepseek.com/v1"
+        },
+        "assessor": {
+          "slot": "main",
+          "max_tokens": 1536,
+          "temperature": 0,
+          "top_p": 1,
+          "timeout_seconds": 120,
+          "max_retries": 0,
+          "thinking": "disabled_by_deepseek_api",
+          "model": "deepseek-flash",
+          "endpoint": "https://api.deepseek.com/v1"
+        }
+      },
+      "model_snapshots": {
+        "embedding": {
+          "available": true,
+          "path": "model/bge-small-en-v1.5",
+          "revision": {
+            "model_id": "BAAI/bge-small-en-v1.5",
+            "requested_revision": "master",
+            "revision_pinning": "branch_or_tag",
+            "verification": "all selected files match remote SHA256 and byte size"
+          },
+          "artifacts": [
+            {
+              "file": "config.json",
+              "bytes": 743,
+              "sha256": "094f8e891b932f2000c92cfc663bac4c62069f5d8af5b5278c4306aef3084750"
+            },
+            {
+              "file": "config_sentence_transformers.json",
+              "bytes": 124,
+              "sha256": "940d5f50db195fa6e5e6a4f122c095f77880de259d74b14a65779ed48bdd7c56"
+            },
+            {
+              "file": "configuration.json",
+              "bytes": 76,
+              "sha256": "6bc26d64eb5024b4d1dab5a52371958b429256d6c9d59787f1f5294a54e0cebd"
+            },
+            {
+              "file": "model.safetensors",
+              "bytes": 133466304,
+              "sha256": "3c9f31665447c8911517620762200d2245a2518d6e7208acc78cd9db317e21ad"
+            },
+            {
+              "file": "modules.json",
+              "bytes": 349,
+              "sha256": "84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf"
+            },
+            {
+              "file": "sentence_bert_config.json",
+              "bytes": 52,
+              "sha256": "84e39fda68ccbff05bfa723ae9c0e70e23e2ec373b76e0f8c6e71af72a693cbf"
+            },
+            {
+              "file": "special_tokens_map.json",
+              "bytes": 125,
+              "sha256": "b6d346be366a7d1d48332dbc9fdf3bf8960b5d879522b7799ddba59e76237ee3"
+            },
+            {
+              "file": "tokenizer.json",
+              "bytes": 711396,
+              "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+            },
+            {
+              "file": "tokenizer_config.json",
+              "bytes": 366,
+              "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+            },
+            {
+              "file": "vocab.txt",
+              "bytes": 231508,
+              "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+            }
+          ],
+          "tokenizer_sha256": "9ef7954804a26a25ae774d26fd2849f572f9d0af361a2f6daee464840e748b76"
+        }
+      },
+      "elapsed_ms_current_run": 91285.209,
+      "recovery_lineage": {
+        "source_run": "20261013T164215Z-32accfcf",
+        "inherited_cases": 1978,
+        "retry_errors": true,
+        "source_execution_statuses": {
+          "success": 1978,
+          "error": 8
+        },
+        "source_code": {
+          "commit": "0e0df1a8bf1801f94440dcdd933f8ace67b5393d",
+          "branch": "main",
+          "dirty": false,
+          "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "changed_files": [],
+          "untracked": []
+        },
+        "source_artifacts": {
+          "annotation-anomalies.json": {
+            "sha256": "0f585371f83b2f45b27a3f54b0da8531b2b4a6e1ecdad6e6de5b8ce7a33d941c",
+            "bytes": 1920
+          },
+          "calls.jsonl": {
+            "sha256": "9bcb5bcccea1349535eb98af04a1548f25c9fdcb9084aa9ba4b500a20ef4159d",
+            "bytes": 10708573
+          },
+          "cases.jsonl": {
+            "sha256": "86b185e73fc35ff894953ed81c424f28778068084f2c8bc858c49c84e997302b",
+            "bytes": 231559024
+          },
+          "events.jsonl": {
+            "sha256": "0e64449e58ad2563d57def1a19f4e69ac388d196a5420e48cc4d56cbe920fd2b",
+            "bytes": 236104
+          },
+          "metrics.json": {
+            "sha256": "7eb1f47b9aecfc382caaf30505b063941411c064fbfba0136039e5a1ab5d1082",
+            "bytes": 4965
+          },
+          "progress.json": {
+            "sha256": "47c77b9dcb93013e9e1853c21d397bd82f6fe346768d7450ed8d5c77f2c1f949",
+            "bytes": 92
+          },
+          "prompts.jsonl": {
+            "sha256": "09b2f0520435b3faa04468322913d0b08aaa3ce4bc4e23d36a3840d75eeb89ae",
+            "bytes": 85397880
+          },
+          "score.json": {
+            "sha256": "73f88211a86eeb1dc65c7ce8be74d242c77c9f3fcff0f24c6ad2d47c329ae572",
+            "bytes": 937166
+          }
+        },
+        "source_elapsed_ms": 7690407.573,
+        "source_inflight_calls_unknown": 0
+      }
+    }
+  ],
+  "same_original_case_ids": true,
+  "same_reader_and_embedding_snapshots": true,
+  "independent_human_review": false,
+  "semantic_accuracy": null,
+  "unseen_test_claim": false,
+  "production_memory_writes": 0,
+  "artifact_and_budget_audit": [
+    {
+      "run_id": "20261013T173925Z-d5b0a2e9",
+      "cases": 1986,
+      "status": "completed",
+      "errors": 0,
+      "calls_max_per_attempt": 5,
+      "request_bytes_max_per_attempt": 80809,
+      "complete_policy_rows": 1986,
+      "retrieval_rounds_max": 1,
+      "monotonic_supplement_rounds_checked": 659,
+      "stages": {
+        "reader": 2645,
+        "sufficiency": 659,
+        "reader_repair": 30
+      },
+      "contract_errors": {
+        "sufficiency": 45,
+        "reader": 30,
+        "reader_repair": 8
+      },
+      "ordinary_abstained": 201,
+      "ordinary_answered_zero_f1": 90,
+      "cost": {
+        "cases": 1986,
+        "attempts": 3336,
+        "known_usage_calls": 3335,
+        "unknown_usage_calls": 1,
+        "failed_calls": 1,
+        "tokens_known": {
+          "prompt_tokens": 14171191,
+          "completion_tokens": 308343,
+          "total_tokens": 14479534
+        },
+        "mean_known_tokens_per_case": 7290.802618328298,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "artifact_sha_verified": true,
+      "frozen_source_verified": true,
+      "case_sets_verified": true,
+      "source_sha_and_same_conversation_verified": true,
+      "model_calls_by_audit": 0,
+      "new_scores_by_audit": 0,
+      "independent_semantic_verification": false
+    },
+    {
+      "run_id": "20261013T185130Z-4d5d7960",
+      "cases": 1986,
+      "status": "failed",
+      "errors": 1,
+      "calls_max_per_attempt": 6,
+      "request_bytes_max_per_attempt": 114598,
+      "complete_policy_rows": 1985,
+      "retrieval_rounds_max": 2,
+      "monotonic_supplement_rounds_checked": 1464,
+      "stages": {
+        "sufficiency": 3450,
+        "reader": 1360,
+        "support": 1315,
+        "reader_repair": 14
+      },
+      "contract_errors": {
+        "sufficiency": 227,
+        "support": 20,
+        "reader": 14,
+        "reader_repair": 6
+      },
+      "ordinary_abstained": 400,
+      "ordinary_answered_zero_f1": 55,
+      "cost": {
+        "cases": 1986,
+        "attempts": 6156,
+        "known_usage_calls": 6149,
+        "unknown_usage_calls": 7,
+        "failed_calls": 9,
+        "tokens_known": {
+          "prompt_tokens": 23533269,
+          "completion_tokens": 1616676,
+          "total_tokens": 25149945
+        },
+        "mean_known_tokens_per_case": 12663.617824773413,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "artifact_sha_verified": true,
+      "frozen_source_verified": true,
+      "case_sets_verified": true,
+      "source_sha_and_same_conversation_verified": true,
+      "model_calls_by_audit": 0,
+      "new_scores_by_audit": 0,
+      "independent_semantic_verification": false
+    }
+  ],
+  "export_scope": "aggregate-only; frozen run artifacts SHA verified; no QA text, reference answers or private owner paths",
+  "export_date_local": "2026-10-14",
+  "elapsed_scope": "parallel methods overlap; current-run duration plus sequential error-recovery source duration, not summed parallel wall-clock",
+  "source_license": "CC BY-NC 4.0; text-only official constructed conversations, not qin personal history",
+  "production_default_changed": false,
+  "production_adaptive_retrieval_enabled": false,
+  "offline_export_model_calls": 0,
+  "offline_export_new_scores": 0,
+  "contract_replay": [
+    {
+      "run_id": "20261013T164214Z-0a26d2a4",
+      "analyzed_current_attempts": 1986,
+      "contract_rejection_reasons": {
+        "sufficiency:Missing fact has no missing requirement": 14,
+        "sufficiency:Conflict requires two distinct sources": 21,
+        "sufficiency:Conflict has no conflicting requirement": 8,
+        "sufficiency:Quote not present in exact source text": 1,
+        "sufficiency:provider_terminal_error": 1,
+        "sufficiency:schema_error": 1
+      },
+      "validation_counts": {
+        "sufficiency:contract_passed": 613,
+        "sufficiency:schema:too_long": 1
+      },
+      "answer_rule_blockers": {},
+      "artifact_sha_verified": true,
+      "model_calls": 0,
+      "new_scores": 0,
+      "semantic_rejudgment": false
+    },
+    {
+      "run_id": "20261013T173925Z-d5b0a2e9",
+      "analyzed_current_attempts": 1,
+      "contract_rejection_reasons": {},
+      "validation_counts": {
+        "sufficiency:contract_passed": 1
+      },
+      "answer_rule_blockers": {},
+      "artifact_sha_verified": true,
+      "model_calls": 0,
+      "new_scores": 0,
+      "semantic_rejudgment": false
+    },
+    {
+      "run_id": "20261013T164215Z-32accfcf",
+      "analyzed_current_attempts": 1986,
+      "contract_rejection_reasons": {
+        "sufficiency:Missing fact has no missing requirement": 124,
+        "sufficiency:Conflict has no conflicting requirement": 51,
+        "support:provider_terminal_error": 2,
+        "support:schema_error": 6,
+        "support:Answer units not completely covered": 10,
+        "sufficiency:Conflict requires two distinct sources": 39,
+        "sufficiency:provider_terminal_error": 4,
+        "sufficiency:Date anchor must be paired with the same utterance text": 5,
+        "sufficiency:Quote not present in exact source text": 1,
+        "sufficiency:schema_error": 3,
+        "sufficiency:Sufficiency contradicts requirements": 3,
+        "support:Timestamp alone cannot support an answer unit": 1,
+        "support:Support claim differs from proposed answer": 3
+      },
+      "validation_counts": {
+        "sufficiency:contract_passed": 3218,
+        "support:contract_passed": 1288,
+        "support:schema:too_long": 6,
+        "sufficiency:schema:too_long": 3
+      },
+      "answer_rule_blockers": {
+        "requested_subject_not_grounded_in_quotes": 18,
+        "absolute_or_first_not_explicitly_established": 16,
+        "high_impact_fact_requires_explicit_support": 3
+      },
+      "artifact_sha_verified": true,
+      "model_calls": 0,
+      "new_scores": 0,
+      "semantic_rejudgment": false
+    },
+    {
+      "run_id": "20261013T185130Z-4d5d7960",
+      "analyzed_current_attempts": 8,
+      "contract_rejection_reasons": {
+        "sufficiency:schema_error": 1,
+        "support:provider_terminal_error": 1
+      },
+      "validation_counts": {
+        "sufficiency:contract_passed": 10,
+        "support:contract_passed": 7,
+        "sufficiency:schema:too_long": 1
+      },
+      "answer_rule_blockers": {},
+      "artifact_sha_verified": true,
+      "model_calls": 0,
+      "new_scores": 0,
+      "semantic_rejudgment": false
+    }
+  ],
+  "pipeline_budget_audit": {
+    "method": "adaptive_risk",
+    "budget_exhausted_cases": 69,
+    "last_reserved_stage": {
+      "support": 48,
+      "reader": 13,
+      "sufficiency": 4,
+      "reader_repair": 4
+    },
+    "scope": "final attempt rows incl inherited successful cases; no semantic rejection correctness claim",
+    "denied_stage_cases": {
+      "retrieval_planning": 69,
+      "support": 11,
+      "reader": 3
+    }
+  },
+  "comparison_limits": [
+    "same frozen QA and declared Reader config/local embedding snapshots; remote deployment weights not attested",
+    "different context budgets and additional calls; no equal-token performance claim",
+    "old rows are same-batch primary/final phases; new methods are independent runs",
+    "all labels previously used for diagnostics; no unseen-test generalization claim",
+    "historical baseline concurrency 4; new full methods each concurrency 2 run in parallel; wall times not comparable as algorithm latency",
+    "official constructed text-only benchmark; not real longitudinal qin history"
+  ]
+}

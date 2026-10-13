@@ -1,0 +1,38 @@
+{
+  "source": "locomo-risk-full-20261014.json",
+  "source_sha256": "d95cf0ba0fe46aae377b68e2796e4e6aec1e9fe97491482bd4887211a8f90d7e",
+  "cases": 1986,
+  "rows": [
+    {
+      "method": "original_rrf_primary",
+      "f1": 0.5611998968108594,
+      "refusal": 0.9417040358744395,
+      "tokens": 3986.384189325277
+    },
+    {
+      "method": "original_full_history",
+      "f1": 0.586542281771223,
+      "refusal": 0.9237668161434978,
+      "tokens": 18414.960221550857
+    },
+    {
+      "method": "targeted",
+      "f1": 0.5747397738431032,
+      "refusal": 0.9282511210762332,
+      "tokens": 7290.802618328298
+    },
+    {
+      "method": "adaptive_risk",
+      "f1": 0.5115119874690983,
+      "refusal": 0.9596412556053812,
+      "tokens": 12663.617824773413
+    }
+  ],
+  "images": {
+    "locomo-risk-full-20261014.png": "1bbe5dccea9fe732f39546b79f379cdf3a6eed0889b39cc173b0d1a74ce49409",
+    "locomo-risk-full-20261014.svg": "2aaa28d52fdce6cfe39453ef15241fe6cfd39c51aa9b33b1080645d8d524d76c"
+  },
+  "matplotlib_version": "3.10.9",
+  "model_calls": 0,
+  "new_scores": 0
+}
