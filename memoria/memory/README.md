@@ -69,3 +69,5 @@ MEMORY.md 从有效普通记忆重建，不是另一权威数据库；SELF.md �
 ## 有引用约束的Reader
 
 新增/api/memory-answer复用QueryRequest与统一访问，在适用完整证据可呈现时调用main reader。严格JSON/引用展示集/审批/条件整组/来源span-SHA/新鲜状态校验，失败拒答，缺项可不调用；不把来源补检变成自动批准。旧memory-query保持诊断，新接口可能产生远程费用。有限运行时个人状态分支复用同契约，通用自由文本尚未全部覆盖，semantic_entailment_verified=false。[完整预算/配置/边界](../../docs/implemented/完整Reader预算与生产引用校验.md)。
+
+本地BGE另支持明确英文small v1.5模型（384维/英文检索指令/独立指纹），用于LoCoMo英文独立实验，生产中文配置保持；同样离线safetensors、512 Token完整分块、无远端代码。[英文评测协议](../../docs/implemented/LoCoMo全量评测与英文检索修复.md)。

@@ -17,10 +17,12 @@ class PrefixRetriever:
     Document and query encodings follow the configured BGE production protocol.
     No similarity cutoff is tuned against gold; whole messages enter the reader.
     """
-    def __init__(self, embedding: EmbeddingClient, *, rrf_k=60):
+    def __init__(self, embedding: EmbeddingClient, *, rrf_k=60, lexical_select=None):
         if type(rrf_k) is not int or rrf_k < 1:
             raise ValueError("Invalid RRF constant")
         self.embedding, self.rrf_k = embedding, rrf_k
+        # Historical LCCC runs retain their frozen compact branch by default.
+        self.lexical_select = lexical_select
         self.documents = {}
         self.document_encodes = self.query_encodes = self.document_cache_hits = 0
 
@@ -87,7 +89,8 @@ class PrefixRetriever:
             if baseline=="B2_rrf":
                 # Same compact lexical branch as the already frozen baseline.
                 from .runner import select_history
-                lexical = select_history(history,question,"B2_fts_compact",limit)
+                lexical = (self.lexical_select(history, question, limit) if self.lexical_select else
+                           select_history(history,question,"B2_fts_compact",limit))
                 lexical_rank = {item["id"]:rank for rank,item in enumerate(lexical,1)}
                 candidates = [row for row in scored if row[1]["id"] in dense_rank or row[1]["id"] in lexical_rank]
                 def fusion(row):

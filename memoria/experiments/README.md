@@ -57,3 +57,7 @@ access_eval 用真实账号副本，0 Claim 仅为空状态开销，不证明正
 ## 官方构建Benchmark的十题入口
 
 `research.py --user USERNAME locomo-smoke --help`显示独立入口。普通真实历史协议不被LoCoMo替换；新授权只对指定官方文件做10题，按类别/源顺序固定，不凭gold换题。真实运行10次DeepSeek/0错误，4回答6拒答；旧compact词面均无英文命中、实际仅Dense，候选/呈现证据召回34%/22%。诊断非官方F1/J/语义准确率，完整Claim演化尚未测试。[契约与限制](../../docs/implemented/LoCoMo十题真实调用诊断.md)。
+
+## LoCoMo英文全量入口
+
+[locomo_eval.py](locomo_eval.py)的新locomo-run默认完整1986题，普通1540/对抗446独立评分；英文BM25+Dense/RRF、紧凑候选优先/邻句、英文BGE、并发4独立调用编号。旧locomo-smoke保留v1复现，不覆盖历史。逐题产物在账号目录，生产0写入，gold只在推理后评分。[协议和命令](../../docs/implemented/LoCoMo全量评测与英文检索修复.md)。

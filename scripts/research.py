@@ -16,6 +16,7 @@ from memoria.experiments.access_eval import benchmark_access
 from memoria.experiments.evidence_eval import replay_selection
 from memoria.experiments.retrieval import BASELINES
 from memoria.experiments.locomo import execute_smoke
+from memoria.experiments.locomo_eval import execute as execute_locomo
 from scripts.user_paths import directory_for
 
 
@@ -75,6 +76,16 @@ def main():
     sub.add_argument("--allow-remote", action="store_true")
     sub.add_argument("--embedding-device", choices=["auto", "cuda", "cpu"], default="auto")
     sub.add_argument("--baseline", choices=["B0_recent", "B2_fts_compact", "B2_dense", "B2_rrf"], default="B2_rrf")
+    sub = subs.add_parser("locomo-run", help="English v2 benchmark; all official QA by default; no production writes")
+    sub.add_argument("--input", required=True)
+    sub.add_argument("--scope", choices=["smoke", "full"], default="full")
+    sub.add_argument("--profile")
+    sub.add_argument("--roles")
+    sub.add_argument("--allow-remote", action="store_true")
+    sub.add_argument("--embedding-device", choices=["auto", "cuda", "cpu"], default="auto")
+    sub.add_argument("--concurrency", type=int, default=4)
+    sub.add_argument("--embedding-model", choices=["bge-small-en-v1.5", "bge-small-zh-v1.5"], default="bge-small-en-v1.5")
+    sub.add_argument("--fallback", choices=["none", "full_history"], default="full_history")
     sub = subs.add_parser("select-evidence",help="Compare four selectors on a captured retrieval pool; zero model calls")
     sub.add_argument("--source-run",required=True)
     sub.add_argument("--budget",type=int,default=1024)
@@ -125,6 +136,13 @@ def main():
         result = asyncio.run(execute_smoke(workspace, Settings.load(args.config), private_input(args.input, directory),
             profile=args.profile, allow_remote=args.allow_remote, baseline=args.baseline,
             embedding_device=args.embedding_device,
+            roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
+    elif args.command == "locomo-run":
+        result = asyncio.run(execute_locomo(workspace, Settings.load(args.config), private_input(args.input, directory),
+            scope=args.scope, profile=args.profile, allow_remote=args.allow_remote,
+            embedding_device=args.embedding_device, concurrency=args.concurrency,
+            embedding_model=args.embedding_model,
+            fallback=args.fallback,
             roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
     elif args.command == "benchmark-access":
         result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)

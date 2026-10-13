@@ -41,6 +41,27 @@ def test_changed_weights_are_rejected_before_lazy_load(tmp_path):
         encoder._executor.shutdown(wait=True)
 
 
+def test_english_bge_instruction_namespace_and_dimension(tmp_path, monkeypatch):
+    model = _model_files(tmp_path / 'bge-small-en-v1.5')
+    (model / 'config.json').write_text('{"model_type":"bert","hidden_size":384}')
+    client = _client(model)
+    seen=[]
+    async def fake_embed(text):
+        seen.append(text)
+        return [1.0, 0.0]
+    monkeypatch.setattr(client, 'embed', fake_embed)
+    asyncio.run(client.embed_query('When did she adopt dogs?'))
+    assert seen == [local_bge.EN_QUERY_INSTRUCTION + 'When did she adopt dogs?']
+    before=client.namespace
+    monkeypatch.setattr(local_bge, 'EN_POLICY', local_bge.EN_POLICY+':changed')
+    assert _client(model).namespace != before
+    encoder=local_bge.LocalBgeEncoder(model, 'cpu')
+    try:
+        assert encoder.public_status()['dimension']==384
+    finally:
+        encoder._executor.shutdown(wait=True)
+
+
 def _settings(tmp_path: Path, model: Path) -> Settings:
     config = tmp_path / "local-test.toml"
     config.write_text(

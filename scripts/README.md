@@ -60,3 +60,7 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 ## LoCoMo十题测试
 
 新增`locomo-smoke --input LOCAL_FILE`，固定官方SHA及10题，独立bundle/run，不导入生产或真实人物协议；远程仍需`--allow-remote`、账号私有profile和匹配roles。只验证执行链路，不自动扩全量或标语义正确。[本轮结果/英文分支限制](../docs/implemented/LoCoMo十题真实调用诊断.md)。
+
+## LoCoMo英文正式入口
+
+`research.py --user USERNAME locomo-run --help`；默认全1986题，`--scope smoke`同固定10题。英文BGE在model/，评分可选依赖`requirements-research.txt`安装到.venv；远程显式授权/profile/roles，默认并发4，错误不丢分母。旧locomo-smoke仅历史v1复现。[完整说明](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。

@@ -20,3 +20,5 @@ lccc-base.manifest.json记录LCCC公开来源版本、选样及指纹。Git仅�
 ## 后续LoCoMo接入
 
 [locomo10.manifest.json](locomo10.manifest.json)记录用户指定的官方构建benchmark（LLM生成并人工编辑、CC-BY-NC-4.0）：原文件2805274字节/10对话/1986题、SHA冻结。原始副本在忽略目录data/benchmarks/locomo/raw/，与qin的50段LCCC和生产个人事实分开；inputs/gold在账号research/benchmarks，真实10题run在experiments。仅固定每段1题，未全量跑1540普通题/446对抗题。[结果与命令](../docs/implemented/LoCoMo十题真实调用诊断.md)。
+
+LoCoMo正式入口新增locomo-run（完整1986题，1540普通/446对抗独立），源码SHA固定，清单不承载原始语料；data/benchmarks原文件、账号research/benchmarks冻结包和experiments结果分开。旧十题开发诊断不覆盖；异常gold保留，文本模式不读图像搜索字段。[完整协议](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。

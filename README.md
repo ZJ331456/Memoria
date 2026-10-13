@@ -304,3 +304,7 @@ replay需要本机已有对应私有来源run与冻结协议；Git只包含无�
 用户指定官方locomo10.json已核对SHA/2805274字节，10段长对话/1986题。原始副本在忽略的data/benchmarks，inputs/gold/run与生产记忆分开；本轮固定每段1题，**10次DeepSeek/10次执行通过/0错误，4回答6拒答**，不能报40%正确率。5882原话BGE中文/CUDA编码；40候选→12呈现的gold证据召回宏平均34%→22%。旧LCCC compact英文词面全部无命中，本轮RRF实际仅Dense；1个gold引用ID不存在，原分母保留。总墙钟124.801秒、已知23306Token，货币成本/官方F1/J/独立语义准确率未知。
 
 相关98 passed / 59.04s；逐题报告只留本地账号reports，不含凭据。生产仍50会话/206消息/0memories，没有把构建benchmark当qin真人历史。接下来先补英文词面适配，再独立登记模型/选择消融；本轮没有全量评测1540普通题/446对抗题。[实现/运行命令](docs/implemented/LoCoMo十题真实调用诊断.md) · [来源清单](datasets/locomo10.manifest.json) · [无原话聚合](docs/assets/evaluation/locomo-smoke-20261013.json)。
+
+## 13. LoCoMo英文修复与全量入口
+
+新增locomo-run：英文Porter BM25+Dense/RRF，先保留候选再补邻句，紧凑12000字符实际证据预算，独立英文BGE本地模型；并发4、原始1986题完整分母、1540普通/446对抗分类评分。旧LCCC和十题记录原样保留。真实全量验收本次继续推进，不将回答率或词面F1当语义准确率。[实现/命令/结果](docs/implemented/LoCoMo全量评测与英文检索修复.md)。

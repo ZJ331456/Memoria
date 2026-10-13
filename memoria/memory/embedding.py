@@ -104,8 +104,9 @@ class EmbeddingClient:
 
     async def embed_query(self, text: str) -> list[float] | None:
         if self.uses_bge_instruction:
-            from .local_bge import QUERY_INSTRUCTION
-            text = QUERY_INSTRUCTION + text
+            from .local_bge import QUERY_INSTRUCTION, EN_QUERY_INSTRUCTION
+            name = self.config.model.replace('\\', '/').rstrip('/').split('/')[-1]
+            text = (EN_QUERY_INSTRUCTION if name == 'bge-small-en-v1.5' else QUERY_INSTRUCTION) + text
         return await self.embed(text)
 
     async def embed(self, text: str) -> list[float] | None:

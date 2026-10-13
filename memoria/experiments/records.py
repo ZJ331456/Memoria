@@ -76,7 +76,7 @@ def model_snapshot(path: Path, root: Path) -> dict:
 
 def environment() -> dict:
     packages = {}
-    for name in ("torch", "transformers", "numpy", "httpx", "fastapi", "openai", "sqlite-vec", "pytest"):
+    for name in ("torch", "transformers", "numpy", "httpx", "fastapi", "openai", "sqlite-vec", "pytest", "nltk"):
         try:
             packages[name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:

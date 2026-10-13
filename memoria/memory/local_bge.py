@@ -11,8 +11,10 @@ from threading import BoundedSemaphore
 from typing import Any
 
 QUERY_INSTRUCTION = "为这个句子生成表示以用于检索相关文章："
+EN_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
 MAX_LENGTH = 512
 POLICY = "bge-zh-v1.5:cls:l2:fp32:max512:query-instruction-v1"
+EN_POLICY = "bge-en-v1.5:cls:l2:fp32:max512:query-instruction-v1"
 _ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -27,7 +29,7 @@ def model_path(model: str) -> Path:
 
 def model_fingerprint(path: Path) -> str:
     """Hash actual model/tokenizer files once per client, not the device or API key."""
-    digest = hashlib.sha256(POLICY.encode())
+    digest = hashlib.sha256((EN_POLICY if path.name == 'bge-small-en-v1.5' else POLICY).encode())
     files = sorted({*path.glob("*.safetensors"), *path.glob("*.json"), *path.glob("*.txt")})
     files = [file for file in files if file.name != "download_manifest.json"]
     if not files:
@@ -62,8 +64,10 @@ class LocalBgeEncoder:
         if self.fingerprint and model_fingerprint(self.path) != self.fingerprint:
             raise RuntimeError("本地模型文件已改变，请重新创建 Embedding 客户端后再编码")
         config = json.loads((self.path / "config.json").read_text(encoding="utf-8"))
-        if config.get("model_type") != "bert" or config.get("hidden_size") != 512:
-            raise RuntimeError("本地后端仅支持 512 维 BGE 中文 small v1.5 模型")
+        dimension = 384 if self.path.name == 'bge-small-en-v1.5' else 512
+        if config.get("model_type") != "bert" or config.get("hidden_size") != dimension:
+            raise RuntimeError("本地后端仅支持 BGE small v1.5：中文512维、英文384维")
+        self._dimension = dimension
         try:
             import torch
             from transformers import AutoModel, AutoTokenizer
@@ -111,7 +115,8 @@ class LocalBgeEncoder:
         return await asyncio.wait_for(asyncio.wrap_future(future), timeout=timeout)
 
     def public_status(self) -> dict[str, Any]:
-        return {"device": self._actual_device or self.device, "dimension": 512,
+        return {"device": self._actual_device or self.device, "dimension": getattr(self, '_dimension',
+                    384 if self.path.name == 'bge-small-en-v1.5' else 512),
                 "max_length": MAX_LENGTH, "loaded": self._model is not None}
 
     def count_tokens(self, texts: list[str]) -> int:
