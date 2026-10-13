@@ -48,6 +48,17 @@ def classify_openai_server(base_url: str) -> str:
 class OpenAICompatBackend:
     name = "openai_http"
 
+    @classmethod
+    def payload(cls, selected, messages, max_tokens, tools=None, stream=False, temperature=None, top_p=None):
+        payload = {"model":selected.model,"messages":messages,"max_tokens":max_tokens,"stream":stream}
+        if stream:
+            payload["stream_options"] = {"include_usage":True}
+        if tools:
+            payload.update(tools=tools,tool_choice="auto")
+        payload.update({k:v for k,v in {"temperature":temperature,"top_p":top_p}.items() if v is not None})
+        payload.update(cls.provider_options(selected))
+        return payload
+
     @staticmethod
     def provider_options(selected):
         if selected.thinking is None:
@@ -81,17 +92,7 @@ class OpenAICompatBackend:
     ) -> ChatResult:
         if stream:
             return await self._chat_stream(selected, messages, max_tokens=max_tokens, tools=tools, on_delta=on_delta, temperature=temperature, top_p=top_p)
-        payload: dict[str, Any] = {
-            "model": selected.model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "stream": False,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-        payload.update({k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None})
-        payload.update(self.provider_options(selected))
+        payload = self.payload(selected, messages, max_tokens, tools, False, temperature, top_p)
         data, metrics = await self._post(selected, selected.auth_headers(), payload)
         try:
             choice = data["choices"][0]
@@ -176,17 +177,7 @@ class OpenAICompatBackend:
         on_delta: Callable[[str], Awaitable[None]] | None,
         temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
-        payload: dict[str, Any] = {
-            "model": selected.model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "stream": True,
-            "stream_options": {"include_usage": True},
-        }
-        if tools:
-            payload.update({"tools": tools, "tool_choice": "auto"})
-        payload.update({k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None})
-        payload.update(self.provider_options(selected))
+        payload = self.payload(selected, messages, max_tokens, tools, True, temperature, top_p)
         headers = selected.auth_headers()
         started = time.perf_counter()
         last_error: Exception | None = None

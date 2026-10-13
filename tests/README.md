@@ -28,6 +28,7 @@ Pop-Location
 
 | 测试文件 | 重点 |
 | --- | --- |
+| [test_reader_contract.py](test_reader_contract.py) | 完整body/输出预算/计数绑定、流式、引用展示与审批、来源竞态、缓冲/hook、嵌套事务和登录隔离 |
 | [test_core.py](test_core.py) | CRUD、版本/去重/语义回填、工具循环、预算、生命周期和 trace |
 | [test_optimizations.py](test_optimizations.py) | 持久任务/租约、FTS、查询门控、工具授权、SSE、内部安全和可选向量 |
 | [test_user_privacy.py](test_user_privacy.py) | 注册/登录/重设失效、每账号路由/工具、CSRF、HTTPS、流式体积与私密文件 |
@@ -81,3 +82,5 @@ Pop-Location
 2026-10-12 Memory Studio 实现交付已记录全量 **405 passed / 91.20 s**、前端 **3 项**、vue-tsc/生产构建及隔离真实HTTP链路通过；这是此前实现的验收，不是本次 README 更新重新跑出的结果。以后实际数量/跳过项以当次输出为准，模块状态与局限见 [实现说明](../docs/implemented/MemoryStudio与统一记忆访问.md)。
 
 2026-10-12最新算法全量 **463 passed / 116.86s**；[test_algorithm_pipeline.py](test_algorithm_pipeline.py)验证有限条件/临时继承、粗日期/跨句、双时间/未来排除、同池/预算/trace、查询模型风险；[runner测试](test_research_workflow.py)验证gold隔离/未来来源拒绝和0调用replay。最后审查补齐英文条件、独立歧义门控与显式记录轴，相关199 passed / 60.90s后再全量通过；临时输入不是质量分数或真实人物。
+
+2026-10-13完整Reader预算/生产记忆引用最终全量 **495 passed / 198.58s**，相关106 passed / 55.51s；新增32项参数化案例。实际Qwen tokenizer全聊天模板292输入Token，与本地计数路由一致、0生成/权重加载。工程耗时不作为生产性能或研究成绩，真实QA历史与AI gold口径保持不变。[实现及范围](../docs/implemented/完整Reader预算与生产引用校验.md)。

@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-13",
+  "public_source_datasets": [
+    {
+      "dataset_id": "lccc-base-validation-multiturn-50",
+      "kind": "public_dialogue_diagnostic",
+      "messages": 206,
+      "conversations": 50,
+      "history_sha256": "1dc6eff2cc5d81776c83db2e6d887312b6df379902fce5f9b167bbf51ff6622a"
+    }
+  ],
+  "qa_protocol_versions": [
+    {
+      "protocol_id": "lccc50-codex-dev-qa-20261012-v1",
+      "dataset_id": "lccc-base-validation-multiturn-50",
+      "qa_cases": 64,
+      "source_kind": "public_dialogue_diagnostic",
+      "human_reviewed": false,
+      "input_sha256": "d11a209cba26e2fa2666d8bee84a1c4872f7fa92cc7f1c18125e0a70c0294eed"
+    },
+    {
+      "protocol_id": "lccc50-codex-dev-qa-20261012-v2",
+      "dataset_id": "lccc-base-validation-multiturn-50",
+      "qa_cases": 64,
+      "source_kind": "public_dialogue_diagnostic",
+      "human_reviewed": false,
+      "input_sha256": "5c707e39ce1ba30ca0a9704a119ec0122e8a950f7860ae9018b59068ab6a062b"
+    }
+  ],
+  "downloaded_validation_archive_nonempty_rows": 20000,
+  "evaluation_scope": "all frozen QA cases on a 50-dialogue subset; not full original dataset",
+  "legacy_history_read": false
+}

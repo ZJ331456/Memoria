@@ -459,11 +459,10 @@ class Store:
 
     def add_message(self, session_id: str, role: str, content: str) -> dict[str, Any]:
         item = {"id": uuid.uuid4().hex, "session_id": session_id, "role": role, "content": content, "created_at": now()}
-        with self.lock:
+        with self._memory_transaction():
             self.db.execute("INSERT INTO messages VALUES (:id,:session_id,:role,:content,:created_at)", item)
             self.db.execute("INSERT INTO messages_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
             self.db.execute("UPDATE sessions SET updated_at=? WHERE id=?", (item["created_at"], session_id))
-            self.db.commit()
         return item
 
     def rename_session(self, session_id: str, title: str) -> None:

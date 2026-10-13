@@ -6,7 +6,7 @@ Source-backed memory management for small-model companionship: reviewed Claims, 
 
 ## Local setup and startup
 
-The latest algorithm iteration separates source-risk verification, Claim relation proposals and guarded Create/Reinforce/Transition/Review policies. Explicit default questions read unscoped state; explicit interview questions select applicable conditions, while missing context still requires clarification. All proposals remain advisory. See [implementation and limits](docs/implemented/Claim证据核验与演化策略.md). Full engineering regression: 432 passed / 159.55 s; no new research quality scores or real model calls.
+The latest iteration adds complete reader request budgeting and buffered citation validation for the memory-answer endpoint and finite personal-state routes. Trusted local chat templates count input tokens with output and safety reservations; remote requests use an explicit byte bound, with exact tokens/window compatibility unknown. Citations must belong to presented, authorized, source-valid evidence and remain fresh after generation; this does not prove semantic entailment. See [implementation and limits](docs/implemented/完整Reader预算与生产引用校验.md). Full engineering regression: 495 passed / 198.58 s; no new paid QA or longitudinal quality scores.
 
 Run from the repository root in Windows PowerShell. Preserve an existing private configuration and use the project virtual environment.
 
@@ -69,8 +69,12 @@ The access benchmark used a consistent real-account database copy with 0 approve
 
 ## Next work and commercial readiness
 
-Prioritize production backup/verify/restore, a consented personal-source intake, exact reader token accounting and citation constraints; then durable index cursors, atomic projections, general conditions and newly registered selector diagnostics. Genuine longitudinal B3/B5/B6 studies need new authorized continuous personal histories; independent human evaluation remains deferred.
+Prioritize compact source-preserving reader evidence and a newly registered same-budget QA protocol, alongside production backup/verify/restore and a consented personal-source intake; then durable index cursors, atomic projections and general conditions. Complete budgeting and finite production citation guards are implemented; unrestricted chat/tool summaries and semantic verification remain pending. Genuine longitudinal B3/B5/B6 studies need new authorized continuous personal histories; independent human evaluation remains deferred.
 
 Per-user SQLite/WAL is the current storage design. Complete account export/deletion, backup retention and restore policy, versioned migrations, resource/cost quotas, SSRF-safe outbound requests, HTTPS trusted-proxy deployment, tenant lifecycle reclamation, readiness/histograms/alerts, reproducible CI/releases and license inventories remain pending. Database encryption and cross-machine credential migration are distinct from NTFS/DPAPI. The plan defines single-host and later scaling gates; PostgreSQL or Kubernetes are not prerequisites invented for this prototype.
 
 [Module documentation](memoria/README.md) · [Tests](tests/README.md) · [AI instructions](AGENTS.md) · [GitHub conventions](docs/implemented/github提交规范.md). Historical engineering baseline: 405 tests / 91.20 s plus 3 frontend tests and build, not research quality. Secrets, weights, raw histories, gold and runtime dependencies stay out of Git; old personal history remains unimported.
+
+## Actual dataset coverage
+
+There is one registered LCCC source subset: 50 conversations / 206 messages. QA v1 and v2 are versions of the same subset, each with 64 questions; v2 is current. Window, Dense and RRF are baselines, not three datasets. Each current run covers all 64 frozen questions, subject to legal history prefixes and context budgets; the downloaded 20,000-row validation archive has not been fully evaluated. Repeated runs are not additional independent samples. See the [scope audit](docs/assets/evaluation/dataset-scope-20261013.json). Continuous personal history, Claim extraction F1 and genuine long-term outcomes remain unverified.

@@ -162,6 +162,7 @@ def create_local_openai_app(
                                             "owned_by": "memoria-local"} for value in ids]}
 
     @app.post("/v1/chat/completions")
+    @app.post("/v1/reader-token-count")
     async def chat_completions(request: Request):
         body = await parse(request, ChatRequest)
         require_model(body.model, {model_id, model, model_path(model).name})
@@ -169,6 +170,14 @@ def create_local_openai_app(
         tools = body.tools if body.tool_choice == "auto" else None
         limit = body.max_tokens or body.max_completion_tokens or 256
         options = {"temperature": body.temperature, "top_p": body.top_p}
+        if request.url.path.endswith('/reader-token-count'):
+            from ..prompting.reader_budget import count_local_path
+            try:
+                count,window,fingerprint=await asyncio.to_thread(count_local_path,model_path(model),messages,tools,max_context_tokens)
+            except Exception as exc:
+                raise HTTPException(503,_error('本地tokenizer计数不可用',code='tokenizer_unavailable')) from exc
+            return {'protocol':'memoria-chat-template-v1','model':body.model,'input_tokens':count,
+                    'context_tokens':window,'tokenizer_sha256':fingerprint}
         created = int(time.time())
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
 

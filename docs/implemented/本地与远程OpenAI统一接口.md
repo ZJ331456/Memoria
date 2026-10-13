@@ -1,6 +1,6 @@
 # 本地与远程 OpenAI 兼容接口
 
-更新日期：2026-10-12。Windows 本机保留 Qwen3.5-2B 与 BGE small zh v1.5；qin 的 main/fast 已按真实公开来源开发诊断切到 deepseek-flash，embedding 保留本地 BGE；依赖安装在项目独立 `.venv`，模型在 Git 忽略的 `model/`。本机推理服务提供业务所需的 Chat Completions / Embeddings 子集，不实现 OpenAI 的全部产品接口。
+更新日期：2026-10-13。Windows 本机保留 Qwen3.5-2B 与 BGE small zh v1.5；qin 的 main/fast 已按真实公开来源开发诊断切到 deepseek-flash，embedding 保留本地 BGE；依赖安装在项目独立 `.venv`，模型在 Git 忽略的 `model/`。本机推理服务提供业务所需的 Chat Completions / Embeddings 子集，不实现 OpenAI 的全部产品接口。
 
 ## 当前账号配置与 DeepSeek
 
@@ -57,6 +57,7 @@ max_tokens = 1024
 | `GET /health` | 服务存活、模型是否加载、设备和总上下文预算；存活不代表模型已成功推理 |
 | `GET /v1/models` | 列出已配置的聊天与 Embedding 模型；未配置 Embedding 时只列聊天 |
 | `POST /v1/chat/completions` | 文本消息、普通响应与 SSE；每次生成唯一 completion ID |
+| `POST /v1/reader-token-count` | Memoria扩展：同聊天字段验证，完整模板输入Token/窗口/tokenizer指纹；不加载生成权重或生成 |
 | 输出预算 | `max_tokens` 或 `max_completion_tokens` 二选一；1–8192，默认 256，并受总上下文限制 |
 | 采样 | `temperature` 0–2、`top_p` (0,1]；默认 temperature=0 为确定性生成，>0 才开启采样 |
 | 文本内容 | 字符串或 `type=text` 内容段；system/developer/user/assistant/tool 角色 |
@@ -95,3 +96,7 @@ HTTP BGE 与原 `local://` BGE 使用不同索引命名空间，切换后旧向�
 ```
 
 旧合成 smoke 脚本和报告已移除。生产接口继续使用 httpx，不要求 OpenAI SDK。真实长期记忆实验见 [计划](../plans/长期陪伴记忆研究与实验计划书.md)；接口兼容不等于模型抽取/回答质量已经达标。
+
+## 完整请求预算的后续接入
+
+LLMClient普通/流式调用先检查完整payload字节上限，记录输出预留；local://按真实模板核验输入+输出+安全量。本地HTTP可在agent.context显式启用reader_local_count；只访问配置信任的回环计数接口，模型/指纹/协议不可核验时拒绝。远程DeepSeek仍使用请求字节门槛，精确输入Token与窗口未知；不能用BGE代替。调用构造器和模板与计量共用，实际Qwen tokenizer已核对292输入Token、0生成调用，详见[完整预算与引用说明](完整Reader预算与生产引用校验.md)。资产或配置变更需重启服务。

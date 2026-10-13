@@ -10,7 +10,7 @@
 | --- | --- |
 | [gateway.py](gateway.py) | 注册/登录/退出、Cookie 或 Bearer 认证、按账号运行时、请求隐私边界、OpenAPI 和 `/studio/` 托管 |
 | [app.py](app.py) | 内部租户工厂、个人会话/记忆/情景/工具接口、SSE、错误契约和组件生命周期 |
-| [claims.py](claims.py) | Claim 原话、候选/修订/明确审核、条件视图、结构化访问、统一查询与分析建议 |
+| [claims.py](claims.py) | Claim 原话、候选/修订/明确审核、条件视图、结构化访问、统一查询/回答与分析建议 |
 | [governance.py](governance.py) | 账号内 Agent key、共享空间 ACL、提案/审批/版本/撤回及审计 |
 | [research_runs.py](research_runs.py) | 当前账号实验 manifest/metrics 只读清单与指纹核验；不启动脚本 |
 | [__init__.py](__init__.py) | 导出正式 `create_app` |
@@ -27,6 +27,7 @@
 | `/api/claim-slots`、`/api/claim-source/{id}`、`/api/claims` | 12 槽位、来源资格与结构化候选/版本/审核 |
 | `/api/claim-views`、`/api/memory-access` | 条件视图及明确槽位/条件/双时间访问 |
 | `/api/memory-query`、`/api/claims/{id}/analyze` | 有限中文解析、真实候选诊断/整组选择和明确请求的审核建议 |
+| `/api/memory-answer` | 当前账号记忆reader的缓冲回答、引用/来源新鲜度校验；可能调用远程收费模型，缺证据可直接澄清 |
 | `/api/memory-layers`、`/api/episodes` | 分层配置、活动情景及管理归档 |
 | `/api/shared/*`、`/api/governance/*` | 独立共享记忆治理；不能只凭 Agent key 绕过用户登录 |
 | `/api/research-runs` | 当前账号规范运行记录；不返回原始 prompt、gold 或密钥 |
@@ -52,3 +53,5 @@ analyze新增use_relation_model/peer_limit及核验/关系/4类影子策略；ex
 ```
 
 这些测试验证权限、契约与事务，不证明真实 reader 效果或部署可用性。Studio 构建与使用见 [studio/](../../studio/README.md)。
+
+2026-10-13新回答契约及完整请求预算见[实现说明](../../docs/implemented/完整Reader预算与生产引用校验.md)；[test_reader_contract.py](../../tests/test_reader_contract.py)验证新接口登录/Origin/身份参数拒绝。引用通过不标为语义正确，旧memory-query不自动发起reader调用。

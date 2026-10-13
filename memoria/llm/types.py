@@ -25,3 +25,4 @@ class ChatResult:
     duration_ms: int = 0
     retries: int = 0
     finish_reason: str | None = None
+    budget: dict[str, Any] = field(default_factory=dict)

@@ -158,6 +158,13 @@ def normalize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return normalized
 
 
+def render_chat_prompt(tokenizer, messages, tools=None):
+    options = {"tokenize":False,"add_generation_prompt":True,"enable_thinking":False}
+    if tools:
+        options["tools"] = tools
+    return tokenizer.apply_chat_template(normalize_messages(messages), **options)
+
+
 class LocalCausalLM:
     """One serial GPU/CPU worker per model+device; shared across LLMClient calls."""
 
@@ -219,16 +226,7 @@ class LocalCausalLM:
         self._load()
         if cancelled is not None and cancelled.is_set():
             raise RuntimeError("本地 LLM 请求已取消")
-        conversation = normalize_messages(messages)
-        kwargs: dict[str, Any] = {
-            "tokenize": False,
-            "add_generation_prompt": True,
-            "enable_thinking": False,
-        }
-        if tools:
-            kwargs["tools"] = tools
-        # Never silently remove tools when a template fails; that changes semantics.
-        prompt = self._tokenizer.apply_chat_template(conversation, **kwargs)
+        prompt = render_chat_prompt(self._tokenizer, messages, tools)
         encoded = self._tokenizer(prompt, return_tensors="pt")
         encoded = {key: value.to(self._actual_device) for key, value in encoded.items()}
         prompt_len = int(encoded["input_ids"].shape[-1])

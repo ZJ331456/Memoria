@@ -6,6 +6,7 @@ from ..claims import (AccessRequest, ClaimDecision, ClaimDraft, ClaimError, Clai
 from ..claims import sha
 from ..memory.access import MemoryAccessOrchestrator, QueryRequest
 from ..memory.claim_analysis import AnalysisRequest, analyze_claim
+from ..memory.reader import read_memory_answer
 
 
 def claims_router(memory: ClaimMemory | None, llm=None, engine=None) -> APIRouter:
@@ -98,5 +99,9 @@ def claims_router(memory: ClaimMemory | None, llm=None, engine=None) -> APIRoute
     @router.post("/api/claims/{claim_id}/analyze")
     async def analyze(claim_id: str, body: AnalysisRequest):
         return await analyze_claim(memory, llm, claim_id, body)
+
+    @router.post("/api/memory-answer")
+    async def answer(body: QueryRequest):
+        return await read_memory_answer(memory,engine,llm,body)
 
     return router

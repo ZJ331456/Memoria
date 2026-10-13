@@ -403,7 +403,14 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 | GET /studio/ | 公开界面壳，构建后200；业务数据不在静态文件中 |
 | GET /api/claim-source/{message_id} | 账号来源/SHA/span与personal_claim_eligible；跨账号404 |
 | POST /api/memory-query | query、subject_id、predicates/context、两个as_of、mode/selector/字符预算/top_k/candidate_limit；返回真实路径/解析/候选/selection/同池对照/过滤/阶段，不调用reader |
+| POST /api/memory-answer | 同QueryRequest，当前账号main reader的缓冲回答；返回引用/校验/预算/usage，证据不足可跳过模型；可能产生远程调用费用 |
 | POST /api/claims/{id}/analyze | expected_revision，use_model默认false；更新/支持度建议，不写库、不批准；源或版本变化409 |
 | GET /api/research-runs、GET /api/research-runs/{run_id} | 仅本账号规范ID；白名单metadata及SHA/大小匹配的执行metrics，无gold/prompt/执行任务接口 |
 
 抽取的infer_conditions/infer_time均为严格布尔、默认false；开启后有限默认/活动条件及分句继承写入独立condition_evidence，event_time保留年/月区间而不补造fact_start。analyze支持度仍为建议，不批准。query新增selector=mmr/evidence_coverage、budget_unit=chars/utf8_bytes/reader_tokens、evidence_budget及use_query_model默认false；无可核验远程tokenizer返回422，API不调用reader。新响应包含requirements、routing、四种同池comparison与逐候选trace；记录时间自然区间返回知识时间线。详见[本轮算法契约](条件时序抽取与预算证据选择.md)。Swagger提供严格字段schema；匿名业务401，不接受user_id覆盖服务器身份。
+
+## 完整Reader预算与严格记忆回答
+
+2026-10-13新增POST /api/memory-answer，匿名401、客户端user_id等未知字段422、跨账号来源不可访问、Origin规则与登录网关一致。memory-query保持诊断；memory-answer的status为answer/clarify/abstain，citations只含实际展示且仍有效的来源，validation明确semantic_entailment_verified=false。严格JSON、完整条件Claim、来源SHA/版本复核失败时拒绝原始模型结论。详见[请求示例、预算与适用范围](完整Reader预算与生产引用校验.md)。
+
+本地模型服务独立增加POST /v1/reader-token-count，使用ChatRequest返回完整模板输入Token/部署窗口/tokenizer SHA，不生成；它不属于账号业务网关，也不作为远程通用标准。main服务的严格回答应在升级后重启；现有Studio查询不会自动变成收费回答调用。

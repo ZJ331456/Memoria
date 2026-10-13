@@ -8,9 +8,9 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| [client.py](client.py) | chat/chat_stream/complete、普通记忆抽取/关系决策/查询规划 |
+| [client.py](client.py) | chat/chat_stream/complete、普通记忆抽取/关系决策/查询规划，完整请求门槛及ChatResult.budget |
 | [types.py](types.py) | ChatResult 和供应商/上下文/内容安全异常 |
-| [server.py](server.py) | 有限 OpenAI 兼容聊天、Embedding、models 与 health |
+| [server.py](server.py) | 有限 OpenAI 兼容聊天、Embedding、models、health与不生成的reader-token-count扩展 |
 | [backends/](backends/README.md) | HTTP/进程内后端、路由、本地队列 |
 | [__init__.py](__init__.py) | 对外导出 |
 
@@ -31,7 +31,7 @@ Invoke-RestMethod http://127.0.0.1:8080/v1/models
 
 本地支持文本、function tools、SSE、usage/finish_reason、float/base64 512 维 BGE。仅协议子集，不支持图片/音频、任意供应商参数、strict schema 或全部 OpenAI API；无效模型/字段/输入明确报错。
 
-本地生成按真实 tokenizer 校验输入加输出，有界串行队列/取消/超时；业务上下文仍按字符近似。可解析工具不证明 Qwen 抽取或长期记忆质量。本地模型 HTTP 当前无独立认证，默认只绑回环，不应直接公开为商用入口。
+本地生成按真实tokenizer校验输入加输出，有界串行队列/取消/超时；业务客户端新增完整请求预算，可信本地按相同模板计Token，远程按UTF-8请求字节门槛并明确Token未知。显式reader_local_count启用本地HTTP计数，绑定失败拒绝生成。可解析工具不证明 Qwen 抽取或长期记忆质量。本地模型 HTTP 当前无独立认证，默认只绑回环，不应直接公开为商用入口。
 
 远程 Key/模型由管理员私密配置，公开只显配置状态。显式 Thinking 开关仅对官方 DeepSeek 端点发送，不泛用到任意兼容服务；真实可用性/费用/质量由实际配置和评测确定。
 
@@ -44,3 +44,5 @@ Invoke-RestMethod http://127.0.0.1:8080/v1/models
 ```
 
 工程替身不发起付费调用，不证明实际权重效果；真实记录见模型文档/研究账本。
+
+[完整预算与引用契约](../../docs/implemented/完整Reader预算与生产引用校验.md)说明配置与范围；新增[test_reader_contract.py](../../tests/test_reader_contract.py)核验HTTP实际body与计数一致、流式、绑定失败和输出预留。

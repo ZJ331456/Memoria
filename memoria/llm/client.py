@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import logging
 import re
 from collections.abc import Awaitable, Callable
@@ -23,9 +24,11 @@ class LLMClient:
     def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
         self.settings = settings
         self.transport = transport
+        from ..prompting.reader_budget import ReaderBudget
+        self.reader_budget = ReaderBudget(settings,transport=transport)
 
     def backend_for(self, model: ModelConfig | None = None):
-        selected = model or self.settings.main
+        selected = copy.deepcopy(model or self.settings.main)
         return resolve_backend(
             selected,
             timeout_seconds=self.settings.request_timeout_seconds,
@@ -53,7 +56,8 @@ class LLMClient:
         tools: list[dict[str, Any]] | None = None,
         *, temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
-        selected = model or self.settings.main
+        selected = copy.deepcopy(model or self.settings.main)
+        messages,tools=copy.deepcopy(messages),copy.deepcopy(tools)
         if not selected.is_ready(role="llm"):
             raise RuntimeError(
                 "主模型未完整配置：远程需 model/base_url/api_key；"
@@ -61,14 +65,18 @@ class LLMClient:
             )
         backend = self.backend_for(selected)
         generation = {k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None}
-        return await backend.chat(
+        output=max_tokens if max_tokens is not None else self.settings.max_tokens
+        budget=await self.reader_budget.check(selected,messages,tools,output,False,**generation)
+        result=await backend.chat(
             selected,
             messages,
-            max_tokens=max_tokens if max_tokens is not None else self.settings.max_tokens,
+            max_tokens=output,
             tools=tools,
             stream=False,
             **generation,
         )
+        result.budget=budget
+        return result
 
     async def chat_stream(
         self,
@@ -78,7 +86,8 @@ class LLMClient:
         *, model: ModelConfig | None = None, max_tokens: int | None = None,
         temperature: float | None = None, top_p: float | None = None,
     ) -> ChatResult:
-        selected = model or self.settings.main
+        selected = copy.deepcopy(model or self.settings.main)
+        messages,tools=copy.deepcopy(messages),copy.deepcopy(tools)
         if not selected.is_ready(role="llm"):
             raise RuntimeError(
                 "主模型未完整配置：远程需 model/base_url/api_key；"
@@ -86,15 +95,19 @@ class LLMClient:
             )
         backend = self.backend_for(selected)
         generation = {k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None}
-        return await backend.chat(
+        output=max_tokens if max_tokens is not None else self.settings.max_tokens
+        budget=await self.reader_budget.check(selected,messages,tools,output,True,**generation)
+        result=await backend.chat(
             selected,
             messages,
-            max_tokens=max_tokens if max_tokens is not None else self.settings.max_tokens,
+            max_tokens=output,
             tools=tools,
             on_delta=on_delta,
             stream=True,
             **generation,
         )
+        result.budget=budget
+        return result
 
     async def extract_memories(self, user_text: str, assistant_text: str) -> list[dict[str, Any]]:
         prompt = """从下面一轮对话中提取值得长期记忆、未来确实有帮助的用户事实或偏好。不要记临时问题、敏感凭据或助手说的话。仅返回 JSON 数组，每项格式 {\"content\":\"...\",\"kind\":\"preference|profile|fact|goal\",\"importance\":1到5}；没有则返回 []。"""

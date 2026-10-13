@@ -151,6 +151,10 @@ class Settings:
     source: Path
     memory_layers: MemoryLayerSettings | None = None
     model_override_file: Path | None = None
+    reader_input_bytes: int = 240000
+    reader_context_tokens: int | None = None
+    reader_safety_tokens: int = 128
+    reader_local_count: bool = False
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Settings":
@@ -226,6 +230,10 @@ class Settings:
             max_iterations=int(agent.get("max_iterations", 8)),
             memory_window=int(agent.get("context", {}).get("memory_window", 30)),
             context_char_budget=int(agent.get("context", {}).get("char_budget", 60000)),
+            reader_input_bytes=int(agent.get("context", {}).get("reader_input_bytes", 240000)),
+            reader_context_tokens=agent.get("context", {}).get("reader_context_tokens"),
+            reader_safety_tokens=int(agent.get("context", {}).get("reader_safety_tokens", 128)),
+            reader_local_count=agent.get("context", {}).get("reader_local_count", False),
             request_timeout_seconds=float(llm.get("request_timeout_seconds", 90)),
             max_retries=int(llm.get("max_retries", 2)),
             vector_backend=vector_backend,

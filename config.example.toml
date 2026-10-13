@@ -47,6 +47,12 @@ max_iterations = 20
 [agent.context]
 memory_window = 40
 char_budget = 60000
+# 完整请求（含所有消息、工具定义/结果与参数）的 UTF-8 字节上限；不是远程Token数。
+reader_input_bytes = 240000
+reader_safety_tokens = 128
+# 本地进程可核验完整模板Token；HTTP仅在使用已升级的Memoria本地服务时显式开启。
+reader_local_count = false
+# reader_context_tokens = 8192  # 精确窗口可选；远程无可信tokenizer时拒绝，不能用BGE估算。
 
 [agent.skills]
 enabled = true

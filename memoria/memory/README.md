@@ -11,6 +11,7 @@
 | [engine.py](engine.py) | 普通记忆写入、强化/替代/纠正、有效区间、词面/BM25/Dense/RRF 和图扩展 |
 | [planner.py](planner.py) | 问候门控及可选 fast 模型查询/类型/数量规划 |
 | [access.py](access.py) | QueryRequest/MemoryAccessOrchestrator：Claim、时间、来源复核、候选和选择解释 |
+| [reader.py](reader.py) | memory-answer、服务端展示引用目录、严格回答schema、来源/版本新鲜度与缓冲输出 |
 | [temporal_query.py](temporal_query.py) | 有限中文年月日/相对日期解析，区间、身份和获知截止歧义处理 |
 | [evidence_selector.py](evidence_selector.py)、[evidence/](evidence/README.md) | Top-K/Coverage/词面MMR/成本归一覆盖；完整JSON字符/字节/可信reader tokenizer预算与全候选trace |
 | [claim_normalizer.py](claim_normalizer.py)、[condition_parser.py](condition_parser.py) | 原12槽位的有限别名、默认/活动条件与分句继承，独立条件证据 |
@@ -64,3 +65,7 @@ MEMORY.md 从有效普通记忆重建，不是另一权威数据库；SELF.md �
 ```
 
 临时用例不代表真实模型质量。BGE 见 [Embedding](../../docs/implemented/本地Embedding配置.md)，真实研究走 [experiments/](../experiments/README.md)。
+
+## 有引用约束的Reader
+
+新增/api/memory-answer复用QueryRequest与统一访问，在适用完整证据可呈现时调用main reader。严格JSON/引用展示集/审批/条件整组/来源span-SHA/新鲜状态校验，失败拒答，缺项可不调用；不把来源补检变成自动批准。旧memory-query保持诊断，新接口可能产生远程费用。有限运行时个人状态分支复用同契约，通用自由文本尚未全部覆盖，semantic_entailment_verified=false。[完整预算/配置/边界](../../docs/implemented/完整Reader预算与生产引用校验.md)。
