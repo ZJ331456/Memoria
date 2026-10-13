@@ -60,3 +60,5 @@ v4同十题run 20261013T113307Z-86f6d910：14次reader（4次完整原话复核�
 HTTP后端普通/流式新增可复用验证TLS上下文：保留HTTPX的SSL_CERT_FILE/SSL_CERT_DIR/certifi优先级、证书/目录变化检测、hostname与CERT_REQUIRED；冷加载在线程中。只缓存CA上下文，不缓存HTTP会话/Key/Cookie。新locomo-run --resume-from读取同账号已停止、artifact SHA一致的检查点；输入/历史/gold/规则/提示/模型资产/reader参数匹配才继承，校验源ID/SHA/引用，未完成题才调用。新run单独记录来源代码/产物、继承和新增调用，合并分数保留1986题分母；不同执行代码批次及旧在途usage未知明确披露。
 
 TLS/后端/reader/runner相关94 passed / 29.10s，复核/继承/篡改检查19 passed / 10.32s，替身测试不作质量成绩。正式续跑及结果随后追加；原检查点和失败分母不覆盖。
+
+TLS/续跑版本完整工程验收525 passed / 199.78s。续跑恢复后Embedding实际查询约30–76ms，原301题中3次ConnectError及2次回退ConnectError保留；目前后续调用没有新增最终case错误。新增`--resume-from RUN --retry-errors`仅对已停止run中执行或回退失败题重试，其他预测继承；多级祖先的调用/usage继续计入，原失败不覆盖，不能筛F1低题做选择性成绩。新结果仍完整1986分母，明确报首次失败和修复次数。

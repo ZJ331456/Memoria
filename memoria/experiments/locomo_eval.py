@@ -283,12 +283,13 @@ class CaseRecorder:
                                        'call': self.case_id + ':' + str(row['call'])})
 
 
-def checkpoint_rows(workspace, run_id, protocol, cases, histories):
+def checkpoint_rows(workspace, run_id, protocol, cases, histories, retry_errors=False):
     """Only consume a stopped, fingerprinted checkpoint belonging to this account."""
     source = workspace.path('experiments', identifier(run_id))
     from ..memory.reader import strict_json
     manifest = strict_json((source/'manifest.json').read_text(encoding='utf-8'))
-    if manifest['status'] != 'interrupted' or manifest['protocol']['owner_user_id'] != workspace.owner:
+    allowed_statuses = {'interrupted','failed','completed'} if retry_errors else {'interrupted'}
+    if manifest['status'] not in allowed_statuses or manifest['protocol']['owner_user_id'] != workspace.owner:
         raise ValueError('Resume requires an explicitly stopped same-owner checkpoint')
     for name, expected in manifest['artifacts'].items():
         if digest_file(source/name) != expected['sha256']:
@@ -297,6 +298,8 @@ def checkpoint_rows(workspace, run_id, protocol, cases, histories):
         if manifest['protocol'][field] != protocol[field]:
             raise ValueError('Checkpoint protocol/input differs')
     rows = [strict_json(l) for l in (source/'cases.jsonl').read_text(encoding='utf-8').splitlines()]
+    manifest['_checkpoint_execution_statuses'] = dict(Counter(r['status'] for r in rows))
+    manifest['_checkpoint_metrics'] = strict_json((source/'metrics.json').read_text(encoding='utf-8'))
     if len({r['id'] for r in rows}) != len(rows):
         raise ValueError('Duplicate checkpoint cases')
     lookup = {c['id']: c for c in cases}
@@ -304,7 +307,7 @@ def checkpoint_rows(workspace, run_id, protocol, cases, histories):
     for row in rows:
         if row['id'] not in lookup:
             raise ValueError('Foreign checkpoint case')
-        if row['status'] in {'not_attempted','cancelled'}:
+        if row['status'] in {'not_attempted','cancelled'} or (retry_errors and (row['status']=='error' or row.get('fallback_status')=='error')):
             continue
         case = lookup[row['id']]
         known = {m['id']: m for m in histories[case['conversation_id']]}
@@ -318,14 +321,32 @@ def checkpoint_rows(workspace, run_id, protocol, cases, histories):
             parse_answer(ChatResult(content=canonical({'status':row['answer_status'],'answer':row['answer'],
                          'evidence_ids':row['evidence_ids']})), row['presented_ids'])
         inherited[row['id']] = {**row, 'inherited_from_run': run_id}
-    calls = [strict_json(l) for l in (source/'calls.jsonl').read_text(encoding='utf-8').splitlines()]
+    def lineage_calls(path, metadata, seen):
+        if metadata['run_id'] in seen or len(seen) >= 8:
+            raise ValueError('Checkpoint lineage cycle/too deep')
+        seen.add(metadata['run_id'])
+        result=[]
+        if metadata.get('resume'):
+            parent=workspace.path('experiments',identifier(metadata['resume']['source_run']))
+            parent_manifest=strict_json((parent/'manifest.json').read_text(encoding='utf-8'))
+            if parent_manifest['status']=='running' or parent_manifest['protocol']['owner_user_id']!=workspace.owner:
+                raise ValueError('Invalid checkpoint ancestor')
+            for name, expected in metadata['resume']['source_artifacts'].items():
+                if digest_file(parent/name)!=expected['sha256']:
+                    raise ValueError('Checkpoint ancestor artifact changed')
+            result.extend(lineage_calls(parent,parent_manifest,seen))
+        file=path/'calls.jsonl'
+        if file.exists():
+            result.extend({**strict_json(l),'origin_run_id':metadata['run_id']} for l in file.read_text(encoding='utf-8').splitlines())
+        return result
+    calls = lineage_calls(source,manifest,set())
     return manifest, inherited, calls
 
 
 async def execute(workspace, settings, source, *, scope='full', profile=None, roles=None,
                   allow_remote=False, embedding_device='auto', concurrency=4, candidate_limit=40,
                   anchor_limit=40, evidence_chars=12000, embedding_model='bge-small-en-v1.5', fallback='full_history', client_factory=ExperimentLLM,
-                  embedding_factory=EmbeddingClient, resume_from=None):
+                  embedding_factory=EmbeddingClient, resume_from=None, retry_errors=False):
     if not 1 <= concurrency <= 8 or not 1 <= anchor_limit <= candidate_limit <= 100:
         raise ValueError('Invalid concurrency/retrieval limits')
     if not 256 <= evidence_chars <= 16000 or embedding_device not in {'auto', 'cpu', 'cuda'}:
@@ -334,6 +355,8 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         raise ValueError('Unsupported benchmark embedding model')
     if fallback not in {'none', 'full_history'}:
         raise ValueError('Unsupported reader fallback')
+    if retry_errors and not resume_from:
+        raise ValueError('Retry errors requires an existing source run')
     # Fail before any paid call if optional scoring dependency is unavailable.
     answer_f1('', '', 4)
     bundle, protocol, cases, histories = prepare(workspace, source, scope)
@@ -369,10 +392,10 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
     print('Registered ' + recorder.run_id + '; requested=' + str(len(cases)), flush=True)
     semaphore, retrieval_lock = asyncio.Semaphore(concurrency), asyncio.Lock()
     rows, calls, fatal = {}, [], None
-    inherited_count, prior_documents = 0, 0
+    inherited_count, prior_documents, prior_queries = 0, 0, 0
     if resume_from:
         try:
-            previous, rows, calls = checkpoint_rows(workspace,resume_from,protocol,cases,histories)
+            previous, rows, calls = checkpoint_rows(workspace,resume_from,protocol,cases,histories,retry_errors)
             for field in ('baseline','selector','candidate_limit','anchor_limit','evidence_chars','context_radius',
                           'rrf_k','lexical','reader_system_sha256','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit'):
                 if previous['protocol'][field] != recorder.manifest['protocol'][field]:
@@ -384,11 +407,14 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
             raise
         inherited_count = len(rows)
         calls = [{**c, '_inherited':True} for c in calls]
-        prior_documents = previous.get('checkpoint',{}).get('source_documents_encoded',0)
+        prior_documents = previous.get('checkpoint',{}).get('source_documents_encoded',previous['_checkpoint_metrics'].get('source_documents_encoded',0))
+        prior_queries = previous.get('checkpoint',{}).get('query_encodes_lower_bound',previous['_checkpoint_metrics'].get('query_calls',0))
         recorder.manifest['resume'] = {'source_run':resume_from,'inherited_cases':inherited_count,
+                                      'retry_errors':retry_errors, 'source_execution_statuses':previous['_checkpoint_execution_statuses'],
                                       'source_code':previous['code'], 'source_artifacts':previous['artifacts'],
                                       'source_elapsed_ms':previous['elapsed_ms'],
-                                      'source_inflight_calls_unknown':previous.get('checkpoint',{}).get('inflight_calls_unknown',0)}
+                                      'source_inflight_calls_unknown':previous.get('checkpoint',{}).get('inflight_calls_unknown',0)
+                                          +previous.get('resume',{}).get('source_inflight_calls_unknown',0)}
         recorder._save_manifest()
         for row in rows.values():
             recorder.append('cases.jsonl',row)
@@ -515,7 +541,9 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                        contract_repair_cases=sum(bool(r.get('contract_repair_attempted')) for r in rows.values()),
                        secondary_initial_validation_errors=sum(bool(r.get('fallback_initial_validation_error')) for r in rows.values()),
                        inherited_cases=inherited_count, new_reader_calls=sum(not c.get('_inherited') for c in calls),
-                       source_documents_encoded=retriever.document_encodes+prior_documents, query_calls=retriever.query_encodes,
+                       source_documents_encoded=retriever.document_encodes+prior_documents, query_calls=retriever.query_encodes+prior_queries,
+                       new_query_calls=retriever.query_encodes,
+                       encoding_counter_scope='confirmed lineage lower bound; current run counters exact; interrupted in-flight encoding unknown',
                        usage_known_calls=sum(u is not None for u in usages),
                        tokens_known={key: sum(u.get(key, 0) or 0 for u in usages if u)
                                      for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')},

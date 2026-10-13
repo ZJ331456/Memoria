@@ -180,6 +180,21 @@ def test_concurrent_reader_call_ids_and_fallback(tmp_path, monkeypatch, first_ou
     assert resumed_metrics['inherited_cases']==40 and resumed_metrics['new_reader_calls']==0
     assert resumed_metrics['reader_calls']==expected
     assert not (resumed/'calls.jsonl').exists()
+    # Fault fixture: retry a finished failure, keep the nested original call ledger.
+    resumed_manifest=json.loads((resumed/'manifest.json').read_text())
+    resumed_rows=[json.loads(l) for l in (resumed/'cases.jsonl').read_text().splitlines()]
+    resumed_rows[0].update(status='error',error='ProviderError')
+    (resumed/'cases.jsonl').write_text(''.join(bench.canonical(r)+'\n' for r in resumed_rows),encoding='utf-8')
+    resumed_manifest['status']='failed'
+    resumed_manifest['artifacts']['cases.jsonl']={'sha256':bench.digest_file(resumed/'cases.jsonl'),
+                                                'bytes':(resumed/'cases.jsonl').stat().st_size}
+    (resumed/'manifest.json').write_text(json.dumps(resumed_manifest),encoding='utf-8')
+    repaired=asyncio.run(bench.execute(workspace,settings,source,scope='full',concurrency=4,
+                 client_factory=Reader, embedding_factory=lambda cfg:Embedding(), roles=load_roles(None),
+                 resume_from=resumed.name,retry_errors=True))
+    repaired_metrics=json.loads((repaired/'metrics.json').read_text())
+    assert repaired_metrics['inherited_cases']==39 and repaired_metrics['errors']==0
+    assert repaired_metrics['reader_calls']==expected+repaired_metrics['new_reader_calls']
     (path/'cases.jsonl').write_text('tampered',encoding='utf-8')
     bundle,protocol,cases,histories=bench.prepare(workspace,source,'full')
     with pytest.raises(ValueError,match='artifact'):

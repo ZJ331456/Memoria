@@ -87,6 +87,7 @@ def main():
     sub.add_argument("--embedding-model", choices=["bge-small-en-v1.5", "bge-small-zh-v1.5"], default="bge-small-en-v1.5")
     sub.add_argument("--fallback", choices=["none", "full_history"], default="full_history")
     sub.add_argument("--resume-from", help="Stopped fingerprinted checkpoint in the same account; preserve completed cases")
+    sub.add_argument("--retry-errors", action="store_true", help="With --resume-from, retry failed cases; keep all original failures in source run")
     sub = subs.add_parser("select-evidence",help="Compare four selectors on a captured retrieval pool; zero model calls")
     sub.add_argument("--source-run",required=True)
     sub.add_argument("--budget",type=int,default=1024)
@@ -145,6 +146,7 @@ def main():
             embedding_model=args.embedding_model,
             fallback=args.fallback,
             resume_from=args.resume_from,
+            retry_errors=args.retry_errors,
             roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
     elif args.command == "benchmark-access":
         result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)

@@ -91,3 +91,5 @@ Pop-Location
 本轮新增test_locomo_eval.py验证英文BM25词干、候选先于邻句、预算/同会话/来源篡改、全题/对抗题、异常gold不修写、并发编号与gold隔离。test_local_embedding.py补英文指令/384维/协议指纹；临时输入不代表研究效果。[验收](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
 
 TLS新增CA优先级/缓存轮换/目录变化/冷载不阻塞/缺失失败测试；LoCoMo补停止检查点继承、来源篡改拒绝和0重复reader调用。工程验收见[运行期修复](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+
+检查点追加嵌套调用继承与仅失败恢复故障回归；断点/恢复多次仍完整计入旧调用，临时故障标签不当真实研究失败。
