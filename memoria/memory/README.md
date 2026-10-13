@@ -12,6 +12,7 @@
 | [planner.py](planner.py) | 问候门控及可选 fast 模型查询/类型/数量规划 |
 | [access.py](access.py) | QueryRequest/MemoryAccessOrchestrator：Claim、时间、来源复核、候选和选择解释 |
 | [reader.py](reader.py) | memory-answer、服务端展示引用目录、严格回答schema、来源/版本新鲜度与缓冲输出 |
+| [evidence_sufficiency.py](evidence_sufficiency.py)、[answer_risk.py](answer_risk.py)、[adaptive_fallback.py](adaptive_fallback.py) | 必要事实与原文引用核验、Query-only风险/回答支持、有限分级补检；生产前后检查显式开启，完整补检先做独立benchmark消融 |
 | [temporal_query.py](temporal_query.py) | 有限中文年月日/相对日期解析，区间、身份和获知截止歧义处理 |
 | [evidence_selector.py](evidence_selector.py)、[evidence/](evidence/README.md) | Top-K/Coverage/词面MMR/成本归一覆盖；完整JSON字符/字节/可信reader tokenizer预算与全候选trace |
 | [claim_normalizer.py](claim_normalizer.py)、[condition_parser.py](condition_parser.py) | 原12槽位的有限别名、默认/活动条件与分句继承，独立条件证据 |

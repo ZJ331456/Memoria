@@ -13,6 +13,7 @@ import sqlite3
 import string
 import time
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 from ..config import ModelConfig
@@ -73,7 +74,7 @@ class EnglishLexicalIndex:
 
 
 def benchmark_cases(records, scope):
-    if scope not in {'smoke', 'full'}:
+    if scope not in {'smoke', 'full', 'development'}:
         raise ValueError('Unknown benchmark scope')
     # Reuse the already validated source projection, without choosing full cases by labels.
     smoke, _ = smoke_cases(records)
@@ -82,6 +83,8 @@ def benchmark_cases(records, scope):
     cases, gold = [], []
     for record in records:
         cid = record['sample_id']
+        if scope == 'development' and cid not in {r['sample_id'] for r in records[:2]}:
+            continue
         ids = {m['dia_id'] for m in histories[cid]}
         for index, qa in enumerate(record['qa']):
             case_id = cid + '-q' + str(index)
@@ -112,7 +115,9 @@ def prepare(workspace, source, scope):
     protocol = {'id': PROTOCOL + '-' + scope, 'source_sha256': SOURCE_SHA256, 'source_url': SOURCE_URL,
                 'mode': 'locomo_' + scope + '_v2', 'scope': scope, 'requested_cases': len(cases),
                 'case_ids': [c['id'] for c in cases],
-                'selection': 'all original QA in source order' if scope == 'full' else 'same fixed v1 ten cases',
+                'selection': 'all original QA in source order' if scope == 'full' else
+                    'all QA in first two source-order conversations; development, not unseen holdout' if scope == 'development'
+                    else 'same fixed v1 ten cases',
                 'source_kind': 'official_constructed_benchmark', 'text_only': True,
                 'human_reviewed_by_project': False, 'automatic_memory_writes': 0,
                 'inputs_sha256': sha(data['inputs.jsonl']), 'histories_sha256': sha(data['histories.json']),
@@ -353,15 +358,28 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         raise ValueError('Invalid budget/device')
     if embedding_model not in {'bge-small-en-v1.5', 'bge-small-zh-v1.5'}:
         raise ValueError('Unsupported benchmark embedding model')
-    if fallback not in {'none', 'full_history'}:
+    if fallback not in {'none', 'full_history', 'targeted', 'adaptive_risk'}:
         raise ValueError('Unsupported reader fallback')
     if retry_errors and not resume_from:
         raise ValueError('Retry errors requires an existing source run')
     # Fail before any paid call if optional scoring dependency is unavailable.
     answer_f1('', '', 4)
     bundle, protocol, cases, histories = prepare(workspace, source, scope)
+    risk_method = fallback in {'targeted', 'adaptive_risk'}
+    if risk_method:
+        from .locomo_risk import PROTOCOL as RISK_PROTOCOL
+        from ..memory.answer_risk import SYSTEM as SUPPORT_SYSTEM
+        from ..memory.evidence_sufficiency import SYSTEM as SUFFICIENCY_SYSTEM
+        protocol = {**protocol, 'id': RISK_PROTOCOL + '-' + fallback + '-' + scope,
+                    'sufficiency_system_sha256': sha(SUFFICIENCY_SYSTEM),
+                    'support_system_sha256': sha(SUPPORT_SYSTEM),
+                    'adaptive_limits': {'evidence_chars': [evidence_chars,16000,20000] if fallback=='adaptive_risk'
+                        else [evidence_chars,16000], 'max_calls':6, 'max_case_input_bytes':160000,
+                        'max_queries_per_round':2, 'full_history_reader_allowed':False}}
     settings = account_settings(copy.deepcopy(settings), workspace, profile)
     roles = roles or load_roles(None)
+    if risk_method:
+        roles = {**roles, 'judge': replace(roles['reader'], max_tokens=1536)}
     local_policy(settings, roles, allow_remote)
     selected = copy.deepcopy(getattr(settings, roles['reader'].slot))
     if roles['reader'].thinking == 'disabled_by_deepseek_api':
@@ -378,8 +396,11 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         protocol={**protocol, 'baseline': 'B2_rrf_english_v2', 'selector': 'ranked_anchor_context',
                   'concurrency': concurrency, 'candidate_limit': candidate_limit, 'anchor_limit': anchor_limit,
                   'evidence_chars': evidence_chars, 'context_radius': 1, 'rrf_k': 60,
-                  'fallback': fallback, 'fallback_trigger': 'abstain/clarify or invalid primary output',
-                  'fallback_call_limit': 1, 'fallback_budget': 'complete frozen conversation or fail complete ReaderBudget',
+                  'fallback': fallback, 'fallback_trigger': 'insufficient quoted requirements or unsupported answer' if fallback=='adaptive_risk'
+                      else 'abstain/clarify or invalid primary output',
+                  'fallback_call_limit': 5 if risk_method else 1,
+                  'fallback_budget': 'bounded evidence stages and cumulative case bytes; no complete-history Reader' if risk_method
+                      else 'complete frozen conversation or fail complete ReaderBudget',
                   'contract_repair_call_limit': 1, 'contract_repair': 'same evidence, regenerate invalid secondary JSON/citations; never insert citations',
                   'lexical': 'FTS5 Porter unicode61 BM25 OR non-stopword query tokens',
                   'reader_system_sha256': sha(SYSTEM), 'embedding_model': settings.embedding.model,
@@ -388,6 +409,8 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                   'owner_user_id': workspace.owner})
     probe = client_factory(settings, roles, CaseRecorder(recorder, 'identity'), StageTimings())
     recorder.manifest['models'] = {'reader': probe.public_roles()['reader']}
+    if risk_method:
+        recorder.manifest['models']['assessor'] = probe.public_roles()['judge']
     recorder._save_manifest()
     print('Registered ' + recorder.run_id + '; requested=' + str(len(cases)), flush=True)
     semaphore, retrieval_lock = asyncio.Semaphore(concurrency), asyncio.Lock()
@@ -397,8 +420,9 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         try:
             previous, rows, calls = checkpoint_rows(workspace,resume_from,protocol,cases,histories,retry_errors)
             for field in ('baseline','selector','candidate_limit','anchor_limit','evidence_chars','context_radius',
-                          'rrf_k','lexical','reader_system_sha256','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit'):
-                if previous['protocol'][field] != recorder.manifest['protocol'][field]:
+                          'rrf_k','lexical','reader_system_sha256','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit',
+                          'sufficiency_system_sha256','support_system_sha256','adaptive_limits'):
+                if previous['protocol'].get(field) != recorder.manifest['protocol'].get(field):
                     raise ValueError('Checkpoint inference settings differ')
             if previous['models'] != recorder.manifest['models'] or previous['model_snapshots'] != recorder.manifest['model_snapshots']:
                 raise ValueError('Checkpoint reader/embedding assets differ')
@@ -443,6 +467,15 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                            selection=chosen, reader_budget=prepared.report,
                            source_shas={m['id']: m['source_text_sha256'] for m in history
                                         if m['id'] in chosen['presented_ids']})
+                if risk_method:
+                    from .locomo_risk import run_case as risk_case
+                    async def supplemental(query, limit):
+                        async with retrieval_lock:
+                            with timings.measure('retrieval.supplemental'):
+                                return await retriever.select(history, query, 'B2_rrf', limit, timings=timings)
+                    await risk_case(client,settings,roles,case['question'],history,found,chosen,row,supplemental,
+                                    method=fallback,reader_system=SYSTEM,select_context=select_context)
+                    return
                 result = await client.call('reader', prepared.messages, stream=False)
                 primary_error = None
                 try:
@@ -549,5 +582,14 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                                      for key in ('prompt_tokens', 'completion_tokens', 'total_tokens')},
                        monetary_cost=None, case_latency=quantiles([r['elapsed_ms'] for r in rows.values() if 'elapsed_ms' in r]),
                        automatic_memory_writes=0)
+        if risk_method:
+            metrics.update(algorithm=fallback,
+                policy_contract_errors=sum(len(r.get('policy_contract_errors',[])) for r in rows.values()),
+                adaptive_retrieval_rounds=dict(Counter(str(r.get('adaptive_policy',{}).get('retrieval_rounds',0)) for r in rows.values())),
+                sufficiency_states=dict(Counter(d['state'] for r in rows.values() for d in r.get('sufficiency_checks',[]))),
+                support_verdicts=dict(Counter(d['verdict'] for r in rows.values() for d in r.get('support_checks',[]))),
+                observed_mean_known_tokens_per_case=metrics['tokens_known']['total_tokens']/len(cases),
+                token_mean_scope='all recorded Reader/planner/verifier attempts including retries; missing usage remains unknown',
+                semantic_entailment_verified=False)
         recorder.finish(metrics, error=fatal)
     return recorder.path

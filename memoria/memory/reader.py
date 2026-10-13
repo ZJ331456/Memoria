@@ -169,12 +169,71 @@ async def read_memory_answer(claims,engine,llm,request: QueryRequest):
     if fresh:
         return {'status':'clarify','answer':SAFE_UNKNOWN,'citations':[],'reader_called':False,'access':access,
                 'validation':{'valid':False,'reason':fresh,'semantic_entailment_verified':False}}
+    risk_checks = None
+    if request.use_answer_risk:
+        from .adaptive_fallback import AdaptiveFallback
+        from .evidence_sufficiency import EvidenceSufficiency, SYSTEM as SUFFICIENCY_SYSTEM
+        from .answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM
+        evidence = [{'id': eid, 'text':'\n'.join(e['quote'] for e in item['spans']),
+                     'source_texts':[e['quote'] for e in item['spans']]}
+                    for eid,item in guard.catalog.items() if item['eligible']]
+        policy = AdaptiveFallback(evidence_budgets=(6000,), max_calls=3)
+        risk_checks = {'checks':[], 'usage':[], 'mode':'quoted_gate_and_support',
+                       'adaptive_retrieval_enabled':False,'semantic_entailment_verified':False}
+
+        async def risk_call(stage,system,packet):
+            bounded=await meter.prepare([{'role':'system','content':system},
+                {'role':'user','content':canonical(packet)}],max_tokens=1536)
+            if not policy.reserve_call(stage,bounded.report):
+                raise ContextLengthError('Answer risk budget exhausted')
+            risk_checks['policy']=policy.public()
+            result=await llm.chat(bounded.messages,model=bounded.model,max_tokens=bounded.max_tokens)
+            risk_checks['usage'].append(result.usage or None)
+            if result.tool_calls: raise ValueError('Risk verifier tool calls forbidden')
+            return strict_json(result.content)
+
+        try:
+            gate=EvidenceSufficiency().validate(await risk_call('sufficiency',SUFFICIENCY_SYSTEM,
+                {'question':request.query,'evidence':evidence}),evidence)
+            risk_checks['checks'].append({'stage':'sufficiency','state':gate['state'],
+                                         'quote_integrity_verified':True})
+            if gate['state']!='sufficient':
+                return {'status':'clarify' if gate['state']=='conflict' else 'abstain','answer':SAFE_UNKNOWN,
+                        'citations':[],'reader_called':False,'access':access,'risk_checks':risk_checks,
+                        'validation':{'valid':True,'reason':'evidence_sufficiency_not_established','semantic_entailment_verified':False}}
+            if not policy.reserve_call('reader',prepared.report):
+                raise ContextLengthError('Answer risk budget exhausted')
+            risk_checks['policy']=policy.public()
+            with claims.store._memory_transaction():
+                if guard.freshness(): raise ValueError('Source changed during sufficiency check')
+        except (ValueError,TypeError,ProviderError,RuntimeError):
+            return {'status':'abstain','answer':SAFE_REJECTED,'citations':[],'reader_called':False,
+                    'access':access,'risk_checks':risk_checks,
+                    'validation':{'valid':False,'reason':'sufficiency_check_failed','semantic_entailment_verified':False}}
     try:
         result=await llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens)
     except (ProviderError,RuntimeError):
         return {'status':'abstain','answer':SAFE_REJECTED,'citations':[],'reader_called':True,'access':access,
                 'reader_budget':prepared.report,'usage':None,'generation_started':None,
-                'validation':{'valid':False,'reason':'reader_provider_failure','semantic_entailment_verified':False}}
+                'validation':{'valid':False,'reason':'reader_provider_failure','semantic_entailment_verified':False},
+                **({'risk_checks':risk_checks} if risk_checks is not None else {})}
     with claims.store._memory_transaction():
         verdict=guard.validate(result,prepared.messages)
-    return {**verdict,'reader_called':True,'reader_budget':prepared.report,'usage':result.usage or None,'access':access}
+    if risk_checks is not None and verdict['validation']['valid'] and verdict['status']=='answer':
+        try:
+            proposed=ReaderAnswer.model_validate(strict_json(result.content)).model_dump()
+            support=AnswerRisk().validate(await risk_call('support',SUPPORT_SYSTEM,
+                {'question':request.query,'proposed_answer':proposed['answer'],
+                 'evidence':[e for e in evidence if e['id'] in proposed['evidence_ids']]}),
+                request.query,proposed,evidence)
+            risk_checks['checks'].append({'stage':'support','accepted':support['accepted'],
+                                         'quote_integrity_verified':True})
+            if not support['accepted']:
+                raise ValueError('Answer support not established')
+            with claims.store._memory_transaction():
+                verdict=guard.validate(result,prepared.messages)
+        except (ValueError,TypeError,ProviderError,RuntimeError):
+            verdict={'status':'abstain','answer':SAFE_REJECTED,'citations':[],
+                     'validation':{'valid':False,'reason':'answer_support_not_established','semantic_entailment_verified':False}}
+    return {**verdict,'reader_called':True,'reader_budget':prepared.report,'usage':result.usage or None,'access':access,
+            **({'risk_checks':risk_checks} if risk_checks is not None else {})}

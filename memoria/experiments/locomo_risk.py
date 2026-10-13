@@ -1,0 +1,162 @@
+"""New ablations over frozen text sources; all decisions are query/evidence only."""
+from __future__ import annotations
+
+from collections import defaultdict
+from ..memory.adaptive_fallback import AdaptiveFallback
+from ..memory.answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM, query_risk
+from ..memory.evidence_sufficiency import EvidenceSufficiency, SYSTEM as SUFFICIENCY_SYSTEM
+from ..memory.reader import strict_json
+from ..prompting.reader_budget import ReaderBudget
+from .history import canonical
+from .locomo import parse_answer
+
+PROTOCOL = 'locomo-sufficiency-risk-v1'
+UNKNOWN = {'status': 'abstain', 'answer': 'Not mentioned.', 'evidence_ids': []}
+
+
+async def run_case(client, settings, roles, question, history, anchors, chosen,
+                   row, retrieve, *, method, reader_system, select_context):
+    if method not in {'targeted', 'adaptive_risk'}:
+        raise ValueError('Unknown risk ablation')
+    policy = AdaptiveFallback(evidence_budgets=(chosen['budget_chars'], 16000, 20000) if method == 'adaptive_risk'
+                              else (chosen['budget_chars'], 16000))
+    risk = query_risk(question)
+    row.update(query_risk=risk, primary_answer=None, primary_reader_called=False, primary_validation_error=None,
+               primary_presented_ids=chosen['presented_ids'], fallback_attempted=False,
+               risk_call_stages=[], sufficiency_checks=[], support_checks=[], adaptive_retrieval=[],
+               policy_contract_errors=[])
+    latest_usage, all_anchors = None, list(anchors)
+
+    async def call(stage, system, packet):
+        role = 'reader' if stage in {'reader', 'reader_repair'} else 'judge'
+        cfg = roles[role]
+        model = getattr(settings, cfg.slot)
+        prepared = await ReaderBudget(settings).prepare(
+            [{'role': 'system', 'content': system}, {'role': 'user', 'content': canonical(packet)}],
+            selected=model, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
+        if not policy.reserve_call(stage, prepared.report):
+            return None
+        row['risk_call_stages'].append({'call': len(client.calls), 'stage': stage, 'role': role,
+                                       'reader_budget': prepared.report})
+        return await client.call(role, prepared.messages, stream=False)
+
+    async def assess(evidence):
+        if not evidence:
+            return {'state': 'unsupported', 'missing_queries': [question], 'reason': 'empty_packet',
+                    'semantic_sufficiency_verified': False}
+        result = await call('sufficiency', SUFFICIENCY_SYSTEM, {'question': question, 'evidence': evidence})
+        if result is None:
+            return {'state': 'unsupported', 'missing_queries': [], 'reason': 'case_budget_exhausted'}
+        try:
+            if result.tool_calls:
+                raise ValueError('Assessor tool calls forbidden')
+            decision = EvidenceSufficiency().validate(strict_json(result.content), evidence)
+        except (ValueError, TypeError) as exc:
+            row['policy_contract_errors'].append({'stage': 'sufficiency', 'error': type(exc).__name__})
+            decision = {'state': 'missing_fact', 'missing_queries': [question],
+                        'reason': 'assessor_contract_rejected', 'semantic_sufficiency_verified': False}
+        row['sufficiency_checks'].append({'round': policy.retrieval_rounds, **decision})
+        return decision
+
+    async def read(evidence):
+        nonlocal latest_usage
+        result = await call('reader', reader_system, {'question': question, 'evidence': evidence})
+        if result is None:
+            return dict(UNKNOWN)
+        latest_usage = result.usage or None
+        try:
+            parsed = parse_answer(result, [e['id'] for e in evidence])
+        except ValueError as exc:
+            row['policy_contract_errors'].append({'stage': 'reader', 'error': type(exc).__name__})
+            parsed = None
+        if row['primary_answer'] is None and policy.retrieval_rounds==0:
+            row.update(primary_answer=parsed or dict(UNKNOWN), primary_reader_called=True)
+        if parsed is None:
+            repair = await call('reader_repair', reader_system, {'question': question, 'evidence': evidence,
+                'instruction': 'Regenerate valid JSON with exact presented citation IDs. Do not invent or force an answer.'})
+            if repair is not None:
+                latest_usage = repair.usage or None
+                try:
+                    parsed = parse_answer(repair, [e['id'] for e in evidence])
+                except ValueError as exc:
+                    row['policy_contract_errors'].append({'stage': 'reader_repair', 'error': type(exc).__name__})
+        return parsed or dict(UNKNOWN)
+
+    async def support(answer, evidence):
+        cited = [e for e in evidence if e['id'] in answer['evidence_ids']]
+        result = await call('support', SUPPORT_SYSTEM, {'question': question, 'proposed_answer': answer['answer'],
+                                                      'evidence': cited, 'query_risk': risk})
+        if result is None:
+            return {'accepted': False, 'verdict': 'insufficient', 'missing_queries': [], 'reason': 'case_budget_exhausted'}
+        try:
+            if result.tool_calls:
+                raise ValueError('Verifier tool calls forbidden')
+            decision = AnswerRisk().validate(strict_json(result.content), question, answer, evidence)
+        except (ValueError, TypeError) as exc:
+            row['policy_contract_errors'].append({'stage': 'support', 'error': type(exc).__name__})
+            decision = {'accepted': False, 'verdict': 'insufficient', 'missing_queries': [question],
+                        'reason': 'support_contract_rejected', 'semantic_entailment_verified': False}
+        row['support_checks'].append({'round': policy.retrieval_rounds, **decision})
+        return decision
+
+    async def expand(decision):
+        nonlocal all_anchors, chosen
+        if policy.calls >= policy.max_calls or policy.input_bytes >= policy.max_input_bytes:
+            policy.trace.append({'decision':'case_budget_exhausted'})
+            return False
+        plan = policy.plan(question, decision, risk)
+        if not plan:
+            return False
+        lists, diagnostics = [all_anchors], []
+        for query in plan['queries']:
+            items, info = await retrieve(query, plan['candidate_limit'])
+            lists.append(items)
+            diagnostics.append({'query': query, **info})
+        weights = defaultdict(float)
+        lookup = {m['id']: m for m in history}
+        positions = {m['id']: i for i, m in enumerate(history)}
+        for items in lists:
+            for rank, item in enumerate(items, 1):
+                if item['id'] not in lookup or item != lookup[item['id']]:
+                    raise ValueError('Supplement source differs from frozen conversation')
+                weights[item['id']] += 1 / (60 + rank)
+        all_anchors = [lookup[mid] for mid in sorted(weights, key=lambda mid: (-weights[mid], positions[mid]))[:80]]
+        chosen = select_context(history, all_anchors, question=question, budget_chars=plan['evidence_chars'],
+                                anchor_limit=80, radius=plan['context_radius'])
+        row['adaptive_retrieval'].append({'plan': plan, 'retrieval': diagnostics, 'selection': chosen})
+        row.update(fallback_attempted=True, fallback_status='success')
+        return True
+
+    answer = dict(UNKNOWN)
+    if method == 'targeted':
+        answer = await read(chosen['payload']['evidence'])
+        if answer['status'] != 'answer':
+            planner = await assess(chosen['payload']['evidence'])
+            # Ablation: use missing queries only, do not gate Reader or verify its answer.
+            if await expand(planner):
+                answer = await read(chosen['payload']['evidence'])
+    else:
+        while True:
+            evidence = chosen['payload']['evidence']
+            decision = await assess(evidence)
+            if policy.retrieval_rounds==0 and decision['state']!='sufficient':
+                row.update(primary_answer=dict(UNKNOWN),primary_reader_called=False,
+                           primary_policy_abstained=True)
+            if decision['state'] == 'sufficient':
+                candidate = await read(evidence)
+                if candidate['status'] == 'answer':
+                    decision = await support(candidate, evidence)
+                    if decision['accepted']:
+                        answer = candidate
+                        break
+                else:
+                    decision = {'state': 'missing_fact', 'missing_queries': [question], 'reason': 'reader_abstained'}
+            if not await expand(decision):
+                answer = {**UNKNOWN, 'status': 'clarify' if decision.get('state') == 'conflict' else 'abstain'}
+                break
+    row.update(status='success', answer_status=answer['status'], answer=answer['answer'],
+               evidence_ids=answer['evidence_ids'], usage=latest_usage,
+               retrieved_ids=[m['id'] for m in all_anchors], presented_ids=chosen['presented_ids'],
+               selection=chosen, source_shas={m['id']: m['source_text_sha256'] for m in history
+                                             if m['id'] in chosen['presented_ids']},
+               adaptive_policy=policy.public(), semantic_entailment_verified=False)

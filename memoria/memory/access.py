@@ -46,6 +46,7 @@ class QueryRequest(Strict):
     top_k: int = Field(default=8, ge=1, le=32, strict=True)
     candidate_limit: int = Field(default=32, ge=1, le=64, strict=True)
     use_query_model: bool = Field(default=False, strict=True)
+    use_answer_risk: bool = Field(default=False, strict=True)
 
     _conditions = field_validator("context")(conditions)
     _times = field_validator("fact_as_of", "recorded_as_of")(timestamp)

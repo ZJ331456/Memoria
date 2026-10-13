@@ -78,16 +78,21 @@ def main():
     sub.add_argument("--baseline", choices=["B0_recent", "B2_fts_compact", "B2_dense", "B2_rrf"], default="B2_rrf")
     sub = subs.add_parser("locomo-run", help="English v2 benchmark; all official QA by default; no production writes")
     sub.add_argument("--input", required=True)
-    sub.add_argument("--scope", choices=["smoke", "full"], default="full")
+    sub.add_argument("--scope", choices=["smoke", "development", "full"], default="full")
     sub.add_argument("--profile")
     sub.add_argument("--roles")
     sub.add_argument("--allow-remote", action="store_true")
     sub.add_argument("--embedding-device", choices=["auto", "cuda", "cpu"], default="auto")
     sub.add_argument("--concurrency", type=int, default=4)
     sub.add_argument("--embedding-model", choices=["bge-small-en-v1.5", "bge-small-zh-v1.5"], default="bge-small-en-v1.5")
-    sub.add_argument("--fallback", choices=["none", "full_history"], default="full_history")
+    sub.add_argument("--fallback", choices=["none", "full_history", "targeted", "adaptive_risk"], default="full_history")
     sub.add_argument("--resume-from", help="Stopped fingerprinted checkpoint in the same account; preserve completed cases")
     sub.add_argument("--retry-errors", action="store_true", help="With --resume-from, retry failed cases; keep all original failures in source run")
+    sub = subs.add_parser("locomo-audit", help="Offline failure triage and lineage Token accounting; no model calls")
+    sub.add_argument("--source-run", required=True)
+    sub = subs.add_parser("locomo-compare", help="Verify matched case/model sets and costs; scoring already frozen")
+    sub.add_argument("--baseline-run", required=True)
+    sub.add_argument("--runs", nargs="+", required=True)
     sub = subs.add_parser("select-evidence",help="Compare four selectors on a captured retrieval pool; zero model calls")
     sub.add_argument("--source-run",required=True)
     sub.add_argument("--budget",type=int,default=1024)
@@ -150,6 +155,12 @@ def main():
             roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
     elif args.command == "benchmark-access":
         result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)
+    elif args.command == "locomo-audit":
+        from memoria.experiments.locomo_diagnostics import audit
+        result,_ = audit(workspace,args.source_run)
+    elif args.command == "locomo-compare":
+        from memoria.experiments.locomo_diagnostics import compare
+        result,_ = compare(workspace,args.baseline_run,args.runs)
     elif args.command == "select-evidence":
         result = replay_selection(workspace,args.source_run,budget=args.budget,unit=args.unit,root=ROOT)
     elif args.command == "score-template":

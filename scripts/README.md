@@ -63,6 +63,8 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 
 ## LoCoMo英文正式入口
 
+新增`--fallback targeted|adaptive_risk`及`--scope development`（原顺序前两段全部304题），用于[P0充分性/风险消融](../docs/implemented/证据充分性与风险感知回答.md)。完整分母仍由`--scope full`保持；新模式不使用完整历史Reader，所有规划/核验及失败Token计入成本，独立注册协议与原始gold保持。旧`none|full_history`行为保留。
+
 `research.py --user USERNAME locomo-run --help`；默认全1986题，`--scope smoke`同固定10题。英文BGE在model/，评分可选依赖`requirements-research.txt`安装到.venv；远程显式授权/profile/roles，默认并发4，错误不丢分母。旧locomo-smoke仅历史v1复现。[完整说明](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
 
 locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为interrupted，由账号边界及产物/协议/模型指纹校验；不会对仍运行源run并发续跑。继承与新增调用分别记录，旧产物不覆盖。

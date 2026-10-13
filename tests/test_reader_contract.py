@@ -52,6 +52,46 @@ def valid_response(guard):
     return ChatResult(content=json.dumps({'status':'answer','answer':'临时工程回答','evidence_ids':[k for k,v in guard.catalog.items() if v['eligible']]},ensure_ascii=False))
 
 
+@pytest.mark.parametrize('reject_at',[None,'gate','support','revoked','provider'])
+def test_opt_in_quoted_risk_keeps_approval_freshness_and_no_rejected_answer(core,reject_at):
+    claim=approved(core)
+    guard,_=guard_for(core)
+    ids=[k for k,v in guard.catalog.items() if v['eligible']]
+    class RiskLLM:
+        settings=Settings.load(core[3])
+        calls=0
+        async def chat(self,messages,**kwargs):
+            self.calls+=1
+            if messages[0]['content'].startswith('Assess'):
+                packet=json.loads(messages[1]['content']);source=packet['evidence'][0]
+                missing=reject_at=='gate'
+                value={'state':'missing_fact' if missing else 'sufficient','requirements':[{'fact':'回答语言',
+                    'status':'missing' if missing else 'supported','sources':[] if missing else
+                    [{'id':source['id'],'quote':source['text']}]}],'missing_queries':[],'reason':'工程临时判断'}
+            elif messages[0]['content'].startswith('Verify'):
+                packet=json.loads(messages[1]['content']);source=packet['evidence'][0]
+                supported=reject_at!='support'
+                value={'verdict':'supported' if supported else 'insufficient','claims':[{'statement':'中文',
+                    'relation':'supported' if supported else 'insufficient','basis':'explicit',
+                    'sources':[{'id':source['id'],'quote':source['text']}],'reason':'工程临时判断'}],
+                    'missing_queries':[],'reason':'工程临时判断'}
+                if reject_at=='revoked':
+                    core[1].claims.decide(claim['id'],ClaimDecision(expected_revision=claim['revision'],reason='Test revocation'),'retract')
+            else:
+                if reject_at=='provider': raise RuntimeError('Temporary provider failure')
+                value={'status':'answer','answer':'中文','evidence_ids':ids}
+            return ChatResult(content=json.dumps(value,ensure_ascii=False),usage={'total_tokens':10})
+    llm=RiskLLM()
+    result=asyncio.run(read_memory_answer(core[1].claims,core[1].runtime.memory,llm,
+        QueryRequest(query='我用什么语言回答',use_answer_risk=True)))
+    assert llm.calls==(1 if reject_at=='gate' else 2 if reject_at=='provider' else 3)
+    assert result['status']==('answer' if reject_at is None else 'abstain')
+    assert result['validation']['semantic_entailment_verified'] is False
+    if reject_at is not None:
+        assert result['citations']==[] and result['answer'] in {SAFE_UNKNOWN,SAFE_REJECTED}
+    assert 'risk_checks' in result
+
+
 def settings(**kw):
     return SimpleNamespace(main=ModelConfig('fixture','x','http://example.test/v1'),max_tokens=32,
                            reader_input_bytes=4096,reader_context_tokens=None,reader_safety_tokens=8,**kw)
