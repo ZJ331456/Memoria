@@ -17,6 +17,11 @@
   "selection": "one per conversation in release order; first question in categories 1,2,3,4 cycled",
   "selection_uses_answers_or_evidence": false,
   "production_personal_import": false,
-  "full_benchmark_evaluated": false,
-  "note": "LLM-generated and human-edited official research benchmark; not consented continuous personal history"
+  "full_benchmark_evaluated": true,
+  "note": "LLM-generated and human-edited official research benchmark; not consented continuous personal history",
+  "full_protocol": "locomo-text-english-rrf-fallback-v5-full",
+  "full_run": "20261013T123154Z-c27f2463",
+  "evaluation_text_only": true,
+  "full_result": "docs/assets/evaluation/locomo-full-20261013.json",
+  "full_evaluation_note": "All 1986 QA; ordinary F1 and adversarial refusal separately; adaptive full-history recheck, checkpoint and engineering retries preserved"
 }

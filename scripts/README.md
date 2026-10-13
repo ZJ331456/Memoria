@@ -68,3 +68,5 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为interrupted，由账号边界及产物/协议/模型指纹校验；不会对仍运行源run并发续跑。继承与新增调用分别记录，旧产物不覆盖。
 
 `locomo-run --resume-from RUN --retry-errors`：仅对停止run的执行/回退错误恢复，完整分母继承，递归保留祖先调用/成本；未带resume-from则拒绝。
+
+`render_locomo_chart.py`仅从公开locomo-full-20261013.json重绘PNG/SVG与SHA清单，不访问私有数据、不重评分/调用模型；依赖requirements-docs.txt中的matplotlib。`--help`仅说明命令。

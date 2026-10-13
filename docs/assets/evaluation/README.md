@@ -32,3 +32,11 @@ PNG用于GitHub显示，SVG可导出。三张图已做视觉检查，无裁切�
 ## LoCoMo十题聚合
 
 [locomo-smoke-20261013.json](locomo-smoke-20261013.json)是后续独立官方构建benchmark的10题真实调用聚合与指纹，无原话/答案/账号UUID/凭据，不与LCCC64题或历史图混合。10调用/0错误、4回答6拒答，候选/呈现gold证据召回34%/22%，词面分支0命中、实际偏Dense。非全量/官方F1/J/长期质量；代码dirty及1个缺失gold引用均保留。[说明](../../implemented/LoCoMo十题真实调用诊断.md)。
+
+## LoCoMo完整1986题（2026-10-13）
+
+[初次全分母](locomo-full-firstpass-20261013.json)保留3执行与2回退连接错误；[最终聚合](locomo-full-20261013.json)三批次继承/5题重试后最终0错误，普通1540 F1=58.65%、对抗446短语分92.38%。这不是LCCC数据或语义准确率，模型/回退/文本/许可限制见[详细说明](../../implemented/LoCoMo全量评测与英文检索修复.md)。
+
+![LoCoMo分类结果](locomo-full-20261013.png)
+
+[SVG](locomo-full-20261013.svg) · [来源/图片SHA](locomo-full-20261013-chart.json)。图用scripts/render_locomo_chart.py从已冻结公开聚合重绘，0私有读取/0新评分/0模型调用；不混进旧3张LCCC图的source index。

@@ -1,0 +1,18 @@
+{
+  "source": "locomo-full-20261013.json",
+  "source_sha256": "b3eb10951a1ab292e9eabedf6f42f7cd16e2b563ffeb25dee9b908ca22a98221",
+  "renderer": "scripts/render_locomo_chart.py",
+  "matplotlib": "3.10.9",
+  "model_calls": 0,
+  "new_scores": 0,
+  "outputs": [
+    {
+      "file": "locomo-full-20261013.png",
+      "sha256": "47f1861da8668e1cd3ecd7c3de6c79ad50ef896cddc00a228cf3849238be2d1b"
+    },
+    {
+      "file": "locomo-full-20261013.svg",
+      "sha256": "195d2e893b3f27d38d232d9ee83c42a7eaec7542c27ecb9612253e713f8db4a0"
+    }
+  ]
+}
