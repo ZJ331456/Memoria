@@ -1,4 +1,4 @@
-# Datasets：真实公开来源清单
+# Datasets：公开来源与官方Benchmark清单
 
 [根入口](../README.md) · [真实来源说明](../docs/implemented/真实对话数据与实验入口.md)
 
@@ -16,3 +16,7 @@ lccc-base.manifest.json记录LCCC公开来源版本、选样及指纹。Git仅�
 ## 2026-10-13实际评测范围
 
 本机注册的是1个真实来源数据集LCCC子集（50段/206消息），同源QA v1/v2各64题，v2现行；Window/Dense/RRF是三种方法，不是三个数据集。已下载验证归档有20000条非空记录，当前未全量评估原始归档；每轮现行QA完整64题，仍受合法前缀和输入预算约束。AI辅助gold与匿名短对话不能给出连续个人长期效果或Claim F1。[不含原话的清单核对](../docs/assets/evaluation/dataset-scope-20261013.json)。
+
+## 后续LoCoMo接入
+
+[locomo10.manifest.json](locomo10.manifest.json)记录用户指定的官方构建benchmark（LLM生成并人工编辑、CC-BY-NC-4.0）：原文件2805274字节/10对话/1986题、SHA冻结。原始副本在忽略目录data/benchmarks/locomo/raw/，与qin的50段LCCC和生产个人事实分开；inputs/gold在账号research/benchmarks，真实10题run在experiments。仅固定每段1题，未全量跑1540普通题/446对抗题。[结果与命令](../docs/implemented/LoCoMo十题真实调用诊断.md)。

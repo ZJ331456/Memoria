@@ -15,6 +15,7 @@ from memoria.experiments.runner import activate_profile, execute, recover_run, s
 from memoria.experiments.access_eval import benchmark_access
 from memoria.experiments.evidence_eval import replay_selection
 from memoria.experiments.retrieval import BASELINES
+from memoria.experiments.locomo import execute_smoke
 from scripts.user_paths import directory_for
 
 
@@ -67,6 +68,13 @@ def main():
     sub = subs.add_parser("benchmark-access")
     sub.add_argument("--repeats",type=int,default=3)
     sub.add_argument("--iterations",type=int,default=50)
+    sub = subs.add_parser("locomo-smoke", help="Fixed ten-question official LoCoMo execution test; no production writes")
+    sub.add_argument("--input", required=True, help="Verified official locomo10.json")
+    sub.add_argument("--profile")
+    sub.add_argument("--roles")
+    sub.add_argument("--allow-remote", action="store_true")
+    sub.add_argument("--embedding-device", choices=["auto", "cuda", "cpu"], default="auto")
+    sub.add_argument("--baseline", choices=["B0_recent", "B2_fts_compact", "B2_dense", "B2_rrf"], default="B2_rrf")
     sub = subs.add_parser("select-evidence",help="Compare four selectors on a captured retrieval pool; zero model calls")
     sub.add_argument("--source-run",required=True)
     sub.add_argument("--budget",type=int,default=1024)
@@ -113,6 +121,11 @@ def main():
                                     allow_remote=args.allow_remote,
                                     profile=args.profile, extraction_protocol=args.extraction_protocol,
                                     roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
+    elif args.command == "locomo-smoke":
+        result = asyncio.run(execute_smoke(workspace, Settings.load(args.config), private_input(args.input, directory),
+            profile=args.profile, allow_remote=args.allow_remote, baseline=args.baseline,
+            embedding_device=args.embedding_device,
+            roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
     elif args.command == "benchmark-access":
         result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)
     elif args.command == "select-evidence":

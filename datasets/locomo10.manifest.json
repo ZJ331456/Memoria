@@ -1,0 +1,22 @@
+{
+  "dataset": "LoCoMo-10",
+  "kind": "official_constructed_benchmark",
+  "source": "https://github.com/snap-research/locomo",
+  "source_file": "https://github.com/snap-research/locomo/blob/main/data/locomo10.json",
+  "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "bytes": 2805274,
+  "conversations": 10,
+  "qa_total": 1986,
+  "qa_categories_1_to_4": 1540,
+  "qa_category_5": 446,
+  "license": "CC-BY-NC-4.0",
+  "license_source": "https://github.com/snap-research/locomo/blob/main/LICENSE.txt",
+  "local_cache": "data/benchmarks/locomo/raw/locomo10.json",
+  "smoke_protocol": "locomo10-smoke-one-per-conversation-v1",
+  "smoke_cases": 10,
+  "selection": "one per conversation in release order; first question in categories 1,2,3,4 cycled",
+  "selection_uses_answers_or_evidence": false,
+  "production_personal_import": false,
+  "full_benchmark_evaluated": false,
+  "note": "LLM-generated and human-edited official research benchmark; not consented continuous personal history"
+}

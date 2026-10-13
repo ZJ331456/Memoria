@@ -14,6 +14,7 @@
 | [records.py](records.py) | 代码/dirty 指纹、环境/模型/数据 SHA、阶段/usage 与产物账本 |
 | [roles.py](roles.py) | reader/extractor/decider/judge 参数与实际调用 |
 | [access_eval.py](access_eval.py) | 实际账号一致副本的 Claim 访问/缓存/失效成本和来源资格 |
+| [locomo.py](locomo.py) | 官方SHA、固定10题bundle、原文/说话者/日期、来源检索/选择/reader与独立gold诊断；不写生产 |
 | [evidence_eval.py](evidence_eval.py) | 复用真实已捕获前缀候选池，四选择器同池/预算，独立gold评分，不重复调用模型 |
 
 ## 本地 CLI
@@ -52,3 +53,7 @@ access_eval 用真实账号副本，0 Claim 仅为空状态开销，不证明正
 隔离临时输入与故障替身只验证协议/泄漏/恢复，不充当用户历史或研究成绩。
 
 2026-10-12新增[预算证据选择诊断](../../docs/implemented/条件时序抽取与预算证据选择.md)：原RRF候选、64开发QA、三档字符预算×四策略，12run/768题次，0新embedding/LLM调用。同池SHA一致、gold仅独立评分；2048字符Top-K/Coverage完整覆盖40/41，MMR38/41、新覆盖39/41，不切换默认策略。`run --evidence-selector`可接入新QA；生产审批和未知语义质量保留。
+
+## 官方构建Benchmark的十题入口
+
+`research.py --user USERNAME locomo-smoke --help`显示独立入口。普通真实历史协议不被LoCoMo替换；新授权只对指定官方文件做10题，按类别/源顺序固定，不凭gold换题。真实运行10次DeepSeek/0错误，4回答6拒答；旧compact词面均无英文命中、实际仅Dense，候选/呈现证据召回34%/22%。诊断非官方F1/J/语义准确率，完整Claim演化尚未测试。[契约与限制](../../docs/implemented/LoCoMo十题真实调用诊断.md)。
