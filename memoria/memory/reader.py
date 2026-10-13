@@ -219,6 +219,11 @@ async def read_memory_answer(claims,engine,llm,request: QueryRequest):
                 **({'risk_checks':risk_checks} if risk_checks is not None else {})}
     with claims.store._memory_transaction():
         verdict=guard.validate(result,prepared.messages)
+    if risk_checks is not None and verdict['status']=='answer':
+        from .answer_risk import is_refusal
+        if is_refusal(verdict['answer']):
+            verdict={'status':'abstain','answer':SAFE_UNKNOWN,'citations':[],
+                     'validation':{'valid':False,'reason':'refusal_status_conflict','semantic_entailment_verified':False}}
     if risk_checks is not None and verdict['validation']['valid'] and verdict['status']=='answer':
         try:
             proposed=ReaderAnswer.model_validate(strict_json(result.content)).model_dump()

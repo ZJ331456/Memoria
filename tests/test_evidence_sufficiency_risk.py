@@ -155,9 +155,63 @@ def test_new_modes_freeze_no_gold_bound_calls_and_reject_foreign_sources(tmp_pat
     metrics=json.loads((result/'metrics.json').read_text())
     manifest=json.loads((result/'manifest.json').read_text())
     assert metrics['requested_cases']==8 and metrics['errors']==0
-    assert manifest['protocol']['id'].startswith('locomo-sufficiency-risk-v1-'+method)
+    assert manifest['protocol']['id'].startswith('locomo-sufficiency-risk-v2-'+method)
     assert metrics['reader_calls']==24 and metrics['automatic_memory_writes']==0
     rows=[json.loads(line) for line in (result/'cases.jsonl').read_text().splitlines()]
     assert all(r['adaptive_policy']['calls']<=6 and not r['adaptive_policy']['full_history_reader_allowed'] for r in rows)
     assert all(not r['semantic_entailment_verified'] for r in rows)
     assert all(r['adaptive_policy']['retrieval_rounds']==(1 if method=='targeted' else 0) for r in rows)
+
+
+def test_date_field_is_an_anchor_not_an_event_and_cannot_cross_turns():
+    items=evidence()
+    items[0]['session_date_raw']='1:56 pm on 8 May, 2023'
+    items[1]['session_date_raw']='1:56 pm on 9 May, 2023'
+    decision=sufficient()
+    decision['requirements'].append({'fact':'Source reference date','kind':'temporal_anchor','status':'supported',
+        'sources':[{'id':'source-a','field':'session_date_raw','quote':items[0]['session_date_raw']}]})
+    parsed=EvidenceSufficiency().validate(decision,items)
+    assert parsed['verified_quotes'][-1]['field']=='session_date_raw'
+    date_only={**decision,'requirements':decision['requirements'][1:]}
+    with pytest.raises(ValueError,match='Timestamp alone'):EvidenceSufficiency().validate(date_only,items)
+    decision['requirements'][1]['sources'][0]['quote']='8 May, 2023'
+    with pytest.raises(ValueError,match='complete original'):EvidenceSufficiency().validate(decision,items)
+    decision['requirements'][1]['sources'][0]={'id':'source-b','field':'session_date_raw','quote':items[1]['session_date_raw']}
+    with pytest.raises(ValueError,match='same utterance'):EvidenceSufficiency().validate(decision,items)
+    value=support();value['claims'][0]['sources']=[{'id':'source-a','field':'session_date_raw','quote':items[0]['session_date_raw']}]
+    with pytest.raises(ValueError,match='Timestamp alone'):AnswerRisk().validate(value,'When?',{'answer':'three dogs','evidence_ids':['source-a']},items)
+
+
+def test_canonical_unknown_is_refusal_even_if_model_sets_answer_status():
+    from memoria.memory.answer_risk import is_refusal
+    assert is_refusal('Not mentioned.') and is_refusal('未提及。')
+    assert not is_refusal('She did not mention where, but does live in Boston.')
+
+
+def test_supplement_never_discards_prior_evidence_to_make_room_for_new_ranked_items():
+    from memoria.experiments.locomo_risk import run_case
+    texts=['Original long source '+('context '*1100)+' adopted dogs.',
+           'New competing source '+('context '*1100), 'Another new source '+('context '*1100)]
+    history=[dict(id=f'c/D{i}',content=text,text=text,content_sha256=bench.sha(text),
+        source_text_sha256=bench.sha(text),speaker='Temporary speaker',session_id=f's{i}',session_date_raw='source date')
+        for i,text in enumerate(texts)]
+    chosen=bench.select_context(history,[history[0]],question='pets',budget_chars=12000)
+    class Client:
+        calls=[]
+        async def call(self,role,messages,**kwargs):
+            packet=json.loads(messages[1]['content']);self.calls.append({})
+            if messages[0]['content'].startswith('Assess'):
+                output={'state':'missing_fact','requirements':[{'fact':'Missing item','status':'missing','sources':[]}],
+                        'missing_queries':['first supplement','second supplement'],'reason':'Engineering only'}
+            elif len(self.calls)==1:
+                output={'status':'abstain','answer':'Not mentioned.','evidence_ids':[]}
+            else:
+                output={'status':'answer','answer':'dogs','evidence_ids':[history[0]['id']]}
+            return ChatResult(content=json.dumps(output))
+    async def retrieve(query,limit):return history[1:],{}
+    row={}
+    settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    asyncio.run(run_case(Client(),settings,load_roles(None),'pets',history,[history[0]],chosen,row,retrieve,
+                         method='targeted',reader_system=bench.SYSTEM,select_context=bench.select_context))
+    assert set(chosen['presented_ids'])<=set(row['presented_ids'])
+    assert history[0]['id'] in row['adaptive_retrieval'][0]['selection']['presented_ids']

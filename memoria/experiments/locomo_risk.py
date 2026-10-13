@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 from ..memory.adaptive_fallback import AdaptiveFallback
-from ..memory.answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM, query_risk
+from ..memory.answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM, query_risk, is_refusal
 from ..memory.evidence_sufficiency import EvidenceSufficiency, SYSTEM as SUFFICIENCY_SYSTEM
 from ..memory.reader import strict_json
 from ..prompting.reader_budget import ReaderBudget
 from .history import canonical
 from .locomo import parse_answer
 
-PROTOCOL = 'locomo-sufficiency-risk-v1'
+PROTOCOL = 'locomo-sufficiency-risk-v2'
 UNKNOWN = {'status': 'abstain', 'answer': 'Not mentioned.', 'evidence_ids': []}
 
 
@@ -66,8 +66,12 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
         latest_usage = result.usage or None
         try:
             parsed = parse_answer(result, [e['id'] for e in evidence])
+            if parsed['status']=='answer' and is_refusal(parsed['answer']):
+                raise ValueError('Refusal status contradicts answer text')
         except ValueError as exc:
             row['policy_contract_errors'].append({'stage': 'reader', 'error': type(exc).__name__})
+            if policy.retrieval_rounds==0:
+                row['primary_validation_error']='ReaderContractError'
             parsed = None
         if row['primary_answer'] is None and policy.retrieval_rounds==0:
             row.update(primary_answer=parsed or dict(UNKNOWN), primary_reader_called=True)
@@ -78,6 +82,8 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
                 latest_usage = repair.usage or None
                 try:
                     parsed = parse_answer(repair, [e['id'] for e in evidence])
+                    if parsed['status']=='answer' and is_refusal(parsed['answer']):
+                        raise ValueError('Refusal status contradicts answer text')
                 except ValueError as exc:
                     row['policy_contract_errors'].append({'stage': 'reader_repair', 'error': type(exc).__name__})
         return parsed or dict(UNKNOWN)
@@ -120,9 +126,14 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
                 if item['id'] not in lookup or item != lookup[item['id']]:
                     raise ValueError('Supplement source differs from frozen conversation')
                 weights[item['id']] += 1 / (60 + rank)
-        all_anchors = [lookup[mid] for mid in sorted(weights, key=lambda mid: (-weights[mid], positions[mid]))[:80]]
+        retained=[lookup[mid] for mid in chosen['presented_ids']]
+        retained_ids={m['id'] for m in retained}
+        extra=[lookup[mid] for mid in sorted(weights,key=lambda mid:(-weights[mid],positions[mid])) if mid not in retained_ids][:80]
+        all_anchors = retained+extra
         chosen = select_context(history, all_anchors, question=question, budget_chars=plan['evidence_chars'],
-                                anchor_limit=80, radius=plan['context_radius'])
+                                anchor_limit=len(all_anchors), radius=plan['context_radius'])
+        if not retained_ids<=set(chosen['presented_ids']):
+            raise ValueError('Supplement lost previously presented evidence')
         row['adaptive_retrieval'].append({'plan': plan, 'retrieval': diagnostics, 'selection': chosen})
         row.update(fallback_attempted=True, fallback_status='success')
         return True
@@ -142,6 +153,9 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
             if policy.retrieval_rounds==0 and decision['state']!='sufficient':
                 row.update(primary_answer=dict(UNKNOWN),primary_reader_called=False,
                            primary_policy_abstained=True)
+            if policy.retrieval_rounds>=1 and decision['state'] in {'unsupported','conflict'}:
+                answer={**UNKNOWN,'status':'clarify' if decision['state']=='conflict' else 'abstain'}
+                break
             if decision['state'] == 'sufficient':
                 candidate = await read(evidence)
                 if candidate['status'] == 'answer':

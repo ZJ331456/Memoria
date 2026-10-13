@@ -1,0 +1,632 @@
+{
+  "cases": 304,
+  "ordinary_cases": 233,
+  "adversarial_cases": 71,
+  "baseline": [
+    {
+      "method": "original_rrf_primary",
+      "run_id": "20261013T123154Z-c27f2463",
+      "code": {
+        "commit": "a51f686d1e3b437a96c5a6f8e5d91d173bc2eca6",
+        "branch": "main",
+        "dirty": false,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": []
+      },
+      "ordinary_f1": 0.5440497028827315,
+      "adversarial_refusal": 0.9154929577464789,
+      "cost": {
+        "cases": 304,
+        "attempts": 312,
+        "known_usage_calls": 309,
+        "unknown_usage_calls": 3,
+        "failed_calls": 3,
+        "tokens_known": {
+          "prompt_tokens": 1214371,
+          "completion_tokens": 12683,
+          "total_tokens": 1227054
+        },
+        "mean_known_tokens_per_case": 4036.3618421052633,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "inflight_usage_unknown": 3
+    },
+    {
+      "method": "original_full_history",
+      "run_id": "20261013T123154Z-c27f2463",
+      "code": {
+        "commit": "a51f686d1e3b437a96c5a6f8e5d91d173bc2eca6",
+        "branch": "main",
+        "dirty": false,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": []
+      },
+      "ordinary_f1": 0.5558847919710396,
+      "adversarial_refusal": 0.9014084507042254,
+      "cost": {
+        "cases": 304,
+        "attempts": 407,
+        "known_usage_calls": 402,
+        "unknown_usage_calls": 5,
+        "failed_calls": 5,
+        "tokens_known": {
+          "prompt_tokens": 4012990,
+          "completion_tokens": 14939,
+          "total_tokens": 4027929
+        },
+        "mean_known_tokens_per_case": 13249.766447368422,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "inflight_usage_unknown": 3
+    }
+  ],
+  "new_methods": [
+    {
+      "method": "targeted",
+      "run_id": "20261013T152535Z-7eac9786",
+      "code": {
+        "commit": "58d4e72090108c1fd9327cd53ea344205479f56e",
+        "branch": "main",
+        "dirty": false,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": []
+      },
+      "protocol": {
+        "id": "locomo-sufficiency-risk-v1-targeted-development",
+        "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "source_url": "https://github.com/snap-research/locomo/blob/main/data/locomo10.json",
+        "mode": "locomo_development_v2",
+        "scope": "development",
+        "requested_cases": 304,
+        "selection": "all QA in first two source-order conversations; development, not unseen holdout",
+        "source_kind": "official_constructed_benchmark",
+        "text_only": true,
+        "human_reviewed_by_project": false,
+        "automatic_memory_writes": 0,
+        "inputs_sha256": "a68b70c9d7d657cf62cd2e68ca6ca58d91d472eaae4d5824164b18ceaab39da3",
+        "histories_sha256": "1a8ae59a060d3cded4ffeedad5a0aecc18090c0c627d39990f9c890855052bec",
+        "gold_sha256": "bc132d1af40bf1ebdff01e6c141ca98a1533ebec542daa8e77b60a6d0659901b",
+        "inference_excludes": [
+          "QA answers",
+          "QA category",
+          "gold evidence",
+          "adversarial_answer",
+          "image search query",
+          "observation",
+          "session_summary",
+          "event_summary"
+        ],
+        "time_policy": "raw session dates; no invented event dates/timezone/recorded axis",
+        "sufficiency_system_sha256": "f7c4b9f481d4361d6f76fbeef08a69e063cea5add683c473af9dcf478782441f",
+        "support_system_sha256": "290fcbcd57d14eea75fbe4502235e857e11b49e2c33ca6c29695ef0253b0591f",
+        "adaptive_limits": {
+          "evidence_chars": [
+            12000,
+            16000
+          ],
+          "max_calls": 6,
+          "max_case_input_bytes": 160000,
+          "max_queries_per_round": 2,
+          "full_history_reader_allowed": false
+        },
+        "baseline": "B2_rrf_english_v2",
+        "selector": "ranked_anchor_context",
+        "concurrency": 4,
+        "candidate_limit": 40,
+        "anchor_limit": 40,
+        "evidence_chars": 12000,
+        "context_radius": 1,
+        "rrf_k": 60,
+        "fallback": "targeted",
+        "fallback_trigger": "abstain/clarify or invalid primary output",
+        "fallback_call_limit": 5,
+        "fallback_budget": "bounded evidence stages and cumulative case bytes; no complete-history Reader",
+        "contract_repair_call_limit": 1,
+        "contract_repair": "same evidence, regenerate invalid secondary JSON/citations; never insert citations",
+        "lexical": "FTS5 Porter unicode61 BM25 OR non-stopword query tokens",
+        "reader_system_sha256": "23572f440b273e2d9e0d5614a501d34595dd95a26ca25b8874d7a5cc41ab98aa",
+        "embedding_model": "model/bge-small-en-v1.5",
+        "embedding_language_warning": null,
+        "retrieval_scope": "source Dense+English BM25; no production Claim/View access"
+      },
+      "metrics": {
+        "requested_cases": 304,
+        "ordinary_cases": 233,
+        "adversarial_cases": 71,
+        "ordinary_answer_f1": 0.556480342853427,
+        "primary_ordinary_answer_f1": 0.5491228934358916,
+        "by_category": {
+          "1": {
+            "cases": 43,
+            "answer_f1": 0.41644434132894487,
+            "primary_score": 0.3931885273754565,
+            "execution_statuses": {
+              "success": 43
+            },
+            "answer_statuses": {
+              "answer": 38,
+              "abstain": 5
+            },
+            "candidate_gold_recall_macro": 0.681782945736434,
+            "primary_presented_gold_recall_macro": 0.6837209302325581,
+            "presented_gold_recall_macro": 0.7186046511627907,
+            "citation_gold_recall_macro": 0.46472868217054264
+          },
+          "2": {
+            "cases": 63,
+            "answer_f1": 0.6910022854000445,
+            "primary_score": 0.6796644169193188,
+            "execution_statuses": {
+              "success": 63
+            },
+            "answer_statuses": {
+              "answer": 58,
+              "abstain": 5
+            },
+            "candidate_gold_recall_macro": 0.9841269841269841,
+            "primary_presented_gold_recall_macro": 1.0,
+            "presented_gold_recall_macro": 1.0,
+            "citation_gold_recall_macro": 0.873015873015873
+          },
+          "3": {
+            "cases": 13,
+            "answer_f1": 0.1478293636188373,
+            "primary_score": 0.1478293636188373,
+            "execution_statuses": {
+              "success": 13
+            },
+            "answer_statuses": {
+              "answer": 7,
+              "abstain": 6
+            },
+            "candidate_gold_recall_macro": 0.7272727272727273,
+            "primary_presented_gold_recall_macro": 0.7727272727272727,
+            "presented_gold_recall_macro": 0.7272727272727273,
+            "citation_gold_recall_macro": 0.3181818181818182
+          },
+          "4": {
+            "cases": 114,
+            "answer_f1": 0.581560416670668,
+            "primary_score": 0.581560416670668,
+            "execution_statuses": {
+              "success": 114
+            },
+            "answer_statuses": {
+              "answer": 104,
+              "abstain": 10
+            },
+            "candidate_gold_recall_macro": 0.8421052631578947,
+            "primary_presented_gold_recall_macro": 0.9298245614035088,
+            "presented_gold_recall_macro": 0.9298245614035088,
+            "citation_gold_recall_macro": 0.8421052631578947
+          },
+          "5": {
+            "cases": 71,
+            "official_refusal_phrase_rate": 0.8732394366197183,
+            "primary_score": 0.9154929577464789,
+            "execution_statuses": {
+              "success": 71
+            },
+            "answer_statuses": {
+              "abstain": 60,
+              "answer": 11
+            },
+            "candidate_gold_recall_macro": 0.9225352112676056,
+            "primary_presented_gold_recall_macro": 1.0,
+            "presented_gold_recall_macro": 0.9366197183098591,
+            "citation_gold_recall_macro": 0.18309859154929578
+          }
+        },
+        "execution_statuses": {
+          "success": 304
+        },
+        "answer_statuses": {
+          "answer": 218,
+          "abstain": 86
+        },
+        "unresolved_gold_entries": 1,
+        "scoring_protocol": "upstream-compatible Porter F1 categories1-4; category5 literal refusal rule",
+        "metric_source": "https://github.com/snap-research/locomo/blob/main/task_eval/evaluation.py",
+        "semantic_accuracy": null,
+        "independent_human_accuracy": null,
+        "errors": 0,
+        "reader_calls": 489,
+        "failed_calls": 0,
+        "primary_validation_errors": 0,
+        "fallback_cases": 92,
+        "fallback_errors": 0,
+        "contract_repair_cases": 0,
+        "secondary_initial_validation_errors": 0,
+        "inherited_cases": 0,
+        "new_reader_calls": 489,
+        "source_documents_encoded": 788,
+        "query_calls": 482,
+        "new_query_calls": 482,
+        "encoding_counter_scope": "confirmed lineage lower bound; current run counters exact; interrupted in-flight encoding unknown",
+        "usage_known_calls": 489,
+        "tokens_known": {
+          "prompt_tokens": 2052436,
+          "completion_tokens": 31183,
+          "total_tokens": 2083619
+        },
+        "monetary_cost": null,
+        "case_latency": {
+          "samples": 304,
+          "p50_ms": 2059.604,
+          "p95_ms": 6762.796
+        },
+        "automatic_memory_writes": 0,
+        "algorithm": "targeted",
+        "policy_contract_errors": 5,
+        "adaptive_retrieval_rounds": {
+          "0": 212,
+          "1": 92
+        },
+        "sufficiency_states": {
+          "missing_fact": 53,
+          "unsupported": 36,
+          "sufficient": 2,
+          "conflict": 1
+        },
+        "support_verdicts": {},
+        "observed_mean_known_tokens_per_case": 6854.0098684210525,
+        "token_mean_scope": "all recorded Reader/planner/verifier attempts including retries; missing usage remains unknown",
+        "semantic_entailment_verified": false
+      },
+      "cost": {
+        "cases": 304,
+        "attempts": 489,
+        "known_usage_calls": 489,
+        "unknown_usage_calls": 0,
+        "failed_calls": 0,
+        "tokens_known": {
+          "prompt_tokens": 2052436,
+          "completion_tokens": 31183,
+          "total_tokens": 2083619
+        },
+        "mean_known_tokens_per_case": 6854.0098684210525,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "artifacts": {
+        "annotation-anomalies.json": {
+          "sha256": "5a2e9589c42da273258ac07afc19c5b64c73cca157a736ff4886d3a04f37d7b0",
+          "bytes": 306
+        },
+        "calls.jsonl": {
+          "sha256": "7f6dbddd7561c003bffc5c6cd081d4af81f6870677a68a2b5b9fda287dc9ebd2",
+          "bytes": 428040
+        },
+        "cases.jsonl": {
+          "sha256": "cc3a39686b29c6bdeef1546509b821972e83ea28173447577d58532f8f1822fb",
+          "bytes": 21759293
+        },
+        "events.jsonl": {
+          "sha256": "6b02c9ee68006be14e4ef776ad086e5155d03ca3d1ca095af262b22aa44b24d3",
+          "bytes": 36040
+        },
+        "metrics.json": {
+          "sha256": "59d4999c8a2e6a23eb08fac45ba2b81642c1423d120a5787188087f85ed01e55",
+          "bytes": 4453
+        },
+        "progress.json": {
+          "sha256": "a538b7d1d9d8a35b63294c6c2614ca299ebef0b8fbc6f4d772c9510e7ec52b55",
+          "bytes": 90
+        },
+        "prompts.jsonl": {
+          "sha256": "c0b591e7b9d8a7ea959394bb01e6250a8030f31c0a8fe314a21977dcf426ad14",
+          "bytes": 7346241
+        },
+        "score.json": {
+          "sha256": "08044ac24ab577e90db70045b6bd182d5acafbdd981d98871e8df23888019ae4",
+          "bytes": 148802
+        }
+      }
+    },
+    {
+      "method": "adaptive_risk",
+      "run_id": "20261013T153546Z-e65a07a1",
+      "code": {
+        "commit": "58d4e72090108c1fd9327cd53ea344205479f56e",
+        "branch": "main",
+        "dirty": false,
+        "dirty_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "changed_files": [],
+        "untracked": []
+      },
+      "protocol": {
+        "id": "locomo-sufficiency-risk-v1-adaptive_risk-development",
+        "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "source_url": "https://github.com/snap-research/locomo/blob/main/data/locomo10.json",
+        "mode": "locomo_development_v2",
+        "scope": "development",
+        "requested_cases": 304,
+        "selection": "all QA in first two source-order conversations; development, not unseen holdout",
+        "source_kind": "official_constructed_benchmark",
+        "text_only": true,
+        "human_reviewed_by_project": false,
+        "automatic_memory_writes": 0,
+        "inputs_sha256": "a68b70c9d7d657cf62cd2e68ca6ca58d91d472eaae4d5824164b18ceaab39da3",
+        "histories_sha256": "1a8ae59a060d3cded4ffeedad5a0aecc18090c0c627d39990f9c890855052bec",
+        "gold_sha256": "bc132d1af40bf1ebdff01e6c141ca98a1533ebec542daa8e77b60a6d0659901b",
+        "inference_excludes": [
+          "QA answers",
+          "QA category",
+          "gold evidence",
+          "adversarial_answer",
+          "image search query",
+          "observation",
+          "session_summary",
+          "event_summary"
+        ],
+        "time_policy": "raw session dates; no invented event dates/timezone/recorded axis",
+        "sufficiency_system_sha256": "f7c4b9f481d4361d6f76fbeef08a69e063cea5add683c473af9dcf478782441f",
+        "support_system_sha256": "290fcbcd57d14eea75fbe4502235e857e11b49e2c33ca6c29695ef0253b0591f",
+        "adaptive_limits": {
+          "evidence_chars": [
+            12000,
+            16000,
+            20000
+          ],
+          "max_calls": 6,
+          "max_case_input_bytes": 160000,
+          "max_queries_per_round": 2,
+          "full_history_reader_allowed": false
+        },
+        "baseline": "B2_rrf_english_v2",
+        "selector": "ranked_anchor_context",
+        "concurrency": 4,
+        "candidate_limit": 40,
+        "anchor_limit": 40,
+        "evidence_chars": 12000,
+        "context_radius": 1,
+        "rrf_k": 60,
+        "fallback": "adaptive_risk",
+        "fallback_trigger": "insufficient quoted requirements or unsupported answer",
+        "fallback_call_limit": 5,
+        "fallback_budget": "bounded evidence stages and cumulative case bytes; no complete-history Reader",
+        "contract_repair_call_limit": 1,
+        "contract_repair": "same evidence, regenerate invalid secondary JSON/citations; never insert citations",
+        "lexical": "FTS5 Porter unicode61 BM25 OR non-stopword query tokens",
+        "reader_system_sha256": "23572f440b273e2d9e0d5614a501d34595dd95a26ca25b8874d7a5cc41ab98aa",
+        "embedding_model": "model/bge-small-en-v1.5",
+        "embedding_language_warning": null,
+        "retrieval_scope": "source Dense+English BM25; no production Claim/View access"
+      },
+      "metrics": {
+        "requested_cases": 304,
+        "ordinary_cases": 233,
+        "adversarial_cases": 71,
+        "ordinary_answer_f1": 0.36792356013299576,
+        "primary_ordinary_answer_f1": 0.36243557555762623,
+        "by_category": {
+          "1": {
+            "cases": 43,
+            "answer_f1": 0.3227439761434289,
+            "primary_score": 0.3419226941422564,
+            "execution_statuses": {
+              "success": 43
+            },
+            "answer_statuses": {
+              "answer": 27,
+              "abstain": 15,
+              "clarify": 1
+            },
+            "candidate_gold_recall_macro": 0.7166666666666667,
+            "primary_presented_gold_recall_macro": 0.6837209302325581,
+            "presented_gold_recall_macro": 0.7282945736434109,
+            "citation_gold_recall_macro": 0.35426356589147284
+          },
+          "2": {
+            "cases": 63,
+            "answer_f1": 0.14545066926019307,
+            "primary_score": 0.10713500629467015,
+            "execution_statuses": {
+              "success": 63
+            },
+            "answer_statuses": {
+              "abstain": 48,
+              "answer": 14,
+              "clarify": 1
+            },
+            "candidate_gold_recall_macro": 0.9841269841269841,
+            "primary_presented_gold_recall_macro": 1.0,
+            "presented_gold_recall_macro": 0.9841269841269841,
+            "citation_gold_recall_macro": 0.20634920634920634
+          },
+          "3": {
+            "cases": 13,
+            "answer_f1": 0.08139579718527086,
+            "primary_score": 0.08139579718527086,
+            "execution_statuses": {
+              "success": 13
+            },
+            "answer_statuses": {
+              "answer": 3,
+              "abstain": 10
+            },
+            "candidate_gold_recall_macro": 0.7727272727272727,
+            "primary_presented_gold_recall_macro": 0.7727272727272727,
+            "presented_gold_recall_macro": 0.7727272727272727,
+            "citation_gold_recall_macro": 0.13636363636363635
+          },
+          "4": {
+            "cases": 114,
+            "answer_f1": 0.5405847457019287,
+            "primary_score": 0.5433084429547119,
+            "execution_statuses": {
+              "success": 114
+            },
+            "answer_statuses": {
+              "answer": 96,
+              "clarify": 1,
+              "abstain": 17
+            },
+            "candidate_gold_recall_macro": 0.8596491228070176,
+            "primary_presented_gold_recall_macro": 0.9298245614035088,
+            "presented_gold_recall_macro": 0.956140350877193,
+            "citation_gold_recall_macro": 0.7324561403508771
+          },
+          "5": {
+            "cases": 71,
+            "official_refusal_phrase_rate": 0.9577464788732394,
+            "primary_score": 0.9436619718309859,
+            "execution_statuses": {
+              "success": 71
+            },
+            "answer_statuses": {
+              "abstain": 67,
+              "answer": 3,
+              "clarify": 1
+            },
+            "candidate_gold_recall_macro": 0.9225352112676056,
+            "primary_presented_gold_recall_macro": 1.0,
+            "presented_gold_recall_macro": 0.971830985915493,
+            "citation_gold_recall_macro": 0.028169014084507043
+          }
+        },
+        "execution_statuses": {
+          "success": 304
+        },
+        "answer_statuses": {
+          "answer": 143,
+          "abstain": 157,
+          "clarify": 4
+        },
+        "unresolved_gold_entries": 1,
+        "scoring_protocol": "upstream-compatible Porter F1 categories1-4; category5 literal refusal rule",
+        "metric_source": "https://github.com/snap-research/locomo/blob/main/task_eval/evaluation.py",
+        "semantic_accuracy": null,
+        "independent_human_accuracy": null,
+        "errors": 0,
+        "reader_calls": 1027,
+        "failed_calls": 0,
+        "primary_validation_errors": 0,
+        "fallback_cases": 180,
+        "fallback_errors": 0,
+        "contract_repair_cases": 0,
+        "secondary_initial_validation_errors": 0,
+        "inherited_cases": 0,
+        "new_reader_calls": 1027,
+        "source_documents_encoded": 788,
+        "query_calls": 801,
+        "new_query_calls": 801,
+        "encoding_counter_scope": "confirmed lineage lower bound; current run counters exact; interrupted in-flight encoding unknown",
+        "usage_known_calls": 1027,
+        "tokens_known": {
+          "prompt_tokens": 4204026,
+          "completion_tokens": 183373,
+          "total_tokens": 4387399
+        },
+        "monetary_cost": null,
+        "case_latency": {
+          "samples": 304,
+          "p50_ms": 7485.414,
+          "p95_ms": 14105.086
+        },
+        "automatic_memory_writes": 0,
+        "algorithm": "adaptive_risk",
+        "policy_contract_errors": 114,
+        "adaptive_retrieval_rounds": {
+          "0": 124,
+          "2": 155,
+          "1": 25
+        },
+        "sufficiency_states": {
+          "sufficient": 203,
+          "missing_fact": 305,
+          "conflict": 13,
+          "unsupported": 118
+        },
+        "support_verdicts": {
+          "supported": 148,
+          "insufficient": 37,
+          "contradicted": 1
+        },
+        "observed_mean_known_tokens_per_case": 14432.233552631578,
+        "token_mean_scope": "all recorded Reader/planner/verifier attempts including retries; missing usage remains unknown",
+        "semantic_entailment_verified": false
+      },
+      "cost": {
+        "cases": 304,
+        "attempts": 1027,
+        "known_usage_calls": 1027,
+        "unknown_usage_calls": 0,
+        "failed_calls": 0,
+        "tokens_known": {
+          "prompt_tokens": 4204026,
+          "completion_tokens": 183373,
+          "total_tokens": 4387399
+        },
+        "mean_known_tokens_per_case": 14432.233552631578,
+        "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+        "monetary_cost": null
+      },
+      "artifacts": {
+        "annotation-anomalies.json": {
+          "sha256": "5a2e9589c42da273258ac07afc19c5b64c73cca157a736ff4886d3a04f37d7b0",
+          "bytes": 306
+        },
+        "calls.jsonl": {
+          "sha256": "8238507ba748bc90d6b48db370f645b430feaa73783cf29d381b57c40d7e56cc",
+          "bytes": 1429162
+        },
+        "cases.jsonl": {
+          "sha256": "b6580f409da79508f9864007726f75c2a1cd77bfb8f2a61abd2574fe81df6476",
+          "bytes": 42523993
+        },
+        "events.jsonl": {
+          "sha256": "e56c3652f2bbcaec1b05c58b7cdd856ca8f75e013c41c301283bbdb073142286",
+          "bytes": 36040
+        },
+        "metrics.json": {
+          "sha256": "4e5db7ae1129a7c13550984cbbc17ff3707e50f354eacf6ed34affd7929f9c87",
+          "bytes": 4700
+        },
+        "progress.json": {
+          "sha256": "47b80a9c2f2e9f028cb28960b459006975a8364fb63a8543dd679b35f192c012",
+          "bytes": 90
+        },
+        "prompts.jsonl": {
+          "sha256": "f57f748582c6a78e1d7c482cc8d5cbcf780d470b0c27955e6989f784f70e1187",
+          "bytes": 15163961
+        },
+        "score.json": {
+          "sha256": "9eeeec38edfb1a5bac68d181af28c1e2d1d82f17403f654574cec3ffa6e9a1af",
+          "bytes": 145636
+        }
+      },
+      "gate_proxy": {
+        "labels": "official category5 negatives; category4 answer literal in primary text positives",
+        "counts": {
+          "tp": 35,
+          "fn": 4,
+          "tn": 65,
+          "fp": 5,
+          "unknown_negative": 1
+        },
+        "evaluated": 110,
+        "excluded": 194,
+        "unknown_decisions": 1,
+        "analysis_version": "gate-proxy-v2-unknown-contract-errors-not-credited-as-negatives",
+        "macro_f1": 0.9073236889692586,
+        "positive_recall": 0.8974358974358975,
+        "negative_recall": 0.9154929577464789,
+        "independent_semantic_gold": false,
+        "model_confidence_used": false
+      }
+    }
+  ],
+  "same_original_case_ids": true,
+  "same_reader_and_embedding_snapshots": true,
+  "independent_human_review": false,
+  "semantic_accuracy": null,
+  "unseen_test_claim": false,
+  "production_memory_writes": 0,
+  "analysis_note": "Contract errors are unknown classifier decisions, not credited as correct negative labels; original run scores unchanged."
+}

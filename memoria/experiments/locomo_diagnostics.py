@@ -81,15 +81,20 @@ def gate_proxy(rows, details, histories):
         else:
             skipped += 1
             continue
-        predicted=initial['state']=='sufficient'
-        confusion['tp' if positive and predicted else 'fn' if positive else 'fp' if predicted else 'tn']+=1
+        if initial.get('reason')=='assessor_contract_rejected':
+            confusion['unknown_positive' if positive else 'unknown_negative']+=1
+        else:
+            predicted=initial['state']=='sufficient'
+            confusion['tp' if positive and predicted else 'fn' if positive else 'fp' if predicted else 'tn']+=1
     tp,fn,fp,tn=(confusion[k] for k in ('tp','fn','fp','tn'))
-    positive_f1=2*tp/(2*tp+fp+fn) if 2*tp+fp+fn else None
-    negative_f1=2*tn/(2*tn+fp+fn) if 2*tn+fp+fn else None
+    up,un=confusion['unknown_positive'],confusion['unknown_negative']
+    positive_f1=2*tp/(2*tp+fp+fn+up) if 2*tp+fp+fn+up else None
+    negative_f1=2*tn/(2*tn+fp+fn+un) if 2*tn+fp+fn+un else None
     return {'labels':'official category5 negatives; category4 answer literal in primary text positives',
-            'counts':dict(confusion),'evaluated':tp+fn+fp+tn,'excluded':skipped,
+            'counts':dict(confusion),'evaluated':tp+fn+fp+tn+up+un,'excluded':skipped,
+            'unknown_decisions':up+un,'analysis_version':'gate-proxy-v2-unknown-contract-errors-not-credited-as-negatives',
             'macro_f1':(positive_f1+negative_f1)/2 if positive_f1 is not None and negative_f1 is not None else None,
-            'positive_recall':tp/(tp+fn) if tp+fn else None,'negative_recall':tn/(tn+fp) if tn+fp else None,
+            'positive_recall':tp/(tp+fn+up) if tp+fn+up else None,'negative_recall':tn/(tn+fp+un) if tn+fp+un else None,
             'independent_semantic_gold':False,'model_confidence_used':False}
 
 

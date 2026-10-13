@@ -373,6 +373,8 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         protocol = {**protocol, 'id': RISK_PROTOCOL + '-' + fallback + '-' + scope,
                     'sufficiency_system_sha256': sha(SUFFICIENCY_SYSTEM),
                     'support_system_sha256': sha(SUPPORT_SYSTEM),
+                    'supplement_policy':'retain_previous_evidence_then_up_to_80_rrf_supplements',
+                    'stop_policy':'unsupported/conflict after first supplement; no complete-history Reader',
                     'adaptive_limits': {'evidence_chars': [evidence_chars,16000,20000] if fallback=='adaptive_risk'
                         else [evidence_chars,16000], 'max_calls':6, 'max_case_input_bytes':160000,
                         'max_queries_per_round':2, 'full_history_reader_allowed':False}}
@@ -421,7 +423,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
             previous, rows, calls = checkpoint_rows(workspace,resume_from,protocol,cases,histories,retry_errors)
             for field in ('baseline','selector','candidate_limit','anchor_limit','evidence_chars','context_radius',
                           'rrf_k','lexical','reader_system_sha256','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit',
-                          'sufficiency_system_sha256','support_system_sha256','adaptive_limits'):
+                          'sufficiency_system_sha256','support_system_sha256','adaptive_limits','supplement_policy','stop_policy'):
                 if previous['protocol'].get(field) != recorder.manifest['protocol'].get(field):
                     raise ValueError('Checkpoint inference settings differ')
             if previous['models'] != recorder.manifest['models'] or previous['model_snapshots'] != recorder.manifest['model_snapshots']:
