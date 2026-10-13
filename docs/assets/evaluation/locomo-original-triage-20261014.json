@@ -1,0 +1,121 @@
+{
+  "source_run": "20261013T123154Z-c27f2463",
+  "requested_cases": 1986,
+  "source_artifacts": {
+    "annotation-anomalies.json": {
+      "sha256": "0f585371f83b2f45b27a3f54b0da8531b2b4a6e1ecdad6e6de5b8ce7a33d941c",
+      "bytes": 1920
+    },
+    "calls.jsonl": {
+      "sha256": "eacf3da8aa28a073cf38cd564b823a6f79d4aa89598a5b723c82b69c09fa872f",
+      "bytes": 6019
+    },
+    "cases.jsonl": {
+      "sha256": "454e73eba223b82ea698b8f86e94fcc445c8ad9fb91d106ece74c91bea6e7b18",
+      "bytes": 120541358
+    },
+    "events.jsonl": {
+      "sha256": "1c6f51f6312ebeb4783aec868076dea85961dc76b3cac2ab94b5b9039c2c9692",
+      "bytes": 683
+    },
+    "metrics.json": {
+      "sha256": "2c99d5ee3871900d7a77232210fbab29d1ebf36b093da4e1c8903fdf35543f8b",
+      "bytes": 4024
+    },
+    "progress.json": {
+      "sha256": "1b26616c0e20f4b3d73d88a286086d10246ac5b072b7126271b85b08a45c6160",
+      "bytes": 92
+    },
+    "prompts.jsonl": {
+      "sha256": "cab607eaed72904902dc4e8852a445fd29818d1a7061b29af72069a91b650427",
+      "bytes": 339414
+    },
+    "score.json": {
+      "sha256": "2637f1b6c5c642d460ae6588cecd388ec742784996d2202c97f35350e703c6d9",
+      "bytes": 947534
+    }
+  },
+  "heuristic_triage_only": true,
+  "independent_human_review": false,
+  "groups": {
+    "abstained": {
+      "cases": 166,
+      "triage": {
+        "temporal_precision_or_premise_review": 44,
+        "reader_or_subject_condition_review": 46,
+        "semantic_span_or_answer_wording_review": 64,
+        "annotation_or_undefined_evidence_review": 2,
+        "background_inference_or_high_impact_review": 10
+      },
+      "flags": {
+        "gold_ids_all_presented": 164,
+        "reference_literal_not_found_in_text": 120,
+        "temporal_relation": 46,
+        "reference_literal_in_source_text": 46,
+        "conditional_or_counterfactual": 18,
+        "gold_evidence_not_defined": 2,
+        "multiple_facts": 19,
+        "inference_requested": 10,
+        "medical_or_high_impact": 2,
+        "absolute_or_first": 5
+      }
+    },
+    "answered_zero_f1": {
+      "cases": 100,
+      "triage": {
+        "retrieval_or_presentation_gap_review": 31,
+        "annotation_or_undefined_evidence_review": 2,
+        "background_inference_or_high_impact_review": 4,
+        "semantic_span_or_answer_wording_review": 48,
+        "temporal_precision_or_premise_review": 15
+      },
+      "flags": {
+        "gold_ids_not_all_presented": 33,
+        "reference_literal_not_found_in_text": 60,
+        "reference_literal_in_source_text": 40,
+        "unresolved_gold_id": 2,
+        "conditional_or_counterfactual": 3,
+        "gold_ids_all_presented": 67,
+        "inference_requested": 9,
+        "multiple_facts": 12,
+        "answer_literal_in_cited_text": 27,
+        "temporal_relation": 20
+      }
+    }
+  },
+  "primary_token_cost": {
+    "cases": 1986,
+    "attempts": 1994,
+    "known_usage_calls": 1991,
+    "unknown_usage_calls": 3,
+    "failed_calls": 3,
+    "tokens_known": {
+      "prompt_tokens": 7840572,
+      "completion_tokens": 76387,
+      "total_tokens": 7916959
+    },
+    "mean_known_tokens_per_case": 3986.384189325277,
+    "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+    "monetary_cost": null
+  },
+  "full_history_token_cost": {
+    "cases": 1986,
+    "attempts": 2652,
+    "known_usage_calls": 2647,
+    "unknown_usage_calls": 5,
+    "failed_calls": 5,
+    "tokens_known": {
+      "prompt_tokens": 36478873,
+      "completion_tokens": 93238,
+      "total_tokens": 36572111
+    },
+    "mean_known_tokens_per_case": 18414.960221550857,
+    "scope": "recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost",
+    "monetary_cost": null
+  },
+  "inflight_calls_unknown": 3,
+  "model_calls": 0,
+  "scores_rewritten": false,
+  "date": "2026-10-14",
+  "review_kind": "post-hoc heuristic queues, not semantic correctness labels"
+}
