@@ -1,6 +1,6 @@
-# 历史注册评测图表
+# 评测汇总与图表
 
-[根README结果](../../../README.md#6-真实开发评测结果与图表) · [原始公开报告](../../implemented/DenseRRF自动评测与视图性能.md)
+[根README结果](../../../README.md#locomo-全量评测) · [LCCC历史报告](../../implemented/DenseRRF自动评测与视图性能.md)
 
 registered-20261012.json仅摘录公开报告的真实聚合指标。测量代码040427c、协议lccc50-codex-dev-qa-20261012-v2、批次lccc50-dense-rrf-auto-20261012-v1；12轮纯检索768题次、9轮QA576调用，每条件三轮。不混入9776e5c旧六轮，不归因于6ea773f新增Studio/选择器。
 

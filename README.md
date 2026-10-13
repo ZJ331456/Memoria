@@ -4,9 +4,44 @@
 
 面向小模型长期陪伴的记忆管理项目：保存原话证据、审核候选、管理条件与变化，在有限上下文中访问适用记忆。入口为 HTTP API、Memory Studio 和研究 CLI，本地 Qwen/BGE 与远程模型使用统一的 OpenAI 兼容业务接口。
 
-**当前定位：本机研究原型与受控试用基础。** 已有工程保护与真实开发评测；真实连续人物长期效果、正向画像视图收益及正式商业发布验收尚未完成。下一步算法、存储、安全和运维验收见[计划 v14](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
+**当前定位：本机研究原型与受控试用基础。** 已有记忆治理、工程保护与下述LoCoMo全量评测；真实连续人物长期效果、正向画像视图收益及正式商业发布验收尚未完成。下一步算法、存储、安全和运维验收见[研究与商用计划](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
 
-## 1. 当前能力
+## LoCoMo 全量评测
+
+2026-10-13完成官方 `locomo10.json` **全部1,986题**：10段长对话、5,882条原话，包含1,540道普通题和446道对抗题。Reader为 **DeepSeek `deepseek-flash`（非思考模式）**，Embedding为本地 **`bge-small-en-v1.5`**；本轮评测的是英文文本来源检索与回答链路，不读取图像，未使用生产Claim/条件视图。
+
+下表按“方法 × 问题类别”展示。**多跳、时序、开放域、单跳及普通题Overall均为官方口径Answer F1（%）**；对抗列单独使用官方拒答短语分（%）。Overall按全部1,540道普通题汇总，不是四类别的等权平均，也不包含对抗题。
+
+| 方法 | 多跳<br>282题 | 时序<br>321题 | 开放域<br>96题 | 单跳<br>841题 | 普通题Overall<br>1,540题 | 对抗拒答分†<br>446题 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Memoria-Agent：RRF + 邻句，首次回答 | 43.44 | 52.12 | 19.55 | 66.08 | 56.12 | **94.17** |
+| Memoria-Agent：RRF + 邻句 + 全历史复核 | **45.09** | **55.95** | **22.47** | **68.37** | **58.65** | 92.38 |
+
+† 对抗分按官方规则检查拒答短语，**不是F1、语义准确率或结构化拒答率**；最终结构化拒答为410/446（91.93%）。两行来自同一批题的首次与最终输出，并非两个独立实验，也尚无同协议外部方法对照。
+
+首次检索使用英文BM25与Dense的RRF融合，Top-40候选优先保留，再补同会话邻句，证据包上限12,000字符。首次拒答、澄清或输出不合法时，最多一次完整同对话历史复核；完整请求另受240,000 UTF-8字节门槛约束，远程精确Token窗口未知。因此最终行包含更大的上下文和额外调用，不能标为纯RRF检索成绩或同Token预算收益。
+
+普通题F1从56.12%升至58.65%，对抗拒答分从94.17%降至92.38%。最终1,986题执行/JSON/引用ID契约通过，仍有166道普通题拒答；这不等于所有回答正确或语义支持已验证。历史5次连接失败和3次在途计费未知保留，三阶段活动墙钟48.65分钟；完整诊断、调用成本和限制见[全量评测报告](docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+
+<details>
+<summary>查看分类结果图与复现来源</summary>
+
+![LoCoMo全量分类结果](docs/assets/evaluation/locomo-full-20261013.png)
+
+[冻结汇总](docs/assets/evaluation/locomo-full-20261013.json) · [SVG](docs/assets/evaluation/locomo-full-20261013.svg) · [图表指纹与复现](docs/assets/evaluation/README.md#locomo完整1986题2026-10-13)。图表只重绘已有结果，不新增模型调用或评分。
+
+</details>
+
+### 与早期LCCC开发评测的区别
+
+| 评测 | 数据与规模 | 用途与评分 |
+| --- | --- | --- |
+| LCCC开发子集（原README第6节） | 50段匿名短对话、206条消息；64道AI辅助开发QA，多次重复 | 检索/引用/失败诊断；QA字面匹配，不是独立真人语义评分 |
+| LoCoMo全量（上表） | 官方构建的10段长对话、5,882条原话、1,986道原始QA | 独立benchmark适配；普通题官方分类F1，对抗题官方拒答短语分 |
+
+旧评测中的“真实”指有真实公开来源和实际模型/API调用。两者的数据长度、语言、标签、预算及评分不同，**LCCC的86.46%字面匹配不能与LoCoMo的58.65% F1直接比较**。旧结果与三张图保留在[LCCC评测报告](docs/implemented/DenseRRF自动评测与视图性能.md)，不混入上表。两者都不能证明真实个人长期陪伴效果；LoCoMo为CC-BY-NC-4.0研究基准，不作为用户个人事实或商用数据授权。
+
+## 当前能力
 
 | 模块 | 已实现 | 适用边界 |
 | --- | --- | --- |
@@ -37,9 +72,7 @@ flowchart LR
 
 代码职责见[memoria](memoria/README.md)，接口边界见[已实现文档](docs/README.md#已实现的功能说明)。研究链路不将公开匿名来源写入本人Claim。
 
-同日算法深化见[Claim演化策略](docs/implemented/Claim证据核验与演化策略.md)：明确默认只读无条件状态，面试场景按适用条件读取，未给条件继续澄清；影子建议与数据库事务分离。本地HTML展示只保存在忽略目录，不随Git发布。
-
-## 2. 首次准备环境
+## 首次准备环境
 
 以下为 **Windows PowerShell**，除注明外从仓库根执行，无需激活.venv。本机路径为`C:\Users\zero\Desktop\Memory-Project\Memoria-Agent`，新机器先获取仓库：
 
@@ -58,7 +91,7 @@ if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
 
 本机已验证Python3.13.5、Node22.16.0、npm10.9.2。API最小依赖在requirements.txt；本地模型可选依赖在requirements-local-embedding.txt，向量扩展在requirements-vector.txt。Node用于Studio/MCP。这是当前平台证据，不代表全部系统已验收；不向conda base或全局npm安装项目包。
 
-## 3. 模型方案：选择一种
+## 模型方案：选择一种
 
 准备`model/bge-small-zh-v1.5/`，使用本地LLM时另备`model/Qwen3.5-2B/`。模型被Git忽略，clone不会包含权重；本项目没有通用Qwen下载CLI，需有效的本地Safetensors/tokenizer/config。
 
@@ -113,7 +146,7 @@ Invoke-RestMethod http://127.0.0.1:8080/v1/models
 
 设备可选cpu/auto；本机验证为CUDA。服务提供chat/completions与embeddings，Qwen总输入+输出默认8192 token、BGE单块512 token；health存活不是模型质量证明。warmup加载并运行本地LLM，长文分块由记忆链路执行，直接超长embedding不会静默截断。[完整接口边界](docs/implemented/本地与远程OpenAI统一接口.md)。
 
-## 4. 构建Studio、启动2237业务
+## 构建Studio、启动2237业务
 
 先构建，再在**终端二**启动；方案A无需另起8080。
 
@@ -162,7 +195,7 @@ npm run dev
 
 访问http://127.0.0.1:5173/studio/，/api代理到2237；部署模式只需构建产物和2237，不需要Vite开发进程。
 
-## 5. 可选MCP与公开诊断来源
+## 可选MCP与公开诊断来源
 
 这些不是最小启动必需项，仅配置已有账号：
 
@@ -183,49 +216,11 @@ npm run dev
 
 50段/206原话来自LCCC，进入账号实验空间；身份/事件时间未知，不生成本人Claim。旧个人历史仍不导入，来源/许可见[datasets](datasets/README.md)。
 
-## 6. 真实开发评测结果与图表
-
-来自**2026-10-12固定21轮、clean040427c**：12轮纯检索768题次、9轮DeepSeek QA576调用。50匿名来源组/206原话/64题（41可知、23不可知），每条件3轮。gold为AI辅助开发标注，字面匹配不是人工语义正确率。结果不归因于后来新增的Studio/选择器，旧六轮窗口/compact QA未混算。
-
-![已知来源证据召回率](docs/assets/evaluation/source-recall.png)
-
-| 方法 | 可知证据召回 | 空上下文 | 检索p50/p95 ms | 本批QA字面匹配 |
-| --- | --- | --- | --- | --- |
-| Window | 123/123，100% | 0/192 | 0.003/0.003 | 166/192，86.46% |
-| Compact FTS | 45/123，36.59% | 81/192 | 0.537/0.676 | 本批未运行 |
-| Dense | 123/123，100% | 0/192 | 11.433/38.011 | 161/192，83.85% |
-| RRF | 123/123，100% | 0/192 | 12.062/18.403 | 158/192，82.29% |
-
-![QA字面匹配与可知引用召回](docs/assets/evaluation/qa-literal-and-citations.png)
-
-Dense/RRF补足compact召回，窗口同样覆盖全部已知证据，本批QA字面表现未超过窗口。失败3/5/7次均保留在192分母，共13次引用越界与2次供应商失败；usage已知574/576，已知353502 token，货币成本未知。首次Dense包含加载，表中百分位不代替极端冷启动或生产SLO。
-
-![0已批准Claim的空状态访问开销](docs/assets/evaluation/empty-claim-access.png)
-
-实际账号一致性副本、0已批准Claim，三个条件各1800次、全为clarify。无缓存/空缓存/失效后p50/p95为0.071/0.097、0.106/0.124、0.125/0.220ms；空缓存增加开销，正向画像视图收益仍未测，不是HTTP/reader端到端指标。编译与失效维护成本另列于[完整报告](docs/implemented/DenseRRF自动评测与视图性能.md)。
-
-追溯[注册协议](configs/research-retrieval-eval-20261012.json)、[公开汇总/图指纹](docs/assets/evaluation/README.md)、[来源/gold](docs/implemented/真实历史标注与评测.md)。连续人物、跨会话长期保持、真实变化恢复、人工陪伴效用和B7收益仍未知。匿名来源不是50名连续用户。
-
-### 查看与重绘
-
-Studio账本只读当前账号执行记录，无任意脚本或gold下载入口。新机器没有私有冻结输入时，不能直接复现完整研究。
-
-```powershell
-.\.venv\Scripts\python.exe scripts/research.py --user qin --help
-# 仅在已有冻结输入/来源和BGE时运行纯检索，0 reader调用
-.\.venv\Scripts\python.exe scripts/research.py --user qin run --mode retrieval --protocol lccc50-codex-dev-qa-20261012-v2 --baseline B2_rrf --embedding-device auto
-# 图表只读公开汇总，不运行模型或重新评分
-.\.venv\Scripts\python.exe -m pip install -r requirements-docs.txt
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py --check
-```
-
-远程QA需显式allow-remote且可能付费。旧登记ID/预测/gold不得覆盖，新实验建新协议和登记；这里没有一键重跑576次调用。
-
-## 7. 实际数据存储
+## 实际数据存储
 
 ```text
 data/                              # 全部忽略
+├─ benchmarks/locomo/raw/          # 本地官方benchmark副本
 ├─ auth/accounts.db                # 账号、密码摘要、会话摘要、登录尝试
 ├─ users/<server UUID>/
 │  ├─ memory/memoria.db             # 原话/记忆/Claim/审核/视图/索引/任务
@@ -241,78 +236,15 @@ model/                             # 权重/tokenizer，忽略
 
 当前每用户SQLite/WAL+本地文件。完整备份/恢复、账号注销/全量导出、备份删除政策、schema版本迁移及跨机凭据迁移尚缺；普通Markdown导出不是完整备份，NTFS/DPAPI也不是整库加密。[商用存储验收](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
 
-## 8. 下一步重点与商用缺口
+仓库中的[datasets/](datasets/README.md)保存来源、许可与SHA清单；原始benchmark、私有输入/gold和逐题结果放在被忽略的data/，公开结果汇总与图表放在[docs/assets/evaluation/](docs/assets/evaluation/README.md)。
 
-1. **数据可靠性与来源入口并行：** 备份/核验/恢复、迁移版本和删除生命周期；增加无需聊天模型的本人原话/获准连续历史入口，保留身份、时间、授权范围。
-2. **紧凑证据投影与新预算QA：** 完整Reader预算与有限生产记忆引用校验已接入；下一步同候选同预算评测必要证据/最终答案、拒答及失败。远程精确Token仍未知，完整请求按字节门槛，不用BGE冒充。
-3. **持久索引与通用条件：** 后台游标、水位、暂停/恢复、投影原子写、条件/否定/计划/不确定时间/实体别名，保留澄清。
-4. **新协议B7，再到真实B3/B5/B6：** 公开来源做选择与引用诊断；真实长期和正向视图需要新的获准连续本人资料，独立真人评估继续暂缓。
+## 下一步重点与商用缺口
 
-商用还需账号/成本/磁盘/队列配额、SSRF出口治理、HTTPS可信代理、租户回收、readiness/直方图/告警、恢复演练、CI/锁定依赖、发布回滚和项目/模型/数据许可清单。有登录页或405项工程测试不等于这些已完成；现阶段无需为了“商用”直接引入多机数据库或Kubernetes。
+1. **回答风险与证据支持：** 优先解决全历史复核后的对抗过答；仅依据Query/来源做风险门控和支持度核验，保留拒答，不读取gold或自动批准高风险个人事实。
+2. **多跳、开放域与时间推断：** 改善跨片段证据覆盖、指代和时间精度。标注证据ID可见不等于文本足够；需区分检索、证据选择与Reader问题。
+3. **小模型的同预算验证：** 使用可信本地Reader tokenizer做紧凑证据与需求预测对照，另登记同模型/预算/评分的基线及独立留出。完整历史回退结果不能直接推广到1B模型。
+4. **真实长期研究：** 获得新授权的连续本人资料后，再测Claim抽取、条件、更新决策及长期保持/变化。独立真人研究评估暂缓，当前公开语料不补造成本人历史。
 
-## 9. 目录与验证
+当前存储为每用户SQLite/WAL与本地文件。商用还缺备份核验/恢复演练、schema迁移、账号全量导出/注销及备份删除政策；同时需资源/成本配额、SSRF出口治理、HTTPS可信代理、租户回收、readiness/监控/告警、CI与依赖锁定、发布回滚和许可清单。具体阶段与验收见[算法下一阶段](docs/plans/长期陪伴记忆研究与实验计划书.md#231-全量完成与接下来验收)及[商用准备](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
 
-| 目录 | 说明 |
-| --- | --- |
-| memoria | [核心模块](memoria/README.md) |
-| studio | [前端构建与测试](studio/README.md) |
-| scripts | [管理员与研究命令](scripts/README.md) |
-| configs | [公开角色与协议](configs/README.md) |
-| datasets | [真实来源清单](datasets/README.md) |
-| deploy | [现有部署资产与边界](deploy/README.md) |
-| skills | [项目技能](skills/README.md) |
-| docs | [已实现与待实现](docs/README.md) |
-| tests | [工程覆盖](tests/README.md) |
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install pytest
-.\.venv\Scripts\python.exe -m pytest -q
-Push-Location studio
-npm test
-npm run build
-Pop-Location
-git diff --check
-```
-
-2026-10-12的6ea773f工程基线405 passed / 91.20s、前端3项及构建通过；文档刷新不产生新的质量实验。凭据/数据库/原话/模型/运行依赖不进Git。AI读AGENTS，按授权在main遵循[GitHub规范](docs/implemented/github提交规范.md)。
-
-## 10. 最新算法深化与选择诊断
-
-已完成原12槽位的有限条件继承/别名、独立条件证据、源事件精度、自然语言双时间区间与影子更新策略；统一Claim/RRF访问保留冲突澄清，新增Top-K/Coverage/词面MMR/成本归一覆盖的同池预算比较。字符/字节单位明确，可信本地reader可用离线tokenizer，远程不可验证则拒绝精确Token请求。memory-query不调用reader，模型路由显式opt-in，生产仍明确审批。
-
-全量工程 **463 passed / 116.86s**；真实LCCC固定候选诊断12run/768题次、64独立开发QA、0模型调用：2048字符完整必要证据Top-K/Coverage40/41、MMR38/41、新覆盖39/41，**本批未显示收益，默认暂不切换**。512字符预算几乎无法容纳完整元数据，1024字符均20/41；数据为AI辅助gold，不能证明QA语义或长期效用，历史图表不覆盖。
-
-[算法契约与操作](docs/implemented/条件时序抽取与预算证据选择.md) · [聚合结果/指纹](docs/assets/evaluation/evidence-selection-20261012.json) · [接下来优先级与商用缺口](docs/plans/长期陪伴记忆研究与实验计划书.md)。完整Reader预算/有限引用校验后续已完成（见第11节）；优先紧凑投影与新预算QA，条件/演化F1需要真实连续资料及独立标签，人工项继续暂缓。
-
-```powershell
-.\.venv\Scripts\python.exe scripts/research.py --user qin select-evidence --help
-.\.venv\Scripts\python.exe scripts/research.py --user qin select-evidence --source-run 20261012T061426Z-e599965a --budget 1024 --unit chars
-```
-
-replay需要本机已有对应私有来源run与冻结协议；Git只包含无原话的聚合记录，干净克隆不能仅凭run ID重建历史私有产物。
-
-## 11. 完整Reader预算与生产记忆引用（2026-10-13）
-
-所有LLMClient普通/流式调用新增完整请求门槛，计system、历史、工具定义/调用/结果和生成参数，预留输出；可信本地使用真实聊天模板Token，远程明确使用UTF-8字节上限，不宣称精确窗口。新增登录/api/memory-answer和有限个人状态运行时严格引用契约：缓冲回答，核对展示ID、审批、完整条件、账号/span-SHA与新鲜状态后再发布，失败澄清/拒答。通用自由文本尚未全部覆盖，引用校验不证明语义蕴含。
-
-全量 **495 passed / 198.58s**。真实Qwen完整模板计292输入Token，与本地计数路由一致，0权重加载/生成；本轮没有新增付费QA或长期质量分数。详细配置、API示例、引用范围和后续见[实现说明](docs/implemented/完整Reader预算与生产引用校验.md)与[计划第21节](docs/plans/长期陪伴记忆研究与实验计划书.md#21-完整reader预算生产引用校验与数据范围核对)。服务升级后需要重启加载新接口。
-
-**目前是1个来源数据集，不是3个：** LCCC子集50段/206消息；同源QA有v1/v2两个版本（现行v2完整64题），Window/Dense/RRF是三种对照。已下载验证归档20000条，尚未全量评估整个原始数据集。每轮完整64题仍受合法前缀和上下文预算限制，多轮不是新增独立样本。[范围审计与指纹](docs/assets/evaluation/dataset-scope-20261013.json)。真实连续个人长期效果、抽取F1和独立真人评估保持待验收/暂缓。
-
-## 12. LoCoMo十题真实调用（2026-10-13）
-
-用户指定官方locomo10.json已核对SHA/2805274字节，10段长对话/1986题。原始副本在忽略的data/benchmarks，inputs/gold/run与生产记忆分开；本轮固定每段1题，**10次DeepSeek/10次执行通过/0错误，4回答6拒答**，不能报40%正确率。5882原话BGE中文/CUDA编码；40候选→12呈现的gold证据召回宏平均34%→22%。旧LCCC compact英文词面全部无命中，本轮RRF实际仅Dense；1个gold引用ID不存在，原分母保留。总墙钟124.801秒、已知23306Token，货币成本/官方F1/J/独立语义准确率未知。
-
-相关98 passed / 59.04s；逐题报告只留本地账号reports，不含凭据。生产仍50会话/206消息/0memories，没有把构建benchmark当qin真人历史。接下来先补英文词面适配，再独立登记模型/选择消融；本轮没有全量评测1540普通题/446对抗题。[实现/运行命令](docs/implemented/LoCoMo十题真实调用诊断.md) · [来源清单](datasets/locomo10.manifest.json) · [无原话聚合](docs/assets/evaluation/locomo-smoke-20261013.json)。
-
-## 13. LoCoMo英文修复与全量入口
-
-新增locomo-run：英文Porter BM25+Dense/RRF，先保留候选再补邻句，紧凑12000字符实际证据预算，独立英文BGE本地模型；并发4、原始1986题完整分母、1540普通/446对抗分类评分。旧LCCC和十题记录原样保留。真实全量已经完成（结果如下），不将回答率或词面F1当语义准确率。[实现/命令/结果](docs/implemented/LoCoMo全量评测与英文检索修复.md)。
-
-全量运行期修复Windows重复CA加载阻塞asyncio；热客户端初始化实测1.8ms、hostname/CERT_REQUIRED保留。已完成301题冻结后以校验检查点续跑，旧在途usage未知单列，完成后追加全分母结果；不会重复调用已完成题。
-
-**最终全量：1986题执行通过、错误0。** 1540普通题Answer F1=58.65%（首次RRF56.12%）；446对抗题官方拒答短语分92.38%。完整来源回退改善普通词面分却降低对抗分，不能声称全面收益或语义正确率。2652记录reader尝试、36572111已知Token，旧5连接失败及3在途未知保留；生产0记忆写入。原10题8回答/2拒答，推断证据不足保持未知。[详细报告](docs/implemented/LoCoMo全量评测与英文检索修复.md)。
-
-![LoCoMo分类Answer F1与对抗拒答短语分](docs/assets/evaluation/locomo-full-20261013.png)
-
-图中普通F1与对抗短语分分开展示，模型为DeepSeek API，全文本、官方构建benchmark；没有独立语义/真实本人长期效果，不直接与其他模型/论文judge J比排名。
+模块职责、工程验证与完整阶段记录统一从[文档导航](docs/README.md)查看；AI协作与提交遵循[AGENTS.md](AGENTS.md)及[GitHub规范](docs/implemented/github提交规范.md)。私密配置、原话、逐题结果和模型不进入Git，旧个人历史仍不导入。

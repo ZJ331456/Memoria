@@ -4,9 +4,35 @@
 
 Source-backed memory management for small-model companionship: reviewed Claims, conditions, dual-time revisions, source retrieval, dependent views, bounded evidence and account-isolated execution. Memory Studio provides source review, timelines, retrieval diagnostics and read-only run records. The current scope is a local research prototype and controlled-pilot foundation; public commercial readiness and longitudinal quality remain unverified.
 
-## Local setup and startup
+## LoCoMo full evaluation
 
-The latest iteration adds complete reader request budgeting and buffered citation validation for the memory-answer endpoint and finite personal-state routes. Trusted local chat templates count input tokens with output and safety reservations; remote requests use an explicit byte bound, with exact tokens/window compatibility unknown. Citations must belong to presented, authorized, source-valid evidence and remain fresh after generation; this does not prove semantic entailment. See [implementation and limits](docs/implemented/完整Reader预算与生产引用校验.md). Full engineering regression: 495 passed / 198.58 s; no new paid QA or longitudinal quality scores.
+Completed on 2026-10-13: all **1,986 original questions**, 10 long conversations and 5,882 utterances. Reader: **DeepSeek `deepseek-flash`, non-thinking**; embedding: local **`bge-small-en-v1.5`**. This evaluates English source retrieval and answering, without production Claim/View access.
+
+The first four categories and ordinary Overall use upstream-compatible **Answer F1 (%)**. Overall averages all 1,540 ordinary questions, excludes adversarial questions and is not an equal-weight category average.
+
+| Method | Multi-hop<br>282 | Temporal<br>321 | Open-domain<br>96 | Single-hop<br>841 | Ordinary Overall<br>1,540 | Adversarial refusal†<br>446 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Memoria-Agent: RRF + neighbors, primary answer | 43.44 | 52.12 | 19.55 | 66.08 | 56.12 | **94.17** |
+| Memoria-Agent: RRF + neighbors + full-history recheck | **45.09** | **55.95** | **22.47** | **68.37** | **58.65** | 92.38 |
+
+† The adversarial column follows the official literal refusal rule, not F1 or semantic accuracy. Final structured abstention is 410/446 (91.93%). Rows are primary and final outputs from the same cases, not independent experiments or matched external-method baselines.
+
+Primary retrieval combines English BM25 and Dense with RRF, retains ranked candidates and then adds neighboring utterances within a 12,000-character evidence budget. Primary abstention/clarification or invalid output can trigger one complete-history recheck, bounded separately by 240,000 UTF-8 request bytes; exact remote tokens/window remain unknown. The final row therefore uses additional context and calls, and is not a pure RRF or equal-token-budget result.
+
+All 1,986 final cases passed execution/JSON/citation-ID contracts, while 166 ordinary cases still abstained; these checks do not establish answer entailment. Ordinary F1 improved from 56.12% to 58.65%, while adversarial refusal declined from 94.17% to 92.38%. Historical connection failures and unknown in-flight billing remain recorded. See the [full report](docs/implemented/LoCoMo全量评测与英文检索修复.md) and [frozen aggregate](docs/assets/evaluation/locomo-full-20261013.json).
+
+<details>
+<summary>Category chart</summary>
+
+![LoCoMo full category results](docs/assets/evaluation/locomo-full-20261013.png)
+
+[Figure provenance and reproduction](docs/assets/evaluation/README.md#locomo完整1986题2026-10-13); no new inference or scoring.
+
+</details>
+
+Earlier [LCCC development results](docs/implemented/DenseRRF自动评测与视图性能.md) used 50 anonymous short conversations / 206 messages and 64 AI-assisted QA items, repeated across methods. Real sources and API calls do not turn development labels into independent human assessment. LCCC literal match (e.g. 86.46%) is not comparable to LoCoMo F1 (58.65%). Our LoCoMo run uses text only; the officially constructed benchmark is licensed under CC-BY-NC-4.0. Neither evaluation measures genuine personal longitudinal companionship or Claim extraction F1.
+
+## Local setup and startup
 
 Run from the repository root in Windows PowerShell. Preserve an existing private configuration and use the project virtual environment.
 
@@ -30,7 +56,7 @@ Open `http://127.0.0.1:2237/studio/`; `/docs` exposes the API contracts and `/ap
 
 Password entry is hidden and resets revoke sessions. The existing local qin account is already configured. Empty api_token never bypasses the formal login gateway; each server-owned UUID selects its own database, files, workers and MCP configuration.
 
-Choose either remote main/fast with in-process local BGE (`local://auto`), or the local HTTP Qwen/BGE server. The [Chinese startup guide](README.md#3-模型方案选择一种) includes optional dependencies, protected Key input, private-override precedence and both complete configurations. Weights are ignored and must already exist locally; the BGE download script verifies a pinned public snapshot.
+Choose either remote main/fast with in-process local BGE (`local://auto`), or the local HTTP Qwen/BGE server. The [Chinese startup guide](README.md#模型方案选择一种) includes optional dependencies, protected Key input, private-override precedence and both complete configurations. Weights are ignored and must already exist locally; the BGE download script verifies a pinned public snapshot.
 
 ```powershell
 # Separate terminal, only when choosing local HTTP inference
@@ -39,42 +65,10 @@ Choose either remote main/fast with in-process local BGE (`local://auto`), or th
 
 MCP and source import are optional, not part of the minimal startup. See [scripts](scripts/README.md), [Studio](studio/README.md), [MCP](docs/implemented/MCP部署与授权.md) and [data provenance](datasets/README.md). No default credentials or synthetic production profiles are included.
 
-## Registered historical development results
-
-Measured on clean commit 040427c, 2026-10-12: 12 retrieval runs / 768 query runs and 9 QA runs / 576 DeepSeek calls; 50 anonymous source groups, 206 utterances, 64 queries (41 answerable / 23 unanswerable), three repetitions per condition. AI-assisted development gold; literal match is not independent human semantic accuracy. These results do not evaluate later Studio or selectors; the older six-run compact QA batch is separate.
-
-![Known-source recall](docs/assets/evaluation/source-recall.png)
-
-| Method | Known evidence recall | Empty context | Retrieval p50/p95 ms | QA literal match |
-| --- | --- | --- | --- | --- |
-| Window | 123/123, 100% | 0/192 | 0.003/0.003 | 166/192, 86.46% |
-| Compact FTS | 45/123, 36.59% | 81/192 | 0.537/0.676 | Not run in this batch |
-| Dense | 123/123, 100% | 0/192 | 11.433/38.011 | 161/192, 83.85% |
-| RRF | 123/123, 100% | 0/192 | 12.062/18.403 | 158/192, 82.29% |
-
-![Literal QA and citation recall](docs/assets/evaluation/qa-literal-and-citations.png)
-
-Dense/RRF fill the compact recall gap; Window also covers all known evidence. The new methods did not exceed Window on this batch's literal metric. Failures 3/5/7 remain in each 192-run denominator: 13 unseen-citation and 2 provider failures. Usage is known for 574/576 calls, totaling 353,502 known tokens; monetary cost is unknown.
-
-![Empty-state overhead](docs/assets/evaluation/empty-claim-access.png)
-
-The access benchmark used a consistent real-account database copy with 0 approved Claims and 1,800 calls per condition; every response was `clarify`. Empty cache added overhead; positive-profile benefits and HTTP/reader SLOs were not measured. Full methods, maintenance costs and limitations are in the [report](docs/implemented/DenseRRF自动评测与视图性能.md), [registration](configs/research-retrieval-eval-20261012.json) and [figure provenance](docs/assets/evaluation/README.md).
-
-```powershell
-# Only public aggregates, no inference or new scoring
-.\.venv\Scripts\python.exe -m pip install -r requirements-docs.txt
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py --check
-```
-
 ## Next work and commercial readiness
 
-Prioritize compact source-preserving reader evidence and a newly registered same-budget QA protocol, alongside production backup/verify/restore and a consented personal-source intake; then durable index cursors, atomic projections and general conditions. Complete budgeting and finite production citation guards are implemented; unrestricted chat/tool summaries and semantic verification remain pending. Genuine longitudinal B3/B5/B6 studies need new authorized continuous personal histories; independent human evaluation remains deferred.
+Prioritize query-only risk gating and source support after fallback, multi-hop/open-domain evidence coverage and time precision, then registered comparisons with trusted local Reader token budgets and independent holdouts. Production finite-state citation validation and complete request budgeting are implemented; semantic support and general free-text citation validation remain incomplete. Consented continuous personal histories are still needed for Claim/condition/update and long-term studies; independent human research evaluation remains deferred.
 
-Per-user SQLite/WAL is the current storage design. Complete account export/deletion, backup retention and restore policy, versioned migrations, resource/cost quotas, SSRF-safe outbound requests, HTTPS trusted-proxy deployment, tenant lifecycle reclamation, readiness/histograms/alerts, reproducible CI/releases and license inventories remain pending. Database encryption and cross-machine credential migration are distinct from NTFS/DPAPI. The plan defines single-host and later scaling gates; PostgreSQL or Kubernetes are not prerequisites invented for this prototype.
+Per-user SQLite/WAL is the current storage design. Verified backup/restore, versioned migrations, full account export/deletion and backup retention, cost/resource quotas, SSRF-safe egress, HTTPS trusted proxies, tenant reclamation, readiness/monitoring/alerts, reproducible CI/releases and license inventories remain pending. See the [research and commercial plan](docs/plans/长期陪伴记忆研究与实验计划书.md) and [module documentation](memoria/README.md).
 
-[Module documentation](memoria/README.md) · [Tests](tests/README.md) · [AI instructions](AGENTS.md) · [GitHub conventions](docs/implemented/github提交规范.md). Historical engineering baseline: 405 tests / 91.20 s plus 3 frontend tests and build, not research quality. Secrets, weights, raw histories, gold and runtime dependencies stay out of Git; old personal history remains unimported.
-
-## Actual dataset coverage
-
-There is one registered LCCC source subset: 50 conversations / 206 messages. QA v1 and v2 are versions of the same subset, each with 64 questions; v2 is current. Window, Dense and RRF are baselines, not three datasets. Each current run covers all 64 frozen questions, subject to legal history prefixes and context budgets; the downloaded 20,000-row validation archive has not been fully evaluated. Repeated runs are not additional independent samples. See the [scope audit](docs/assets/evaluation/dataset-scope-20261013.json). Continuous personal history, Claim extraction F1 and genuine long-term outcomes remain unverified.
+Source manifests belong in [datasets/](datasets/README.md); raw benchmarks, private gold and per-case artifacts stay in ignored data/. Public aggregates and charts live in [docs/assets/evaluation/](docs/assets/evaluation/README.md). Secrets and model weights remain local; old personal history stays unimported. See [AI instructions](AGENTS.md) and [GitHub conventions](docs/implemented/github提交规范.md).
