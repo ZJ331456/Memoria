@@ -32,46 +32,6 @@
 
 </details>
 
-### 与早期LCCC开发评测的区别
-
-| 评测 | 数据与规模 | 用途与评分 |
-| --- | --- | --- |
-| LCCC开发子集（原README第6节） | 50段匿名短对话、206条消息；64道AI辅助开发QA，多次重复 | 检索/引用/失败诊断；QA字面匹配，不是独立真人语义评分 |
-| LoCoMo全量（上表） | 官方构建的10段长对话、5,882条原话、1,986道原始QA | 独立benchmark适配；普通题官方分类F1，对抗题官方拒答短语分 |
-
-旧评测中的“真实”指有真实公开来源和实际模型/API调用。两者的数据长度、语言、标签、预算及评分不同，**LCCC的86.46%字面匹配不能与LoCoMo的58.65% F1直接比较**。旧结果与三张图保留在[LCCC评测报告](docs/implemented/DenseRRF自动评测与视图性能.md)，不混入上表。两者都不能证明真实个人长期陪伴效果；LoCoMo为CC-BY-NC-4.0研究基准，不作为用户个人事实或商用数据授权。
-
-## 当前能力
-
-| 模块 | 已实现 | 适用边界 |
-| --- | --- | --- |
-| 来源与个人记忆 | 原话定位、待审批准、去重强化、纠正/撤销/恢复、有效区间、Markdown 投影 | 来源删除、事实删除、账号注销须分别治理 |
-| Claim | 12槽位、主体/typed条件、极性/计划、span/SHA、不可变修订与双时间 | 明确审批；支持度是模型建议，通用条件/实体别名待做 |
-| 演化建议 | 独立证据风险核验、关系解析、4类更新策略、完整目标复核、抽取影子建议 | 不自动提交；真实F1与长期质量未测 |
-| 访问与视图 | 依赖失效、view/retrieve/history/clarify、有限中文区间和来源补检 | 补检不晋升本人事实；普通记忆无完整获知时间索引 |
-| 检索与预算 | FTS/BM25/Dense/RRF、BGE完整分块、父版本过滤、整组topk/coverage | 同池四选择器；可信本地Reader完整Token预算、远程请求字节门槛；B7真实质量待验收 |
-| Studio | 来源审核、双时间、检索解释、只读执行账本 | 真实账号数据，没有聊天窗口或演示画像 |
-| 扩展与身份 | 本地/远程模型、SSE/工具、只读MCP、Skills；UUID独立库/worker/MCP，共享ACL | 业务始终登录；外部内容不自动作为个人记忆 |
-| 研究工具 | 来源/标注协议、冻结、输入/gold分离、前缀runner、独立scorer、阶段耗时/指纹 | AI开发gold与真人审核分开，匿名来源不能补成连续个人历史 |
-
-```mermaid
-flowchart LR
-    UI[Studio / HTTP] --> Auth[登录网关 · 服务端 UUID]
-    Auth --> Tenant[账号独立运行时]
-    Tenant --> Source[来源原话 / SQLite]
-    Source --> Draft[待审候选]
-    Draft --> Review[明确批准 / 修订 / 撤回]
-    Review --> Claims[Claim与条件视图]
-    Review --> Index[普通记忆FTS / BM25 / 分块向量]
-    Claims --> Access[统一访问与澄清]
-    Index --> Access
-    Access --> Select[完整证据组与预算]
-    Select --> Reader[可选reader / 可解释诊断]
-    Public[独立公开来源] --> Research[研究输入 / runner / 独立scorer]
-```
-
-代码职责见[memoria](memoria/README.md)，接口边界见[已实现文档](docs/README.md#已实现的功能说明)。研究链路不将公开匿名来源写入本人Claim。
-
 ## 首次准备环境
 
 以下为 **Windows PowerShell**，除注明外从仓库根执行，无需激活.venv。本机路径为`C:\Users\zero\Desktop\Memory-Project\Memoria-Agent`，新机器先获取仓库：

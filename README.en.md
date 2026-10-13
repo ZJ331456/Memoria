@@ -30,8 +30,6 @@ All 1,986 final cases passed execution/JSON/citation-ID contracts, while 166 ord
 
 </details>
 
-Earlier [LCCC development results](docs/implemented/DenseRRF自动评测与视图性能.md) used 50 anonymous short conversations / 206 messages and 64 AI-assisted QA items, repeated across methods. Real sources and API calls do not turn development labels into independent human assessment. LCCC literal match (e.g. 86.46%) is not comparable to LoCoMo F1 (58.65%). Our LoCoMo run uses text only; the officially constructed benchmark is licensed under CC-BY-NC-4.0. Neither evaluation measures genuine personal longitudinal companionship or Claim extraction F1.
-
 ## Local setup and startup
 
 Run from the repository root in Windows PowerShell. Preserve an existing private configuration and use the project virtual environment.
