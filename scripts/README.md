@@ -70,3 +70,5 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 `locomo-run --resume-from RUN --retry-errors`：仅对停止run的执行/回退错误恢复，完整分母继承，递归保留祖先调用/成本；未带resume-from则拒绝。
 
 `render_locomo_chart.py`仅从公开locomo-full-20261013.json重绘PNG/SVG与SHA清单，不访问私有数据、不重评分/调用模型；依赖requirements-docs.txt中的matplotlib。`--help`仅说明命令。
+
+LoCoMo渲染器写标准LF并规范SVG行尾，图源SHA与Git实际blob一致，PNG/SVG可重绘复核；数值和原始实验不改。

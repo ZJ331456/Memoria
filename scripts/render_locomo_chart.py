@@ -41,12 +41,14 @@ def main():
     for suffix in ('png','svg'):
         target=base.with_suffix('.'+suffix)
         fig.savefig(target,dpi=180,metadata={'Date':None} if suffix=='svg' else {})
+        if suffix=='svg':
+            target.write_bytes(('\n'.join(line.rstrip() for line in target.read_text(encoding='utf-8').splitlines())+'\n').encode('utf-8'))
         outputs.append({'file':target.name,'sha256':hashlib.sha256(target.read_bytes()).hexdigest()})
     plt.close(fig)
     manifest={'source':source.name,'source_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),
               'renderer':'scripts/render_locomo_chart.py','matplotlib':matplotlib.__version__,
               'model_calls':0,'new_scores':0,'outputs':outputs}
-    base.with_name(base.name+'-chart.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8')
+    base.with_name(base.name+'-chart.json').write_bytes((json.dumps(manifest,indent=2)+'\n').encode('utf-8'))
     print(json.dumps({'chart_written':True,'private_data_read':False,'model_calls':0}))
 
 
