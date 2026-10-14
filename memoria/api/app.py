@@ -654,11 +654,19 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
         if not item: raise HTTPException(404, "来源消息不存在，可能已删除")
         return item
 
+    def release_turn(session_id, task, lock):
+        if task is not None and active_turns.get(session_id) is task:
+            active_turns.pop(session_id, None)
+        if (session_id not in active_turns and not lock.locked()
+                and session_locks.get(session_id) is lock):
+            session_locks.pop(session_id, None)
+
     async def execute_turn(session_id: str, content: str, request_id: str | None = None):
         if session_id in deleting_sessions: raise HTTPException(409, "该会话正在删除")
         if not store.session(session_id): raise HTTPException(404, "会话不存在")
         lock = session_locks.setdefault(session_id, asyncio.Lock())
-        if lock.locked(): raise HTTPException(409, "该会话已有一轮对话正在执行")
+        if lock.locked() or session_id in active_turns: raise HTTPException(409, "该会话已有一轮对话正在执行")
+        task = None
         try:
             async with lock:
                 if session_id in deleting_sessions:
@@ -667,13 +675,13 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
                     raise HTTPException(404, "会话不存在")
                 task = asyncio.create_task(service.chat_with_trace(session_id, content.strip(), request_id=request_id))
                 active_turns[session_id] = task
+                task.add_done_callback(lambda done: release_turn(session_id, done, lock))
                 message, memories, trace = await task
             return {"message": message, "memories_created": memories, "trace": trace}
         except HTTPException: raise
         except Exception as exc: raise HTTPException(502, f"模型调用失败：{type(exc).__name__}: {exc}") from exc
         finally:
-            active_turns.pop(session_id, None)
-            if not lock.locked(): session_locks.pop(session_id, None)
+            release_turn(session_id, task, lock)
 
     # Trusted channels enter only after resolving an authenticated account binding.
     app.state.chat_turn = execute_turn
@@ -690,11 +698,18 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
         if lock.locked() or session_id in active_turns: raise HTTPException(409, "该会话已有一轮对话正在执行")
         queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         request_id = getattr(request.state, "request_id", None)
+        started = False
 
         async def emit(event: dict[str, Any]): await queue.put(event)
         async def worker():
+            nonlocal started
+            started = True
             try:
                 async with lock:
+                    if session_id in deleting_sessions:
+                        raise HTTPException(409, "该会话正在删除")
+                    if not store.session(session_id):
+                        raise HTTPException(404, "会话不存在")
                     message, memories, trace = await service.chat_with_trace(
                         session_id, body.content.strip(), emit, request_id=request_id,
                     )
@@ -705,12 +720,19 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             except Exception as exc:
                 await queue.put({"type":"error","message":f"{type(exc).__name__}: {exc}"})
             finally:
-                active_turns.pop(session_id, None)
-                if not lock.locked(): session_locks.pop(session_id, None)
+                release_turn(session_id, asyncio.current_task(), lock)
                 await queue.put(None)
+
+        def finished(done):
+            release_turn(session_id, done, lock)
+            # Cancellation before the coroutine starts never enters its finally.
+            if not started and done.cancelled():
+                queue.put_nowait({'type': 'cancelled', 'session_id': session_id})
+                queue.put_nowait(None)
 
         task = asyncio.create_task(worker())
         active_turns[session_id] = task
+        task.add_done_callback(finished)
 
         async def events():
             try:

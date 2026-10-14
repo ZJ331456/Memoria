@@ -369,3 +369,49 @@ def test_full_history_repair_never_drops_query_or_evidence(tmp_path, monkeypatch
         assert len(repairs) == 10
         assert all(r['fallback_status'] == 'success' and r['fallback_reader_budget']['dropped_messages'] == 0 for r in rows)
         assert all(len(r['presented_ids']) == 1 and r['answer_status'] == 'answer' for r in rows)
+
+
+@pytest.mark.parametrize('action', ['cancel', 'delete'])
+def test_stream_reserves_session_before_start_and_cancel_always_releases_it(tmp_path, action):
+    from types import SimpleNamespace
+    from fastapi import HTTPException
+    from memoria.api.app import ChatBody
+    from tests.test_memory_layers_integration import _app
+
+    async def case():
+        app = _app(tmp_path)
+        store = app.state.store
+        sid = store.create_session()['id']
+        stream = next(r.endpoint for r in app.routes if getattr(r, 'path', '') == '/api/sessions/{session_id}/chat/stream')
+        cancel = next(r.endpoint for r in app.routes if getattr(r, 'path', '') == '/api/sessions/{session_id}/cancel')
+        delete = next(r.endpoint for r in app.routes if getattr(r, 'path', '') == '/api/sessions/{session_id}' and 'DELETE' in r.methods)
+        calls = []
+        async def chat(session_id, content, *args, **kwargs):
+            calls.append(content)
+            return store.add_message(session_id, 'assistant', content), [], {}
+        async def disconnected(): return False
+        request = SimpleNamespace(state=SimpleNamespace(request_id='audit'), is_disconnected=disconnected)
+        app.state.service.chat_with_trace = chat
+        try:
+            # The stream task is reserved but has not had a chance to take the lock.
+            response = await stream(sid, ChatBody(content='stream must not run'), request)
+            assert app.state.service._busy_check()
+            with pytest.raises(HTTPException) as error:
+                await app.state.chat_turn(sid, 'duplicate must not run')
+            assert error.value.status_code == 409
+            if action == 'cancel':
+                assert (await cancel(sid))['status'] == 'cancelled'
+            else:
+                await delete(sid)
+            async def collect():
+                return [chunk async for chunk in response.body_iterator]
+            chunks = await asyncio.wait_for(collect(), timeout=2)
+            assert 'cancelled' in ''.join(chunks)
+            assert not calls and not app.state.service._busy_check()
+            target = sid if action == 'cancel' else store.create_session()['id']
+            result = await app.state.chat_turn(target, 'next valid turn')
+            assert result['message']['content'] == 'next valid turn'
+            assert calls == ['next valid turn'] and not app.state.service._busy_check()
+        finally:
+            store.close()
+    asyncio.run(case())
