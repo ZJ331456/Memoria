@@ -64,7 +64,8 @@ def test_applying_review_recovers_after_restart(tmp_path: Path):
 
     path = tmp_path / "recover.db"
     store = Store(path)
-    job = store.enqueue_memory_job("source", "u", "a")
+    source = store.add_message(store.create_session()['id'], 'user', 'u')
+    job = store.enqueue_memory_job(source['id'], "u", "a")
     store.claim_memory_job("worker")
     review = store.stage_memory_reviews(job["id"], "worker", [{"content": "喜欢散步", "kind": "preference"}])[0]
     store.claim_memory_review(review["id"], review["content"], review["kind"], review["importance"])

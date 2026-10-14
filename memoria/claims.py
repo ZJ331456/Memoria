@@ -298,7 +298,7 @@ class ClaimMemory:
                 raise ClaimError(422, "证据须来自本账号仍存在的用户原话")
             if e["message_id"] in imported_ids:
                 raise ClaimError(422, "公开语料的来源分组不能作为个人Claim证据")
-            if self.db.execute("SELECT 1 FROM claim_source_revocations WHERE message_id=?", (e["message_id"],)).fetchone():
+            if self.store.source_revoked(e['message_id']) or self.db.execute("SELECT 1 FROM claim_source_revocations WHERE message_id=?", (e["message_id"],)).fetchone():
                 raise ClaimError(409, "该来源已撤销，请使用新的有效原话")
             text = row["content"]
             if sha(text) != e["content_sha256"] or not 0 <= e["start"] < e["end"] <= len(text):
@@ -737,6 +737,7 @@ class ClaimMemory:
 def revoke_claim_sources(store: Store, source_refs: list[str], recorded_at: str) -> None:
     """Called inside Store's existing source-undo transaction; no nested commit."""
     db = store.db
+    db.executemany('INSERT OR IGNORE INTO memory_source_revocations VALUES(?,?)', [(ref,recorded_at) for ref in source_refs])
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='claim_roots'").fetchone():
         return
     for ref in source_refs:

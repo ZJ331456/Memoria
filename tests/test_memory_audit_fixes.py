@@ -50,3 +50,26 @@ def test_source_loss_hides_derived_memory_including_history_and_projection(tmp_p
     assert '工程原话证据' not in engine.refresh_markdown()
     assert store.memory(memory['id'])  # Preserve audit state without treating it as usable evidence.
     store.close()
+
+
+def test_revoked_source_cannot_create_replace_or_reinforce_after_restart(tmp_path):
+    from memoria.store import MemorySourceUnavailable
+    path = tmp_path/'revoke.db'
+    store = Store(path, 'json')
+    source = store.add_message(store.create_session()['id'], 'user', '工程撤销样例')
+    first = store.add_memory('工程撤销样例', source_ref=source['id'], require_source=True)
+    other = store.add_memory('独立事实')
+    store.undo_memory_sources([source['id']])
+    store.close()
+    store = Store(path, 'json')
+    with pytest.raises(MemorySourceUnavailable):
+        asyncio.run(MemoryEngine(store).remember('工程撤销样例', 'fact', 3, 'reviewed_conversation', source['id'], require_source=True))
+    with pytest.raises(MemorySourceUnavailable):
+        store.add_memory('替代事实', supersedes_id=other['id'], source_ref=source['id'])
+    with pytest.raises(MemorySourceUnavailable):
+        store.reinforce_memory(other['id'], source['id'])
+    assert store.memory(other['id'])['status']=='active'
+    assert store.memory(other['id'])['reinforcement']==1
+    assert not asyncio.run(MemoryEngine(store).retrieve('撤销样例'))
+    assert store.memory(first['id'])['status']=='superseded'
+    store.close()

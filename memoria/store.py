@@ -168,6 +168,8 @@ class Store:
                     memory_id TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
                     message_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'active');
                 CREATE INDEX IF NOT EXISTS idx_memory_source_message ON memory_source_dependencies(message_id);
+                CREATE TABLE IF NOT EXISTS memory_source_revocations (
+                    message_id TEXT PRIMARY KEY, revoked_at TEXT NOT NULL);
                 CREATE TRIGGER IF NOT EXISTS memory_source_deleted BEFORE DELETE ON messages BEGIN
                     UPDATE memory_source_dependencies SET state='deleted' WHERE message_id=OLD.id;
                 END;
@@ -180,6 +182,8 @@ class Store:
                     FROM memories m LEFT JOIN messages u ON u.id=m.source_ref AND u.role='user'
                     WHERE m.source_ref IS NOT NULL AND (m.source='reviewed_conversation' OR u.id IS NOT NULL);
             """)
+            if self.db.execute("SELECT 1 FROM sqlite_master WHERE name='claim_source_revocations'").fetchone():
+                self.db.execute('INSERT OR IGNORE INTO memory_source_revocations SELECT * FROM claim_source_revocations')
             trace_columns = {row[1] for row in self.db.execute("PRAGMA table_info(turn_traces)").fetchall()}
             if "metadata_json" not in trace_columns:
                 self.db.execute("ALTER TABLE turn_traces ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
@@ -741,7 +745,8 @@ class Store:
         return (active + f"EXISTS (SELECT 1 FROM memory_validity_intervals vi WHERE vi.memory_id={alias}.id "
                 "AND vi.valid_at<=? AND (vi.invalid_at IS NULL OR vi.invalid_at>?)) "
                 f"AND NOT EXISTS (SELECT 1 FROM memory_source_dependencies sd LEFT JOIN messages u ON u.id=sd.message_id "
-                f"WHERE sd.memory_id={alias}.id AND (sd.state!='active' OR u.id IS NULL OR u.role!='user'))", (moment, moment))
+                f"WHERE sd.memory_id={alias}.id AND (sd.state!='active' OR u.id IS NULL OR u.role!='user')) "
+                f"AND NOT EXISTS (SELECT 1 FROM memory_source_revocations sr WHERE sr.message_id={alias}.source_ref)", (moment, moment))
 
     def retrieval_memories(self, limit: int = 2000, *, as_of: str | None = None) -> list[dict]:
         scope, params = self.retrieval_scope(as_of=as_of)
@@ -762,9 +767,15 @@ class Store:
 
     def _require_memory_source(self, source_ref: str | None) -> None:
         # Called inside the same write transaction as the memory mutation.
+        if self.source_revoked(source_ref):
+            raise MemorySourceUnavailable("来源已撤销，须提供新的有效原话")
         row = self.db.execute("SELECT role FROM messages WHERE id=?", (source_ref,)).fetchone()
         if row is None or row["role"] != "user":
             raise MemorySourceUnavailable("来源用户消息已删除，不能批准悬空记忆")
+
+    def source_revoked(self, source_ref: str | None) -> bool:
+        with self.lock:
+            return bool(source_ref and self.db.execute('SELECT 1 FROM memory_source_revocations WHERE message_id=?', (source_ref,)).fetchone())
 
     def add_memory(self, content: str, kind: str = "fact", importance: int = 3, source: str = "manual", embedding: list[float] | None = None, supersedes_id: str | None = None, reason: str = "", source_ref: str | None = None, *, require_source: bool = False, embedding_namespace: str | None = None, embedding_chunks: list[dict] | None = None) -> dict[str, Any]:
         timestamp = now()
@@ -780,6 +791,8 @@ class Store:
         with self._memory_transaction():
             timestamp = now()
             item["created_at"] = item["updated_at"] = timestamp
+            if self.source_revoked(source_ref):
+                raise MemorySourceUnavailable("来源已撤销，不能重新创建或替代记忆")
             if require_source:
                 self._require_memory_source(source_ref)
             previous = None
@@ -824,6 +837,8 @@ class Store:
                 if duplicate:
                     self.db.execute("COMMIT" if owns_transaction else "RELEASE SAVEPOINT memoria_reinforce")
                     return self.memory(memory_id)
+                if self.source_revoked(source_ref):
+                    raise MemorySourceUnavailable("来源已撤销，不能强化记忆")
                 cur = self.db.execute("""UPDATE memories SET reinforcement=reinforcement+1,
                     last_reinforced_at=?,updated_at=? WHERE id=? AND status='active'""", (timestamp, timestamp, memory_id))
                 if cur.rowcount and source_ref:
@@ -1354,6 +1369,7 @@ class Store:
                     AND lease_owner=? AND lease_expires_at>?""", (job_id, owner, timestamp)).fetchone()
                 if not job:
                     raise RuntimeError("memory job lease lost before staging")
+                self._require_memory_source(job['source_ref'])
                 for ordinal, candidate in enumerate(candidates):
                     content = str(candidate.get("content", "")).strip()[:4000]
                     kind = str(candidate.get("kind", "fact"))
@@ -1440,6 +1456,7 @@ class Store:
             affected = list(dict.fromkeys([*state_affected, *reinforced]))
             if not dry_run:
                 timestamp = now()
+                self.db.executemany('INSERT OR IGNORE INTO memory_source_revocations VALUES(?,?)', [(ref,timestamp) for ref in refs])
                 from .claims import revoke_claim_sources
                 revoke_claim_sources(self, refs, timestamp)
                 for memory_id in state_affected:
