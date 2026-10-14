@@ -60,7 +60,9 @@ def test_undo_restores_separate_interval_without_erasing_history(store):
     restored = store.memory(old["id"])
     assert restored["valid_at"] > new["created_at"]
     assert [m["id"] for m in store.time_travel(old["created_at"])] == [old["id"]]
-    assert [m["id"] for m in store.time_travel(new["created_at"])] == [new["id"]]
+    # Source revocation takes precedence over replay; the interval stays auditable.
+    assert store.time_travel(new["created_at"]) == []
+    assert store.memory_validity(new['id'])[0]['valid_at'] == new['created_at']
     assert [m["id"] for m in store.time_travel(restored["valid_at"])] == [old["id"]]
     assert store.time_travel(old["created_at"])[0]["valid_at"] == old["created_at"]
 

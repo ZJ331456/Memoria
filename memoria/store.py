@@ -1683,10 +1683,10 @@ class Store:
 
     def time_travel(self, as_of: str, limit: int = 100, query: str = "") -> list[dict]:
         timestamp = normalize_time(as_of)
+        scope, scope_params = self.retrieval_scope(as_of=timestamp)
         with self.lock:
-            params: list = [timestamp, timestamp]
-            clause = """WHERE EXISTS (SELECT 1 FROM memory_validity_intervals v
-                WHERE v.memory_id=m.id AND v.valid_at<=? AND (v.invalid_at IS NULL OR v.invalid_at>?))"""
+            params: list = list(scope_params)
+            clause = 'WHERE ' + scope
             if query:
                 clause += " AND content LIKE ?"
                 params.append(f"%{query}%")

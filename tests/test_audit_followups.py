@@ -102,3 +102,57 @@ def test_tool_evidence_is_rechecked_after_reader_and_buffered(tmp_path, tool, mu
         finally:
             store.close()
     asyncio.run(case())
+
+
+@pytest.mark.parametrize('mutation', ['delete', 'undo', 'edit'])
+def test_history_and_online_export_exclude_unavailable_sources(tmp_path, mutation):
+    from fastapi.testclient import TestClient
+    from tests.test_memory_layers_integration import _app
+    app = _app(tmp_path)
+    store = app.state.store
+    try:
+        sid = store.create_session()['id']
+        source = store.add_message(sid, 'user', 'AUDIT_SOURCE_SENTINEL')
+        item = store.add_memory(source['content'], source='reviewed_conversation',
+                                source_ref=source['id'], require_source=True)
+        instant = item['created_at']
+        if mutation == 'delete':
+            store.delete_session(sid)
+        elif mutation == 'undo':
+            store.undo_memory_sources([source['id']])
+        else:
+            with store.db:
+                store.db.execute('UPDATE messages SET content=? WHERE id=?', ('changed', source['id']))
+        assert not store.time_travel(instant)
+        client = TestClient(app)
+        headers = {'Authorization': 'Bearer admin-secret'}
+        for query in ['', 'AUDIT_SOURCE_SENTINEL']:
+            response = client.get('/api/memories/time-travel', params={'as_of': instant, 'q': query}, headers=headers)
+            assert response.status_code == 200 and response.json() == []
+        exported = client.get('/api/memories/export.md', headers=headers)
+        assert exported.status_code == 200 and 'AUDIT_SOURCE_SENTINEL' not in exported.text
+    finally:
+        store.close()
+
+
+def test_online_export_uses_current_validity_but_history_preserves_valid_versions(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from fastapi.testclient import TestClient
+    from tests.test_memory_layers_integration import _app
+    app = _app(tmp_path)
+    store = app.state.store
+    try:
+        before = store.add_memory('VALID_HISTORICAL_SENTINEL')
+        store.correct_memory(before['id'], 'CURRENT_SENTINEL', 'fact', 3, 'engineering')
+        instant = datetime.now(timezone.utc)
+        future = store.add_memory('FUTURE_SENTINEL')
+        expired = store.add_memory('EXPIRED_SENTINEL')
+        store.set_temporal(future['id'], (instant + timedelta(days=1)).isoformat())
+        store.set_temporal(expired['id'], (instant - timedelta(days=2)).isoformat(), (instant - timedelta(days=1)).isoformat())
+        assert before['id'] in {m['id'] for m in store.time_travel(before['created_at'])}
+        exported = TestClient(app).get('/api/memories/export.md', headers={'Authorization': 'Bearer admin-secret'})
+        assert exported.status_code == 200
+        assert 'CURRENT_SENTINEL' in exported.text
+        assert all(t not in exported.text for t in ['VALID_HISTORICAL_SENTINEL', 'FUTURE_SENTINEL', 'EXPIRED_SENTINEL'])
+    finally:
+        store.close()

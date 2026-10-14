@@ -763,7 +763,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
 
     @app.get("/api/memories/export.md", tags=["memories"], summary="导出人类可读 Markdown 记忆层")
     def export_memories_md(limit: int = Query(default=500, ge=1, le=2000)):
-        markdown = export_memories_markdown(store.memories("", limit, "active"))
+        markdown = export_memories_markdown(store.retrieval_memories(limit))
         return Response(markdown, media_type="text/markdown; charset=utf-8")
 
     @app.get("/api/sessions/{session_id}/compaction", tags=["sessions"], summary="查看会话压缩摘要")
