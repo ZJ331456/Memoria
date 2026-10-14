@@ -247,3 +247,32 @@ def test_claim_cache_expires_at_unselected_parent_start_and_selected_parent_end(
         assert [c['value'] for c in expired['payload']['claims']] == (['中文'] if with_default else [])
     finally:
         store.close()
+
+
+@pytest.mark.parametrize(('answer', 'units'), [
+    ('Alice likes Bob. Bob likes Alice.', ['Alice likes Bob.']),
+    ('Alice likes Bob and Bob likes Alice.', ['Alice likes Bob', 'Bob likes Alice']),
+    ('-5', ['5']), ('Alice likes Bob. Alice likes Bob or Alice.', ['Alice likes Bob', 'Alice']),
+])
+def test_support_rejects_uncovered_order_conjunction_or_sign(answer, units):
+    from memoria.memory.answer_risk import AnswerRisk
+    value = {'verdict': 'supported', 'claims': [
+        {'statement': unit, 'relation': 'supported', 'basis': 'explicit',
+         'sources': [{'id': 's1', 'quote': 'Alice likes Bob.'}], 'reason': 'Engineering support'} for unit in units],
+        'missing_queries': [], 'reason': 'Engineering support'}
+    with pytest.raises(ValueError, match='completely covered'):
+        AnswerRisk().validate(value, 'Question', {'answer': answer, 'evidence_ids': ['s1']},
+                              [{'id': 's1', 'text': 'Alice likes Bob.'}])
+
+
+@pytest.mark.parametrize('answer', ['Alice likes Bob.\nBob likes Alice.', '“Alice likes Bob.”; Bob likes Alice.'])
+def test_support_accepts_all_literal_units_with_sentence_separators(answer):
+    from memoria.memory.answer_risk import AnswerRisk
+    value = {'verdict': 'supported', 'claims': [
+        {'statement': unit, 'relation': 'supported', 'basis': 'explicit',
+         'sources': [{'id': 's1', 'quote': unit}], 'reason': 'Engineering support'}
+        for unit in ['Alice likes Bob.', 'Bob likes Alice.']],
+        'missing_queries': [], 'reason': 'Engineering support'}
+    result = AnswerRisk().validate(value, 'Question', {'answer': answer, 'evidence_ids': ['s1']},
+                                  [{'id': 's1', 'text': 'Alice likes Bob. Bob likes Alice.'}])
+    assert result['accepted'] and not result['semantic_entailment_verified']
