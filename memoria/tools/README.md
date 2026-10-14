@@ -41,3 +41,5 @@ calculate 仅 AST 基本算术，load_skill 返回正文不执行脚本。HTTP �
 真实外部服务另由 [check_mcp.py](../../scripts/check_mcp.py) 检查，不由替身测试证明。
 
 Claim与情景工具现在携带独立于输出文本的来源/状态依赖，Reader前及发布前复核并缓冲输出；Claim直接重新选择状态。工程反例与剩余边界见[逐项修复](../../docs/implemented/算法逻辑审查逐项修复.md)。
+
+授权按操作分别匹配直接命令，保存内容里的“忘记”不能扩大为删除能力；回忆询问和裸Remember ...?不授予写权限。最终范围补强及689项回归见[修复记录](../../docs/implemented/算法逻辑审查逐项修复.md)。

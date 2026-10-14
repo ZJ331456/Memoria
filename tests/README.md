@@ -30,6 +30,7 @@ Pop-Location
 
 | 测试文件 | 重点 |
 | --- | --- |
+| [test_audit_followups.py](test_audit_followups.py)、[test_tool_policy_scope.py](test_tool_policy_scope.py) | 69项隔离审查反例：否定/范围授权、工具依赖、历史/导出、强化竞态、条件缓存、回答覆盖、May、评测修复/拒答和启动前取消；不作研究成绩 |
 | [test_locomo_smoke.py](test_locomo_smoke.py) | SHA、inputs/gold隔离、原文日期、固定抽样、引用/重复JSON、异常标签与完整失败分母；临时输入不是benchmark成绩 |
 | [test_reader_contract.py](test_reader_contract.py) | 完整body/输出预算/计数绑定、流式、引用展示与审批、来源竞态、缓冲/hook、嵌套事务和登录隔离 |
 | [test_core.py](test_core.py) | CRUD、版本/去重/语义回填、工具循环、预算、生命周期和 trace |
