@@ -276,3 +276,26 @@ def test_support_accepts_all_literal_units_with_sentence_separators(answer):
     result = AnswerRisk().validate(value, 'Question', {'answer': answer, 'evidence_ids': ['s1']},
                                   [{'id': 's1', 'text': 'Alice likes Bob. Bob likes Alice.'}])
     assert result['accepted'] and not result['semantic_entailment_verified']
+
+
+@pytest.mark.parametrize('question', [
+    'What disease was Alice diagnosed with in May?', 'What disease was Alice diagnosed with in may?',
+    'What happened during May?', 'What happened last May?', 'What happened on May 5?',
+    'What did May adopt?', 'What condition does May have?', 'May was diagnosed with what disease?',
+])
+def test_month_or_person_may_does_not_permit_inferred_personal_facts(question):
+    from memoria.memory.answer_risk import AnswerRisk, query_risk
+    assert not query_risk(question)['allows_background_inference']
+    value = {'verdict': 'supported', 'claims': [{'statement': 'anemia', 'relation': 'supported', 'basis': 'inference',
+        'sources': [{'id': 's1', 'quote': 'I have fatigue and headaches.'}], 'reason': 'Engineering inference'}],
+        'missing_queries': [], 'reason': 'Engineering inference'}
+    assert not AnswerRisk().validate(value, question, {'answer': 'anemia', 'evidence_ids': ['s1']},
+                                    [{'id': 's1', 'text': 'I have fatigue and headaches.'}])['accepted']
+
+
+@pytest.mark.parametrize('question', ['What might Alice prefer?', 'What may Alice prefer?',
+    'Alice may have which condition?', 'What may she prefer in May?', 'May she prefer tea?',
+    'What could May prefer?', '根据原话推测她可能喜欢什么？'])
+def test_explicit_speculation_remains_available_even_with_a_month_or_name(question):
+    from memoria.memory.answer_risk import query_risk
+    assert query_risk(question)['allows_background_inference']
