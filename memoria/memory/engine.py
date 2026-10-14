@@ -202,6 +202,8 @@ class MemoryEngine:
         if diagnostics is not None:
             diagnostics['stale_candidate_ids'] = stale
         ranked_ids = self._apply_kind_quotas(ranked_ids, by_id, max(1, limit))
+        if diagnostics is not None:
+            diagnostics.update(quota_policy='soft_diversity_then_relevance',requested_limit=limit,returned_count=len(ranked_ids))
         result = []
         for memory_id in ranked_ids:
             item = dict(by_id[memory_id])
@@ -543,4 +545,9 @@ class MemoryEngine:
             counts[kind] = counts.get(kind, 0) + 1
             if len(selected) >= limit:
                 break
-        return selected
+        chosen = set(selected)
+        for memory_id in ids:
+            if len(chosen) >= limit:
+                break
+            chosen.add(memory_id)
+        return [mid for mid in ids if mid in chosen][:limit]

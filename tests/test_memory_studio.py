@@ -109,7 +109,8 @@ def test_raw_source_never_fills_claim_state_and_deleted_source_rejected(state):
     assert not result['candidates'][0]['data']['approved_personal_state']
     store.delete_session(sid)
     result = asyncio.run(orchestrator.access(QueryRequest(query='回答语言是中文')))
-    assert result['candidates']==[] and result['rejected'][0]['reason']=='source_unavailable_revoked_or_public'
+    assert result['candidates']==[] and result['path']=='clarify'
+    assert asyncio.run(MemoryEngine(store).retrieve('回答语言是中文'))==[]  # Filter before ranking/Top-K.
 
 
 def test_recorded_query_never_semantically_looks_into_future(state):

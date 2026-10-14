@@ -94,19 +94,21 @@ def test_memory_worker_processes_durable_job(tmp_path: Path):
         async def extract_memories(self, user_text, assistant_text):
             return [{"content":"用户偏好深色主题","kind":"preference","importance":4}]
     store = Store(tmp_path / "worker.db")
-    store.enqueue_memory_job("message-worker", "我喜欢深色主题", "知道了")
+    source=store.add_message(store.create_session()['id'],'user','我喜欢深色主题')
+    store.enqueue_memory_job(source['id'], "我喜欢深色主题", "知道了")
     worker = MemoryJobWorker(store, FakeLLM(), MemoryEngine(store))
     assert asyncio.run(worker.process_once())
     assert store.memory_jobs()[0]["status"] == "completed"
     assert store.memories() == []
     reviews = store.memory_reviews()
-    assert len(reviews) == 1 and reviews[0]["source_ref"] == "message-worker"
+    assert len(reviews) == 1 and reviews[0]["source_ref"] == source['id']
     assert reviews[0]["status"] == "pending"
 
 
 def test_memory_review_staging_is_idempotent_and_decisions_are_final(tmp_path: Path):
     store = Store(tmp_path / "reviews.db")
-    job = store.enqueue_memory_job("source-1", "u", "a")
+    source=store.add_message(store.create_session()['id'],'user','u')
+    job = store.enqueue_memory_job(source['id'], "u", "a")
     store.claim_memory_job("review-worker")
     candidates = [
         {"content": "喜欢乌龙茶", "kind": "preference", "importance": 4},

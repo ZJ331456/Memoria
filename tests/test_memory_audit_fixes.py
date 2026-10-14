@@ -184,3 +184,15 @@ def test_reordered_chinese_bigrams_find_low_priority_memory_outside_window(tmp_p
     assert not asyncio.run(engine.retrieve('龙井',mode='bm25',expand_graph=False))
     assert asyncio.run(engine.retrieve('碧螺春',mode='bm25',expand_graph=False))[0]['id']==old['id']
     store.close()
+
+
+def test_soft_kind_quotas_fill_relevant_same_type_evidence(tmp_path):
+    store=Store(tmp_path/'quota.db','json')
+    ids={store.add_memory('工程聚会事实'+str(i),'fact')['id'] for i in range(8)}
+    diagnostics={}
+    results=asyncio.run(MemoryEngine(store).retrieve('工程聚会',limit=8,expand_graph=False,diagnostics=diagnostics))
+    assert {m['id'] for m in results}==ids
+    assert diagnostics['quota_policy']=='soft_diversity_then_relevance'
+    assert diagnostics['returned_count']==8
+    assert len(asyncio.run(MemoryEngine(store).retrieve('工程聚会',limit=3)))==3
+    store.close()
