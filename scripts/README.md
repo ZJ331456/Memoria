@@ -82,4 +82,4 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 
 ## 项目说明与框架图
 
-`render_project_diagrams.py`生成根assets/images内的两幅PNG/SVG及指纹；`--check`校验产物。`render_locomo_risk_chart.py --check`校验当前全量聚合与图表，`render_eval_charts.py --check`校验LCCC保留图。三者不读取私有原话或调用模型；来源与精简规则见[assets](../assets/README.md)。旧基线单独绘图脚本随重复结果移除。
+`render_project_diagrams.py`重绘根assets/images内的英文架构PNG/字体轮廓化SVG，保留已选定的ImageGen海报PNG并封装嵌入位图的SVG，更新四幅产物、提示词和实现来源的指纹；`--check`核对指纹。它不会重新调用ImageGen或覆盖海报PNG。`render_locomo_risk_chart.py --check`校验当前全量聚合与图表，`render_eval_charts.py --check`校验LCCC保留图。三个本地渲染器不读取私有原话或调用模型；海报的独立创意生成与素材类型见[assets](../assets/README.md)。旧基线单独绘图脚本随重复结果移除。

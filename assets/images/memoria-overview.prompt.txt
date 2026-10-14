@@ -1,0 +1,19 @@
+Use case: ads-marketing
+Asset type: a finished premium commercial-style landscape README hero poster for the open-source project Memoria. This is a completely new creative direction, not a generic diagram. High resolution, wide 16:9 format.
+Primary request: Make a striking, beautifully art-directed technology brand poster. Editorial Swiss typography and luxurious 3D glass sculpture. Dark midnight navy canvas, cool luminous periwinkle, icy cyan and soft violet. Deliberate generous negative space, precise alignment, restrained light, crisp typography. Visually compelling enough for a polished SaaS launch campaign.
+Composition: The left 48% is a typography zone. The right 52% features a spectacular sculptural continuous loop / flowing folded ribbon made of translucent frosted glass, suggesting continuity of memory; subtle orbiting glass slivers / source fragments and a small refined constellation of glowing points, on a deep-blue to near-black field. Three-dimensional, premium product-render quality, delicate reflections, smooth material, dimensional depth. Keep the sculpture entirely behind and away from the typography. Faint elegant fine-line trajectories are allowed. No dashboards or fake application screenshots.
+Text, verbatim, ALL ENGLISH, with strong hierarchy:
+Top left small wordmark: "MEMORIA"
+Small eyebrow below wordmark: "SOURCE-BACKED AI MEMORY"
+Main headline, LARGE, left aligned, exactly two lines:
+"Memory that stays"
+"in context."
+Below the headline, subdued readable supporting copy, exactly:
+"Built for small-model,"
+"long-term companionship."
+Bottom band separated by a subtle rule, three evenly spaced benefit statements:
+"Traceable sources"     "Reviewed memories"     "Context-aware access"
+Tiny lower left footer: "Chat / Memory Studio / HTTP API"
+Tiny lower right footer: "Research prototype"
+Typography: modern refined sans-serif, bold clean headline, immaculate kerning, luminous white headline, lavender accent for "in context.", muted ice-blue secondary copy. Brand name spelled M E M O R I A. Text must be perfectly readable, no invented words, no extra copy.
+Constraints: This poster advertises the design and implemented capabilities only. No numeric performance claims, no guarantees, no commercial-readiness claims, no made-up customers, no logos from other brands, no call-to-action buttons, no Chinese text, no watermark. Rich and sophisticated, not a crowded infographic, not generic cyberpunk, no brain illustration, no stock robots.

@@ -6,15 +6,15 @@
 
 Memoria connects original evidence, review, conditions and revisions so that bounded-context answers can use traceable, applicable memories. It includes independent Chat and Memory Studio interfaces, an authenticated HTTP API, and research tools. Local Qwen/BGE and remote OpenAI-compatible models share the same interfaces.
 
-![Memoria project overview](assets/images/memoria-overview.png)
+![Memoria — Memory that stays in context.](assets/images/memoria-overview.png)
 
 The current scope is a local research prototype and a controlled-pilot foundation. Longitudinal quality, positive profile-view benefits and commercial readiness remain unverified.
 
 ## Architecture
 
-![Memoria architecture](assets/images/memoria-architecture.png)
+![How Memoria works — identity, memory runtime, models and storage](assets/images/memoria-architecture.png)
 
-Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Sufficiency and risk verification require an explicit option. See [implementation and limits](docs/implemented/系统架构与实现说明.md).
+Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Sufficiency and risk verification require an explicit option. See [implementation and limits](docs/implemented/系统架构与实现说明.md). [Poster PNG](assets/images/memoria-overview.png) · [Vector architecture SVG](assets/images/memoria-architecture.svg).
 
 ## Getting started
 

@@ -6,7 +6,7 @@
 
 Memoria 将原话、审核、条件和版本连接起来，让有限上下文中的回答能够使用有来源、在当前情境下适用的记忆。项目提供独立 Chat、Memory Studio、HTTP API 与研究工具，支持本地 Qwen/BGE 和兼容 OpenAI 接口的远程模型。
 
-![Memoria项目说明：原话、审核、状态与证据回答](assets/images/memoria-overview.png)
+![Memoria — Memory that stays in context.](assets/images/memoria-overview.png)
 
 > 当前是本机研究原型与受控试用基础。真实连续人物的长期效果、正向画像视图收益和正式商业发布仍待验证。
 
@@ -22,9 +22,9 @@ Memoria 将原话、审核、条件和版本连接起来，让有限上下文中
 
 ## 系统架构
 
-![Memoria系统框架：入口、账号、记忆链路、模型与存储](assets/images/memoria-architecture.png)
+![How Memoria works — identity, memory runtime, models and storage](assets/images/memoria-architecture.png)
 
-Claim 按槽位与条件访问，普通记忆使用混合检索；充分性与风险核验通过显式开关启用。完整边界见[系统实现](docs/implemented/系统架构与实现说明.md)。[项目说明 SVG](assets/images/memoria-overview.svg) · [框架图 SVG](assets/images/memoria-architecture.svg)
+Claim 按槽位与条件访问，普通记忆使用混合检索；充分性与风险核验通过显式开关启用。完整边界见[系统实现](docs/implemented/系统架构与实现说明.md)。[英文宣传海报 PNG](assets/images/memoria-overview.png) · [架构图矢量 SVG](assets/images/memoria-architecture.svg)
 
 ## 快速开始
 
