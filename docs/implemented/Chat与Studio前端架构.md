@@ -12,7 +12,7 @@
 | `/app/` | 已移除，返回404及入口说明 | 不再挂载第二份Studio |
 | `/assets/` | 一次多页面构建的带指纹静态资产 | frontend/dist/assets，Git忽略 |
 
-统一使用frontend下package/lock/node_modules，Vite两个HTML输入输出dist/chat和dist/studio。聊天专用CSS与后台Element Plus分别打包，公共Vue/账号/API为共享块。以后新增前端功能独立子目录和入口，按需复用shared，不再新增一套散落根目录的构建配置。原根studio迁移完毕，旧frontend中的React缓存、空目录/编译残留和旧Studio构建迁入忽略的data/backups本地备份；不提交旧产物或依赖。
+统一使用frontend下package/lock/node_modules，Vite两个HTML输入输出dist/chat和dist/studio。聊天专用CSS与后台Element Plus分别打包，公共Vue/账号/API为共享块。以后新增前端功能独立子目录和入口，按需复用shared，不再新增一套散落根目录的构建配置。原根studio迁移完毕；此前迁入data/backups的旧React缓存、空目录/编译残留和旧Studio构建已于2026-10-14核验后由用户在本机清理，当前frontend源码和依赖保留。
 
 ## 对话与资料边界
 
@@ -26,12 +26,12 @@ shared/auth.ts和AuthPanel共用登录、注册、正式HttpOnly Cookie、换号
 
 ## 启动与验证
 
-[build_frontend.cmd](../../build_frontend.cmd)完成两端类型检查与构建；依赖缺失时仅安装frontend/node_modules；[启动](../../start_backend.cmd)/[停止](../../stop_backend.bat)保持同一个2237后端进程。启动脚本显示Chat与Studio地址，并分别检查两个HTML构建入口；缺失时提示构建命令。详见[前端README](../../frontend/README.md)和[后台脚本说明](本机后台启动与停止.md)。
+[build_frontend.cmd](../../build_frontend.cmd)完成两端类型检查与构建；依赖缺失时仅安装frontend/node_modules；[启动](../../start_backend.cmd)/[停止](../../stop_backend.cmd)保持同一个2237后端进程。启动脚本显示Chat与Studio地址，并分别检查两个HTML构建入口；缺失时提示构建命令。详见[前端README](../../frontend/README.md)和[后台脚本说明](本机后台启动与停止.md)。
 
 受影响后端92 passed / 41.90s（账号/隐私/投影/Studio/Reader/启动器），新增SSE保存与取消后投影文件7 passed / 11.13s；按不重复计数为94项工程通过。前端10项覆盖账号迟到响应、原文码点/投影、UTF-8/CRLF流边界、流中换号与异账号响应拒绝；类型检查和双入口生产构建通过。替身只在临时数据库验证流式协议及持久化/取消，不代表真实模型回复质量。真实浏览器验证根地址200显示独立Chat，Studio显示原50段/206消息；Chat原生聊天数为0，不填充公开导入资料。跨两端退出清空/重新登录恢复同账号通过；本机build_frontend.cmd实际构建通过。
 
 静态检查72份Markdown/707个本地链接锚点、首页56个冻结数值与既有评测产物均通过；无凭据命中。构建脚本真实运行通过，生产根Chat/Studio/资产与匿名接口权限已核验。临时Vite开发服务器联调命令被本机自动执行策略拦截，尚未现场验收开发模式，不冒充已通过。
 
-旧缓存暂存data/backups，批量及限定备份路径删除均被自动审批策略阻止，工具没有给出更具体原因；当前源码与Git只保留新结构，备份不发布。该残余清理不作为已物理删除。
+旧缓存此前因自动审批拦截而暂存；用户已执行本机清理，全部目标消失、保留文件指纹复核通过，见[清理完成记录](本机数据目录与残留清理.md)。本次统一根入口为cmd，当前源码与Git只保留新结构。
 
 本次没有重跑LoCoMo或发起真实模型质量评测，生产账号对话/记忆不为测试写入，冻结结果不变。通用账号角色/后台资料实现、停止脚本与此次拆分按用户最新授权一同审查后普通推送main；本机账号密码/角色赋予状态和数据不发布。商业发布、原生连续资料长期效果及完整账号生命周期仍见[计划](../plans/长期陪伴记忆研究与实验计划书.md)。

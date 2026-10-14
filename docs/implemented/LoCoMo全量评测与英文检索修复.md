@@ -35,7 +35,7 @@
 .\.venv\Scripts\python.exe scripts/research.py --user qin locomo-run --input data/benchmarks/locomo/raw/locomo10.json --embedding-device cuda --profile deepseek --roles configs/research-remote-roles.toml --allow-remote --concurrency 4
 ```
 
-原文件SHA见[清单](../../datasets/locomo10.manifest.json)。冻结包在账号research/benchmarks，manifest/cases/prompts/calls/score/anomalies/metrics在账号experiments/run_id，详细报告在账号reports。代码/清单/无原话聚合可提交；原始数据、逐题输出、凭据/UUID、模型不提交。LoCoMo为CC-BY-NC-4.0官方构建研究基准，不变为qin本人来源或商用许可。
+原文件SHA见[清单](../data-sources/locomo10.manifest.json)。冻结包在账号research/benchmarks，manifest/cases/prompts/calls/score/anomalies/metrics在账号experiments/run_id，详细报告在账号reports。代码/清单/无原话聚合可提交；原始数据、逐题输出、凭据/UUID、模型不提交。LoCoMo为CC-BY-NC-4.0官方构建研究基准，不变为qin本人来源或商用许可。
 
 ## 验收与下一步
 
@@ -86,7 +86,7 @@ TLS/续跑版本完整工程验收525 passed / 199.78s。续跑恢复后Embeddin
 
 计入祖先账本共 **2652次已记录reader尝试**，其中历史连接失败5次；usage已知2647次。已知prompt **36478873**、completion **93238**、total **36572111** Token；货币成本及3在途请求费用未知。全量三阶段活动墙钟合计 **2919.225秒（48.65分钟）**，不含检查点间开发/校验间隔，也不含此前十题开发调用；续跑阶段1073.610秒，故障重试47.659秒。完整病例时延混合三个批次/冷启动，p50=2.105秒、p95=27.419秒，不能当HTTP生产SLO或TLS单因素收益。中断前查询编码无法精确完整计数，运行metrics的编码字段为确认下界，原计量不回写。
 
-原9个异常标签：6个条目可作语法定位诊断，3个无法恢复，原文/标签/主评分不变。LoCoMo有910条带图片来源，606道普通题引用带图来源；不代表都必须看图，但文本模式不宣称完整多模态复现。来源/许可与[清单](../../datasets/locomo10.manifest.json)保持。
+原9个异常标签：6个条目可作语法定位诊断，3个无法恢复，原文/标签/主评分不变。LoCoMo有910条带图片来源，606道普通题引用带图来源；不代表都必须看图，但文本模式不宣称完整多模态复现。来源/许可与[清单](../data-sources/locomo10.manifest.json)保持。
 
 生产库前后50会话/206消息/0memories/0reviews/0jobs；没有导入benchmark为qin个人画像。逐题问题/参考/模型回答、调用及gold只在账号reports/experiments。公开：[初次完整分母](../assets/evaluation/locomo-full-firstpass-20261013.json)、[最终汇总与指纹](../assets/evaluation/locomo-full-20261013.json)、[结果图](../assets/evaluation/locomo-full-20261013.png)。
 

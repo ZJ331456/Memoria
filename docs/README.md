@@ -9,7 +9,8 @@
 | [算法审查逐项修复](implemented/算法逻辑审查逐项修复.md) | 10项逐项推送及授权范围补强；最终后端689/前端10通过，研究与后续验收见计划第29节 |
 | [内部记忆修复](implemented/内部记忆一致性修复记录.md) | 当前时间、来源、并发、索引与召回的逐项修复证据；未完成项见计划第28节 |
 | [系统架构](implemented/系统架构与实现说明.md) | 运行时、存储、记忆链路与模型职责 |
-| [后台启动](implemented/本机后台启动与停止.md) | 根cmd一键启动/独立bat关闭，业务与MCP进程树停止、端口/PID保护，项目venv独立日志 |
+| [后台启动](implemented/本机后台启动与停止.md) | 统一cmd启动/停止/构建，业务与MCP进程树停止、端口/PID保护，项目venv独立日志及Memoria目录迁移验收 |
+| [本机数据目录与清理](implemented/本机数据目录与残留清理.md) | 来源清单归入docs/data-sources；两个真实数据缓存保留、931.901 MiB残留清理完成及保留文件复核 |
 | [API](implemented/API接口文档.md) | 正式登录网关与个人/共享/研究接口 |
 | [用户隔离](implemented/用户登录与数据隔离.md) | UUID独立库、Cookie/账号、MCP、旧历史与文件保护 |
 | [独立Chat与前端架构](implemented/Chat与Studio前端架构.md) | 根地址聊天、Studio后台、frontend统一目录/构建/共享登录与SSE |
@@ -40,7 +41,7 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| [研究与实验计划 v21](plans/长期陪伴记忆研究与实验计划书.md) | 算法/真实数据/B0–B7、第18节商业验收、第19–24节算法/Reader/LoCoMo/P0、第26节独立Chat与前端扩展、第27节飞书机器人、第28节内部一致性 |
+| [研究与实验计划 v21](plans/长期陪伴记忆研究与实验计划书.md) | 算法/真实数据/B0–B7、第18节商业验收、第19–24节算法/Reader/LoCoMo/P0、第26节独立Chat与前端扩展、第27节飞书机器人、第28–29节一致性与算法修复、第30–32节本机目录迁移、数据清理与cmd入口 |
 | [研究来源](plans/研究来源.md) | 一手机制与外部数据适用边界，不是项目实测成绩 |
 | [计划目录](plans/README.md) | 文档分工与人工暂停要求 |
 
@@ -63,7 +64,7 @@
 
 ## 当前数据范围
 
-当前保留一个LCCC开发来源子集及一个独立官方LoCoMo benchmark。LCCC归属账号实验空间，不代表本人；LoCoMo全量使用独立冻结inputs/history/gold，不写入生产Claim/记忆，源许可为CC-BY-NC-4.0。来源清单见[datasets](../datasets/README.md)，数量/指纹与评分分别见[资产导航](assets/evaluation/README.md)。十题诊断、初始连接失败与完整运行的继承/重试记录全部保留，旧个人历史仍不导入。
+当前保留一个LCCC开发来源子集及一个独立官方LoCoMo benchmark。LCCC归属账号实验空间，不代表本人；LoCoMo全量使用独立冻结inputs/history/gold，不写入生产Claim/记忆，源许可为CC-BY-NC-4.0。来源清单见[数据来源文档](data-sources/README.md)，数量/指纹与评分分别见[资产导航](assets/evaluation/README.md)。十题诊断、初始连接失败与完整运行的继承/重试记录全部保留，旧个人历史仍不导入。
 
 本机账号调整（2026-10-14，仅本地未提交）：撤销admin短密码例外，qin原数据和UUID保持，已设置正常密码及真实superadmin角色、停用旧admin登录。最小账号管理/会话撤销/审计和Studio角色标记经85项后端回归、前端构建及3项测试通过；[使用和边界](implemented/用户登录与数据隔离.md#本机qin账号与超级管理员2026-10-14仅本地未提交)。不记录具体密码，不提交或推送，0新评测。
 

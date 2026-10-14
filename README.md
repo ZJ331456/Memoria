@@ -48,13 +48,13 @@
 
 前端源码统一位于[frontend](frontend/README.md)：`chat/`独立聊天、`studio/`管理后台、`shared/`共用登录/API。一套依赖和构建，旧/app/工作台已移除；聊天页只列个人原生对话，公开导入资料在Studio查看。
 
-以下为 **Windows PowerShell**，除注明外从仓库根执行，无需激活.venv。本机路径为`C:\Users\zero\Desktop\Memory-Project\Memoria-Agent`，新机器先获取仓库：
+以下为 **Windows PowerShell**，除注明外从仓库根执行，无需激活.venv。本机路径为`C:\Users\zero\Desktop\Memory-Project\Memoria`，新机器先获取仓库：
 
 ```powershell
 # 已有项目不重复clone
-git clone https://github.com/ZJ331456/Memoria-Agent.git
-Set-Location Memoria-Agent
-# 本机可直接 Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent'
+git clone https://github.com/ZJ331456/Memoria.git
+Set-Location Memoria
+# 本机可直接 Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria'
 
 if (-not (Test-Path .venv\Scripts\python.exe)) { python -m venv .venv }
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -126,13 +126,13 @@ Invoke-RestMethod http://127.0.0.1:8080/v1/models
 
 ```powershell
 .\start_backend.cmd
-.\stop_backend.bat
+.\stop_backend.cmd
 # 查看 / 停止同一脚本管理的进程
 .\start_backend.cmd -Action Status
 .\start_backend.cmd -Action Stop
 ```
 
-后台隐藏运行，根地址http://127.0.0.1:2237/进入Chat，http://127.0.0.1:2237/studio/进入后台；日志在`data/logs/system/`。双击[stop_backend.bat](stop_backend.bat)关闭业务及其MCP子进程；端口已有其他服务时会提示占用，不重复启动或误杀。脚本启动业务服务并托管已构建的两套界面；方案B的8080模型服务仍需先准备，首次构建步骤见下文。[配置、端口与停止说明](docs/implemented/本机后台启动与停止.md)。
+后台隐藏运行，根地址http://127.0.0.1:2237/进入Chat，http://127.0.0.1:2237/studio/进入后台；日志在`data/logs/system/`。双击[stop_backend.cmd](stop_backend.cmd)关闭业务及其MCP子进程；端口已有其他服务时会提示占用，不重复启动或误杀。脚本启动业务服务并托管已构建的两套界面；方案B的8080模型服务仍需先准备，首次构建步骤见下文。[配置、端口与停止说明](docs/implemented/本机后台启动与停止.md)。
 
 先构建，再在**终端二**启动；方案A无需另起8080。
 
@@ -202,7 +202,7 @@ Chat访问http://127.0.0.1:5173/，Studio访问http://127.0.0.1:5173/studio/，/
 .\.venv\Scripts\python.exe scripts/prepare_real_dialogues.py --limit 50 --user your_username
 ```
 
-50段/206原话来自LCCC，进入账号实验空间；身份/事件时间未知，不生成本人Claim。旧个人历史仍不导入，来源/许可见[datasets](datasets/README.md)。
+50段/206原话来自LCCC，进入账号实验空间；身份/事件时间未知，不生成本人Claim。旧个人历史仍不导入，来源/许可见[来源清单](docs/data-sources/README.md)。
 
 ## 实际数据存储
 
@@ -224,7 +224,7 @@ model/                             # 权重/tokenizer，忽略
 
 当前每用户SQLite/WAL+本地文件。完整备份/恢复、账号注销/全量导出、备份删除政策、schema版本迁移及跨机凭据迁移尚缺；普通Markdown导出不是完整备份，NTFS/DPAPI也不是整库加密。[商用存储验收](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
 
-仓库中的[datasets/](datasets/README.md)保存来源、许可与SHA清单；原始benchmark、私有输入/gold和逐题结果放在被忽略的data/，公开结果汇总与图表放在[docs/assets/evaluation/](docs/assets/evaluation/README.md)。
+仓库中的[docs/data-sources/](docs/data-sources/README.md)保存来源、许可与SHA清单；LCCC下载缓存位于data/datasets/，LoCoMo原始benchmark位于data/benchmarks/，私有输入/gold和逐题结果放在账号data/目录，公开结果汇总与图表放在[docs/assets/evaluation/](docs/assets/evaluation/README.md)。
 
 ## 下一步重点与商用缺口
 

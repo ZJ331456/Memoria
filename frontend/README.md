@@ -18,7 +18,7 @@ frontend/
 
 ## 构建与启动
 
-从仓库根双击 [build_frontend.cmd](../build_frontend.cmd)，缺少node_modules时按锁文件安装到本目录，再类型检查和构建；`-Install` 强制重新按锁安装。之后用[start_backend.cmd](../start_backend.cmd)启动；后端正在运行且代码有修改时先[停止](../stop_backend.bat)。依赖不装到base或全局npm。
+从仓库根双击 [build_frontend.cmd](../build_frontend.cmd)，缺少node_modules时按锁文件安装到本目录，再类型检查和构建；`-Install` 强制重新按锁安装。之后用[start_backend.cmd](../start_backend.cmd)启动；后端正在运行且代码有修改时先[停止](../stop_backend.cmd)。依赖不装到base或全局npm。
 
 手动方式在本目录运行：
 

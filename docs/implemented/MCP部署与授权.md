@@ -122,7 +122,7 @@ http://localhost:3000/callback
 打开 Windows Terminal 或 PowerShell，在你的电脑上执行：
 
 ```powershell
-Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria-Agent'
+Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria'
 .\.venv\Scripts\python.exe scripts/configure_feishu.py --user qin
 ```
 

@@ -1,6 +1,6 @@
 # LoCoMo 十题真实调用诊断
 
-2026-10-13，用户提供项目父目录的 locomo10.json 并要求先测10题。大小2805274字节、SHA 79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4，与已核对的[官方文件](https://github.com/snap-research/locomo/blob/main/data/locomo10.json)一致。全文件10段长对话、1986 QA；1540普通题与446对抗题分开，本轮仅10题。原始文件保留，副本在忽略目录data/benchmarks/locomo/raw/，Git只保留[清单](../../datasets/locomo10.manifest.json)和不含原话的[聚合诊断](../assets/evaluation/locomo-smoke-20261013.json)。
+2026-10-13，用户提供项目父目录的 locomo10.json 并要求先测10题。大小2805274字节、SHA 79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4，与已核对的[官方文件](https://github.com/snap-research/locomo/blob/main/data/locomo10.json)一致。全文件10段长对话、1986 QA；1540普通题与446对抗题分开，本轮仅10题。原始文件保留，副本在忽略目录data/benchmarks/locomo/raw/，Git只保留[清单](../data-sources/locomo10.manifest.json)和不含原话的[聚合诊断](../assets/evaluation/locomo-smoke-20261013.json)。
 
 这是模型生成、人工编辑的官方构建研究基准，按其[CC-BY-NC-4.0许可](https://github.com/snap-research/locomo/blob/main/LICENSE.txt)保留来源，不能冒充qin真人历史或商业数据授权。本轮按用户新要求接入指定文件，不自行生成对话、人物或标签，既有LCCC/旧历史协议不覆盖。
 

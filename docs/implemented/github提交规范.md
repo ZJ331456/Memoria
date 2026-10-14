@@ -4,7 +4,7 @@
 
 ## 远程、身份和分支
 
-- 远程：`https://github.com/ZJ331456/Memoria-Agent.git`。
+- 远程：`https://github.com/ZJ331456/Memoria.git`。
 - 本项目当前使用 `main`，遵循用户“直接推送 main、不要新建分支”的约定；后续用户明确变更时以最新要求为准。
 - author / committer：`ZJ331456 <ZJ331456@users.noreply.github.com>`。Git 作者和远程认证账号是两个概念，分别检查。
 - 仅在用户授权提交或更新远程的工作中执行推送；不要把“自动读取”理解为每次访问都自动提交。
