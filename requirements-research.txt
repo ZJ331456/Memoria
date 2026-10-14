@@ -1,3 +1,0 @@
-# Optional benchmark scoring; install only in the project .venv.
-# PorterStemmer needs no downloaded NLTK corpus or model.
-nltk==3.9.2

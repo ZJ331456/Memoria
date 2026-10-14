@@ -26,7 +26,7 @@ shared/auth.ts和AuthPanel共用登录、注册、正式HttpOnly Cookie、换号
 
 ## 启动与验证
 
-[build_frontend.cmd](../../build_frontend.cmd)完成两端类型检查与构建；依赖缺失时仅安装frontend/node_modules；[启动](../../start_backend.cmd)/[停止](../../stop_backend.cmd)保持同一个2237后端进程。启动脚本显示Chat与Studio地址，并分别检查两个HTML构建入口；缺失时提示构建命令。详见[前端README](../../frontend/README.md)和[后台脚本说明](本机后台启动与停止.md)。
+[build_frontend.cmd](../../scripts/cmd/build_frontend.cmd)完成两端类型检查与构建；依赖缺失时仅安装frontend/node_modules；[启动](../../scripts/cmd/start_backend.cmd)/[停止](../../scripts/cmd/stop_backend.cmd)保持同一个2237后端进程。启动脚本显示Chat与Studio地址，并分别检查两个HTML构建入口；缺失时提示构建命令。详见[前端README](../../frontend/README.md)和[后台脚本说明](本机后台启动与停止.md)。
 
 受影响后端92 passed / 41.90s（账号/隐私/投影/Studio/Reader/启动器），新增SSE保存与取消后投影文件7 passed / 11.13s；按不重复计数为94项工程通过。前端10项覆盖账号迟到响应、原文码点/投影、UTF-8/CRLF流边界、流中换号与异账号响应拒绝；类型检查和双入口生产构建通过。替身只在临时数据库验证流式协议及持久化/取消，不代表真实模型回复质量。真实浏览器验证根地址200显示独立Chat，Studio显示原50段/206消息；Chat原生聊天数为0，不填充公开导入资料。跨两端退出清空/重新登录恢复同账号通过；本机build_frontend.cmd实际构建通过。
 

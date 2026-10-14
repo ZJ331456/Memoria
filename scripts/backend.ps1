@@ -95,7 +95,7 @@ do {
         Write-Host "Logs: $taskLogs"
         if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\studio\index.html')) -or
             -not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\chat\index.html'))) {
-            Write-Warning 'Frontend is not built. Run build_frontend.cmd from the repository root, then restart the backend.'
+            Write-Warning 'Frontend is not built. Run scripts\cmd\build_frontend.cmd from the repository root, then restart the backend.'
         }
         exit 0
     }

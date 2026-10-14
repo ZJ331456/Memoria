@@ -4,14 +4,14 @@
 
 临时输入、隔离账号/数据库和模型/传输故障替身只验证工程行为，不写入生产、不作为真实用户数据或研究成绩。正式效果结果由真实来源、冻结协议和独立评分记录说明。
 
-[飞书渠道测试](test_feishu_channel.py)验证SDK事件形状、绑定/换绑快照、防重放/去重、隔离、停用/解绑、重发不再生成、停止/限流、UTF-8分块与私密错误；需要先在.venv安装requirements-feishu.txt。替身不调用真实飞书或模型。相关完整118项回归与前端10项通过，真实手机消息另行验收。
+[飞书渠道测试](test_feishu_channel.py)验证SDK事件形状、绑定/换绑快照、防重放/去重、隔离、停用/解绑、重发不再生成、停止/限流、UTF-8分块与私密错误；需要先在.venv安装requirements.txt。替身不调用真实飞书或模型。相关完整118项回归与前端10项通过，真实手机消息另行验收。
 
 ## 运行
 
-从仓库根目录使用 `.venv`。新开发环境先在该环境安装 pytest；它们是开发测试依赖，不使用 base 或全局 Python。
+从仓库根目录使用`.venv`。pytest与各模块依赖均在统一requirements.txt按类型维护，不使用base或全局Python。
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install pytest
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pytest -q
 # 受影响范围示例
 .\.venv\Scripts\python.exe -m pytest -q tests/test_user_privacy.py tests/test_claims.py tests/test_memory_studio.py
@@ -76,7 +76,7 @@ Pop-Location
 
 [test_claim_evolution.py](test_claim_evolution.py)新增27项独立核验/关系/策略、源时间、主体/计划/否定、并发目标、模型引用、无提交和默认缓存反例；项目.venv执行`-m pytest -q tests/test_claim_evolution.py`。临时输入不作为研究数据或质量分数。
 
-- sqlite-vec 可选，未安装时相应用例可跳过；在项目环境安装 requirements-vector.txt 后再验证该后端。
+- sqlite-vec 可选，未安装时相应用例可跳过；在项目环境安装 requirements.txt 后再验证该后端。
 - 传输/模型替身不证明真实 Qwen/BGE 质量；网络握手不证明业务权限或可靠性。MCP 真实只读验证用 `scripts/check_mcp.py --user USERNAME`，飞书先完成 OAuth。
 - 跨账号测试不等于任意个人信息脱敏、全盘加密、多节点隔离或商用安全认证。
 - 没有把合成轨迹/演示画像导入产品或报为研究成绩。实际50匿名对话没有连续人物时间，不能由本目录推出长期陪伴结论。

@@ -1,2 +1,0 @@
--r requirements.txt
-sqlite-vec>=0.1.9,<0.2

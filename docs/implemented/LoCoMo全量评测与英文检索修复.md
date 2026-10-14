@@ -27,7 +27,7 @@
 仓库根目录、已有账号/私有profile；远程会产生实际费用，每次创建新run：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-research.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe scripts/download_embedding.py --model-id BAAI/bge-small-en-v1.5 --local-dir model/bge-small-en-v1.5
 # 相同十题开发诊断
 .\.venv\Scripts\python.exe scripts/research.py --user qin locomo-run --scope smoke --input data/benchmarks/locomo/raw/locomo10.json --embedding-device cuda --profile deepseek --roles configs/research-remote-roles.toml --allow-remote --concurrency 4

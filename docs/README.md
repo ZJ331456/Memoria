@@ -8,7 +8,7 @@
 
 | 主题 | 入口 |
 | --- | --- |
-| 安装与启动 | [完整配置指南](implemented/安装配置与启动.md) · [后台启动/停止](implemented/本机后台启动与停止.md) |
+| 安装与启动 | [完整配置指南](implemented/安装配置与启动.md) · [统一依赖与平台目录](implemented/安装配置与启动.md#依赖清单与平台脚本) · [后台启动/停止](implemented/本机后台启动与停止.md) |
 | 系统与接口 | [系统架构](implemented/系统架构与实现说明.md) · [API](implemented/API接口文档.md) |
 | Chat、Studio与渠道 | [前端架构](implemented/Chat与Studio前端架构.md) · [资料与记忆后台](implemented/MemoryStudio与统一记忆访问.md) · [飞书私聊](implemented/飞书机器人对话接入.md) |
 | 记忆与状态 | [分层配置](implemented/记忆分层与配置.md) · [Claim/条件视图](implemented/Claim条件视图与访问路由.md) · [来源与审核](implemented/自动记忆审核与来源定位.md) |

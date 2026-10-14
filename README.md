@@ -42,24 +42,28 @@ if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
 
 已有项目直接进入仓库并保留现有环境、私密配置和账号资料。
 
+Python 依赖统一在 [requirements.txt](requirements.txt)，按服务、本地模型、向量扩展、飞书、评测、图表和测试分类注释；上述命令安装全部类别。CUDA 用户应先按[配置指南](docs/implemented/安装配置与启动.md#依赖清单与平台脚本)选择官方 PyTorch wheel，再安装统一清单。
+
 ### 2. 配置模型
 
 | 方案 | 需要准备 |
 | --- | --- |
 | 远程 LLM + 本地 BGE | 配置 main / fast 的兼容 API；BGE 权重放入 `model/`，Embedding 使用 `local://auto` |
-| 本地 Qwen + BGE HTTP 服务 | 准备本地权重和可选依赖，先启动独立的 8080 模型服务 |
+| 本地 Qwen + BGE HTTP 服务 | 安装统一依赖清单、准备本地权重，先启动独立的 8080 模型服务 |
 
 `config.example.toml` 默认使用第二种方案。模型权重不随 Git 下载；已有账号的模型覆盖配置优先于根配置。安装命令、完整 TOML 示例与安全输入凭据的方法见[安装配置指南](docs/implemented/安装配置与启动.md)。
 
 ### 3. 构建并启动
 
 ```powershell
-.\build_frontend.cmd
-.\start_backend.cmd
+.\scripts\cmd\build_frontend.cmd
+.\scripts\cmd\start_backend.cmd
 # 查看状态 / 停止
-.\start_backend.cmd -Action Status
-.\stop_backend.cmd
+.\scripts\cmd\start_backend.cmd -Action Status
+.\scripts\cmd\stop_backend.cmd
 ```
+
+Windows 入口集中在 [scripts/cmd](scripts/cmd/README.md)，可直接双击；[scripts/sh](scripts/sh/README.md) 为 Linux 预留，当前尚未实现启动脚本。
 
 | 入口 | 地址 |
 | --- | --- |
@@ -105,7 +109,9 @@ Memoria/
 │  └─ plans/        # 研究路线与待验收事项
 ├─ frontend/         # chat / studio / shared
 ├─ memoria/          # 记忆、运行时、模型、API与研究代码
-├─ scripts/          # 本机管理、模型准备与图表复现
+├─ scripts/          # Python/PowerShell工具、模型准备与图表复现
+│  ├─ cmd/          # Windows构建、启动、停止入口
+│  └─ sh/           # Linux入口预留，尚未实现
 ├─ tests/            # 工程回归
 ├─ data/             # 本机账号、原文、配置和实验账本；Git忽略
 └─ model/            # 本地模型权重；Git忽略

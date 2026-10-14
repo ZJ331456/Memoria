@@ -1,7 +1,55 @@
+# Memoria Python dependencies — one manifest, grouped by purpose.
+# Install only in the project .venv: python -m pip install -r requirements.txt
+# This installs every group below; comments are documentation, not pip extras.
+# Model weights and frontend/MCP Node dependencies are managed separately.
+
+# ---------------------------------------------------------------------------
+# 1. HTTP service and configuration
+# ---------------------------------------------------------------------------
 fastapi>=0.115,<1
 uvicorn[standard]>=0.30,<1
 httpx>=0.27,<1
 pydantic>=2.8,<3
-# Windows 没有系统 IANA 时区数据库，DriftWorker 的 ZoneInfo 需要它。
+
+# Windows lacks the system IANA database used by DriftWorker's ZoneInfo.
 tzdata>=2024.1; sys_platform == "win32"
+
+# ---------------------------------------------------------------------------
+# 2. Local Qwen/BGE inference and model downloads
+# ---------------------------------------------------------------------------
+# Select the PyTorch CPU/CUDA wheel for your machine BEFORE the full install.
+# Existing Windows RTX 4060 setup (inside .venv):
+# python -m pip install torch==2.9.0 --index-url https://download.pytorch.org/whl/cu126
+# torch==2.9.0 also accepts the installed 2.9.0+cu126 build; do not force-reinstall.
+torch==2.9.0
+transformers==5.5.3
+modelscope==1.34.0
+
+# ---------------------------------------------------------------------------
+# 3. SQLite vector search extension
+# ---------------------------------------------------------------------------
+sqlite-vec>=0.1.9,<0.2
+
+# ---------------------------------------------------------------------------
+# 4. Feishu bot channel SDK
+# ---------------------------------------------------------------------------
+# Installing the SDK does not configure credentials or enable the channel.
+lark-oapi==1.7.4
+
+# ---------------------------------------------------------------------------
+# 5. Research scoring
+# ---------------------------------------------------------------------------
+# PorterStemmer needs no downloaded NLTK corpus or model.
+nltk==3.9.2
+
+# ---------------------------------------------------------------------------
+# 6. Documentation charts and diagrams
+# ---------------------------------------------------------------------------
+matplotlib==3.10.9
+
+# ---------------------------------------------------------------------------
+# 7. Engineering tests
+# ---------------------------------------------------------------------------
+# The locally verified environment uses pytest 9.1.1.
+pytest>=9,<10
 

@@ -11,5 +11,5 @@ try {
     }
     & npm.cmd run build
     if ($LASTEXITCODE -ne 0) { throw 'Frontend type check or build failed.' }
-    Write-Host 'Built Chat (/) and Memory Studio (/studio/). Start or restart the backend with start_backend.cmd.'
+    Write-Host 'Built Chat (/) and Memory Studio (/studio/). Start or restart the backend with scripts\cmd\start_backend.cmd.'
 } finally { Pop-Location }

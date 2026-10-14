@@ -29,7 +29,7 @@ python -m venv .venv
 
 # CUDA PyTorch 先使用官方索引安装；本机 RTX 4060 使用 CUDA 12.6 wheel。
 .\.venv\Scripts\python.exe -m pip install "torch==2.9.0" --index-url https://download.pytorch.org/whl/cu126
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-local-embedding.txt pytest
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe scripts/download_embedding.py
 ```
 

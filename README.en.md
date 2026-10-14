@@ -30,12 +30,16 @@ if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
 
 Configure models before starting. The example defaults to a local Qwen/BGE HTTP service on port 8080. Alternatively, use a remote main/fast LLM with in-process local BGE. Model weights are excluded from Git; per-account overrides take priority. See the [complete setup guide](docs/implemented/安装配置与启动.md).
 
+The single [requirements.txt](requirements.txt) groups service, local-model, vector, Feishu, scoring, chart and test dependencies; the install command includes every group. Select an appropriate official PyTorch CPU/CUDA wheel before installing the full list. Frontend and MCP Node dependencies remain separate.
+
 ```powershell
-.\build_frontend.cmd
-.\start_backend.cmd
-.\start_backend.cmd -Action Status
-.\stop_backend.cmd
+.\scripts\cmd\build_frontend.cmd
+.\scripts\cmd\start_backend.cmd
+.\scripts\cmd\start_backend.cmd -Action Status
+.\scripts\cmd\stop_backend.cmd
 ```
+
+Windows entry points live in [scripts/cmd](scripts/cmd/README.md) and support double-click usage. [scripts/sh](scripts/sh/README.md) is reserved for future Linux launchers; none is implemented yet.
 
 Chat: http://127.0.0.1:2237/ · Studio: http://127.0.0.1:2237/studio/ · API docs: http://127.0.0.1:2237/docs
 

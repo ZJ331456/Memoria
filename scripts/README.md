@@ -6,7 +6,9 @@
 
 ## 一键业务后台
 
-双击根目录[start_backend.cmd](../start_backend.cmd)启动，[stop_backend.cmd](../stop_backend.cmd)关闭；`start_backend.cmd -Action Status`查看状态。关闭时先校验根进程归属，再结束业务及其MCP子进程树。内部[backend.ps1](backend.ps1)仅用项目venv、私密配置、loopback和隐藏窗口，日志在忽略的data/logs/system，端口占用不另起/误杀。首次依赖及Chat/Studio统一构建先准备（根[build_frontend.cmd](../build_frontend.cmd)，内部[frontend.ps1](frontend.ps1)），本地HTTP模型8080仍独立启动。[完整使用及真实验证](../docs/implemented/本机后台启动与停止.md)。
+Windows入口集中在[cmd](cmd/README.md)：双击[start_backend.cmd](cmd/start_backend.cmd)启动，[stop_backend.cmd](cmd/stop_backend.cmd)关闭；从仓库根执行`.\scripts\cmd\start_backend.cmd -Action Status`查看状态。关闭时先校验根进程归属，再结束业务及其MCP子进程树。内部[backend.ps1](backend.ps1)仅用项目venv、私密配置、loopback和隐藏窗口，日志在忽略的data/logs/system，端口占用不另起/误杀。首次依赖及Chat/Studio统一构建先准备（[build_frontend.cmd](cmd/build_frontend.cmd)，内部[frontend.ps1](frontend.ps1)），本地HTTP模型8080仍独立启动。[完整使用及真实验证](../docs/implemented/本机后台启动与停止.md)。
+
+Python依赖只维护根[requirements.txt](../requirements.txt)，按七类注释，安装命令包含全部类别。通用Python工具和Windows PowerShell实现保留在scripts；[sh](sh/README.md)只预留Linux入口位置，尚无Linux启动实现。
 
 ## 环境与模型
 
@@ -51,7 +53,7 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 ## README 图表复现
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-docs.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe scripts/render_eval_charts.py
 .\.venv\Scripts\python.exe scripts/render_eval_charts.py --check
 ```
@@ -70,7 +72,7 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 
 新增`--fallback targeted|adaptive_risk`及`--scope development`（原顺序前两段全部304题），用于[P0充分性/风险消融](../docs/implemented/证据充分性与风险感知回答.md)。完整分母仍由`--scope full`保持；新模式不使用完整历史Reader，所有规划/核验及失败Token计入成本，独立注册协议与原始gold保持。旧`none|full_history`行为保留。
 
-`research.py --user USERNAME locomo-run --help`；默认全1986题，`--scope smoke`同固定10题。英文BGE在model/，评分可选依赖`requirements-research.txt`安装到.venv；远程显式授权/profile/roles，默认并发4，错误不丢分母。旧locomo-smoke仅历史v1复现。[完整说明](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+`research.py --user USERNAME locomo-run --help`；默认全1986题，`--scope smoke`同固定10题。英文BGE在model/，评分可选依赖`requirements.txt`安装到.venv；远程显式授权/profile/roles，默认并发4，错误不丢分母。旧locomo-smoke仅历史v1复现。[完整说明](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
 
 locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为interrupted，由账号边界及产物/协议/模型指纹校验；不会对仍运行源run并发续跑。继承与新增调用分别记录，旧产物不覆盖。
 

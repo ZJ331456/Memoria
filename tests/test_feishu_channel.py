@@ -37,7 +37,7 @@ def test_only_matching_app_human_private_messages_are_accepted(change):
 
 
 def test_sdk_event_shape_and_binding_secret_are_normalized_before_disk():
-    lark=pytest.importorskip('lark_oapi',reason='Install requirements-feishu.txt to verify the official SDK event shape')
+    lark=pytest.importorskip('lark_oapi',reason='Install requirements.txt to verify the official SDK event shape')
     from lark_oapi.api.im.v1 import P2ImMessageReceiveV1
     payload=event('/绑定 ONE-TIME-CODE')
     normalized=json.loads(lark.JSON.marshal(P2ImMessageReceiveV1(payload)))

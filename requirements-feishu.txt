@@ -1,2 +1,0 @@
-# Optional bot ingress. Install only inside the project .venv.
-lark-oapi==1.7.4

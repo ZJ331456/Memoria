@@ -25,7 +25,7 @@ Invoke-RestMethod http://127.0.0.1:8080/health
 Invoke-RestMethod http://127.0.0.1:8080/v1/models
 ```
 
-此进程与 main.py 账号/记忆服务分开。main/fast base_url=`http://127.0.0.1:8080/v1`，model 与登记一致；BGE 用 bge-small-zh-v1.5。可选 --warmup 会真正加载/生成。权重仅留 model/，不自动下载；基础 requirements.txt 不含全部本地模型依赖。
+此进程与 main.py 账号/记忆服务分开。main/fast base_url=`http://127.0.0.1:8080/v1`，model 与登记一致；BGE 用 bge-small-zh-v1.5。可选 --warmup 会真正加载/生成。权重仅留 model/，不自动下载；统一[requirements.txt](../../requirements.txt)已包含本地模型依赖，PyTorch的CPU/CUDA构建仍按硬件选择。
 
 ## 接口与部署边界
 
