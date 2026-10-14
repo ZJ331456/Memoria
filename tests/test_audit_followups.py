@@ -299,3 +299,73 @@ def test_month_or_person_may_does_not_permit_inferred_personal_facts(question):
 def test_explicit_speculation_remains_available_even_with_a_month_or_name(question):
     from memoria.memory.answer_risk import query_risk
     assert query_risk(question)['allows_background_inference']
+
+
+@pytest.mark.parametrize('tight_budget', [False, True])
+def test_full_history_repair_never_drops_query_or_evidence(tmp_path, monkeypatch, tight_budget):
+    from dataclasses import replace
+    from memoria.config import Settings
+    from memoria.experiments import locomo_eval as bench
+    from memoria.experiments.history import HistoryWorkspace
+    from memoria.experiments.roles import load_roles
+    from memoria.llm import ChatResult
+    from memoria.prompting.reader_budget import ReaderBudget
+    from tests.test_locomo_eval import fixture_records
+
+    source = tmp_path / 'source.json'
+    source.write_text(json.dumps(fixture_records()), encoding='utf-8')
+    monkeypatch.setattr(bench, 'SOURCE_SHA256', bench.digest_file(source))
+    config = tmp_path / 'config.toml'
+    config.write_text('[llm.main]\nmodel="temporary"\nbase_url="http://localhost:11434/v1"\n', encoding='utf-8')
+    settings, roles = Settings.load(config), load_roles(None)
+    cases, histories, _ = bench.benchmark_cases(fixture_records(), 'smoke')
+    packet = {'question': cases[0]['question'], 'evidence': [
+        {k: m[k] for k in ('id', 'speaker', 'session_date_raw', 'text')} for m in histories[cases[0]['conversation_id']]],
+        'instruction': 'Recheck against the complete original conversation. Answer only if supported; otherwise Not mentioned.'}
+    messages = [{'role': 'system', 'content': bench.SYSTEM}, {'role': 'user', 'content': bench.canonical(packet)}]
+    initial = asyncio.run(ReaderBudget(settings).measure(settings.main, messages, None, roles['reader'].max_tokens,
+                                                       temperature=0, top_p=1))
+    if tight_budget:
+        settings = replace(settings, reader_input_bytes=initial['input_bytes'] + 1)
+
+    class Retriever:
+        document_encodes = 0
+        query_encodes = 0
+        def __init__(self, *args, **kwargs): pass
+        async def select(self, history, *args, **kwargs):
+            self.query_encodes += 1
+            return history, {}
+
+    repairs = []
+    class Reader:
+        def __init__(self, settings, roles, recorder, timings):
+            self.calls, self.recorder = [], recorder
+        def public_roles(self): return {'reader': {'model': 'engineering-only'}}
+        async def call(self, role, messages, **kwargs):
+            packet = json.loads(messages[1]['content'])
+            assert packet['question'] == cases[0]['question'] and packet['evidence']
+            assert 'GOLD' not in json.dumps(messages)
+            self.calls.append({'usage': {'total_tokens': 1}})
+            self.recorder.append('calls.jsonl', {'call': len(self.calls) - 1, 'usage': {'total_tokens': 1}})
+            if len(self.calls) == 1:
+                output = {'status': 'abstain', 'answer': 'Not mentioned.', 'evidence_ids': []}
+            elif len(self.calls) == 2:
+                output = {'status': 'answer', 'answer': 'temporary', 'evidence_ids': ['unseen']}
+            else:
+                repairs.append(packet)
+                output = {'status': 'answer', 'answer': 'temporary', 'evidence_ids': [packet['evidence'][0]['id']]}
+            return ChatResult(content=json.dumps(output), usage={'total_tokens': 1})
+
+    monkeypatch.setattr(bench, 'PrefixRetriever', Retriever)
+    path = asyncio.run(bench.execute(HistoryWorkspace(tmp_path / 'owner'), settings, source, scope='smoke',
+        client_factory=Reader, embedding_factory=lambda cfg: None, roles=roles))
+    rows = [json.loads(line) for line in (path / 'cases.jsonl').read_text().splitlines()]
+    assert len(rows) == 10
+    if tight_budget:
+        assert not repairs
+        assert all(r['fallback_status'] == 'error' and r['fallback_error'] == 'ContextLengthError' for r in rows)
+        assert all(r['answer_status'] == 'abstain' for r in rows)
+    else:
+        assert len(repairs) == 10
+        assert all(r['fallback_status'] == 'success' and r['fallback_reader_budget']['dropped_messages'] == 0 for r in rows)
+        assert all(len(r['presented_ids']) == 1 and r['answer_status'] == 'answer' for r in rows)

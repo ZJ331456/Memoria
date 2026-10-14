@@ -27,7 +27,7 @@ from .retrieval import PrefixRetriever
 from .roles import ExperimentLLM, load_roles
 from .runner import account_settings, local_policy, quantiles
 
-PROTOCOL = 'locomo-text-english-rrf-fallback-v5'
+PROTOCOL = 'locomo-text-english-rrf-fallback-v6'
 STOPWORDS = frozenset('a an the and or of to in on at by with for from about as is are was were be been '
                      'do does did have has had what which who where when why how might could would '
                      'can will s regards regard'.split())
@@ -408,7 +408,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                   'fallback_call_limit': 5 if risk_method else 1,
                   'fallback_budget': 'bounded evidence stages and cumulative case bytes; no complete-history Reader' if risk_method
                       else 'complete frozen conversation or fail complete ReaderBudget',
-                  'contract_repair_call_limit': 1, 'contract_repair': 'same evidence, regenerate invalid secondary JSON/citations; never insert citations',
+                  'contract_repair_call_limit': 1, 'contract_repair': 'atomic question/evidence/repair user packet; fail if incomplete; never insert citations',
                   'lexical': 'FTS5 Porter unicode61 BM25 OR non-stopword query tokens',
                   'reader_system_sha256': sha(SYSTEM), 'embedding_model': settings.embedding.model,
                   'embedding_language_warning': 'Chinese BGE on English' if embedding_model.endswith('zh-v1.5') else None,
@@ -497,25 +497,34 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                     # never controls escalation or selects extra sources.
                     row['fallback_attempted'] = True
                     complete = [{k: m[k] for k in ('id', 'speaker', 'session_date_raw', 'text')} for m in history]
-                    fallback_prompt = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': canonical({
+                    full_packet = {
                         'question': case['question'], 'evidence': complete,
-                        'instruction': 'Recheck against the complete original conversation. Answer only if supported; otherwise Not mentioned.'})}]
+                        'instruction': 'Recheck against the complete original conversation. Answer only if supported; otherwise Not mentioned.'}
+                    fallback_prompt = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': canonical(full_packet)}]
                     try:
                         full_prepared = await ReaderBudget(settings).prepare(fallback_prompt, selected=selected,
                             max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
+                        if full_prepared.messages != fallback_prompt:
+                            raise ValueError('Complete history/question was not fully presented')
                         full_result = await client.call('reader', full_prepared.messages, stream=False)
                         try:
                             full_parsed = parse_answer(full_result, [e['id'] for e in complete])
                         except ValueError as exc:
                             row.update(fallback_initial_validation_error=type(exc).__name__, contract_repair_attempted=True)
-                            repair_prompt = fallback_prompt + [
-                                {'role': 'assistant', 'content': full_result.content},
-                                {'role': 'user', 'content': 'Your JSON/citations failed validation. Regenerate the answer using the SAME '
+                            # Keep the question, all evidence and repair instruction in
+                            # the protected current user message; earlier user messages
+                            # are optional to ReaderBudget and can otherwise disappear.
+                            repair_packet = {**full_packet, 'instruction': full_packet['instruction'] + ' '
+                                'Your JSON/citations failed validation. Regenerate the answer using the SAME '
                                  'evidence above. Every status=answer requires at least one exact supporting evidence id. '
                                  'Do not fabricate IDs or change facts to force an answer. If unsupported, return '
-                                 'status=abstain, answer="Not mentioned.", evidence_ids=[]. Return ONLY valid JSON.'}]
+                                'status=abstain, answer="Not mentioned.", evidence_ids=[]. Return ONLY valid JSON.'}
+                            repair_prompt = [{'role': 'system', 'content': SYSTEM},
+                                             {'role': 'user', 'content': canonical(repair_packet)}]
                             full_prepared = await ReaderBudget(settings).prepare(repair_prompt, selected=selected,
                                 max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
+                            if full_prepared.messages != repair_prompt:
+                                raise ValueError('Repair history/question was not fully presented')
                             full_result = await client.call('reader', full_prepared.messages, stream=False)
                             full_parsed = parse_answer(full_result, [e['id'] for e in complete])
                         result, parsed = full_result, full_parsed
