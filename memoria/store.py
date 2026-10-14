@@ -203,6 +203,8 @@ class Store:
             self.db.execute("UPDATE memory_jobs SET available_at=COALESCE(available_at,created_at)")
             self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_jobs_available ON memory_jobs(status, available_at, lease_expires_at)")
             self.db.execute("UPDATE memory_reviews SET status='pending' WHERE status='applying'")
+            if 'applied_claim_id' not in {r[1] for r in self.db.execute('PRAGMA table_info(memory_reviews)')}:
+                self.db.execute('ALTER TABLE memory_reviews ADD COLUMN applied_claim_id TEXT')
             self.db.execute("CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status, updated_at DESC)")
             for _column, _statement in {
                 "valid_at": "ALTER TABLE memories ADD COLUMN valid_at TEXT",

@@ -1,5 +1,7 @@
 # Memoria Agent API 接口文档
 
+2026-10-14：候选批准 `POST /api/memory-reviews/{id}/approve` 可同时提交完整 `claim`（ClaimDraft）及 `approve_claim=true`。调用者须明确核对主体、属性、值、条件、时间与来源；所有引用限该候选的同一原话。普通记忆、Claim批准、审核状态在同一事务发布，失败全部回滚，响应新增 `applied_claim_id`。未明确勾选的普通批准不会自动升格个人状态。Studio候选审核已有对应入口，详见[修复第6项](内部记忆一致性修复记录.md)。
+
 同日算法深化：`/api/claims/{id}/analyze`新增use_relation_model（默认false）/peer_limit（1–64，默认32），返回核验/关系/4类影子策略；extract附shadow_updates，额外模型调用0。memory-query的scope_mode为auto/applicable/default，memory-access/view为applicable/default，default不与context混用。[演化说明](Claim证据核验与演化策略.md)，完整schema以当前OpenAPI为准。
 
 [文档导航](../README.md) · [API 实现说明](../../memoria/api/README.md)

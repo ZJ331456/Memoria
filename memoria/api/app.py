@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..config import Settings
-from ..claims import ClaimError
+from ..claims import ClaimError, ClaimDraft
 from ..governance import GovernanceError, MemoryGovernance
 from ..llm import LLMClient
 from ..memory import export_memories_markdown
@@ -203,6 +203,7 @@ class MemoryReviewResponse(BaseModel):
     status: Literal["pending", "applying", "approved", "rejected"]
     applied_memory_id: str | None = None
     applied_action: str | None = None
+    applied_claim_id: str | None = None
     created_at: str
     updated_at: str
 
@@ -211,6 +212,14 @@ class MemoryReviewApproval(StrictModel):
     content: str = Field(min_length=1, max_length=4000)
     kind: MemoryKind
     importance: int = Field(ge=1, le=5)
+    claim: ClaimDraft | None = None
+    approve_claim: bool = Field(default=False, strict=True)
+
+    @model_validator(mode='after')
+    def explicit_claim_approval(self):
+        if (self.claim is not None) != self.approve_claim:
+            raise ValueError('结构化状态须同时提交完整Claim和approve_claim=true明确批准')
+        return self
 
 
 class EpisodePatch(StrictModel):
@@ -797,11 +806,17 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             store.reset_memory_review(review_id)
             raise HTTPException(409, "来源消息已删除，不能批准悬空记忆")
         try:
+            if body.claim is not None:
+                from ..memory.review import approve_review_with_claim
+                return await approve_review_with_claim(service, review, body)
             result = await service.runtime.memory.remember(
                 body.content, body.kind, body.importance, "reviewed_conversation", review["source_ref"],
                 require_source=True,
             )
             store.finish_memory_review(review_id, result.memory["id"] if result.memory else None, result.action)
+        except ClaimError:
+            store.reset_memory_review(review_id)
+            raise
         except MemorySourceUnavailable as exc:
             store.reset_memory_review(review_id)
             raise HTTPException(409, "来源消息已删除，不能批准悬空记忆") from exc
