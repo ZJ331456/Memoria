@@ -1,0 +1,39 @@
+# 前端：Chat 与 Memory Studio
+
+[项目首页](../README.md) · [功能说明](../docs/implemented/Chat与Studio前端架构.md)
+
+两套独立页面、一套依赖与构建。根地址 `http://127.0.0.1:2237/` 是聊天界面；`/studio/` 是资料、记忆治理与实验后台。旧 `/app/` 已移除。
+
+```text
+frontend/
+├─ chat/                 # 聊天页面与专用样式
+├─ studio/               # 数据后台与管理组件
+├─ shared/               # Cookie登录、账号生命周期、API、SSE与原文工具
+├─ tests/                # 跨账号竞态、文本与流式解析工程测试
+├─ package.json          # 两端统一依赖
+├─ package-lock.json
+├─ vite.config.ts        # 两个HTML入口
+└─ dist/                 # 构建产物，Git忽略
+```
+
+## 构建与启动
+
+从仓库根双击 [build_frontend.cmd](../build_frontend.cmd)，缺少node_modules时按锁文件安装到本目录，再类型检查和构建；`-Install` 强制重新按锁安装。之后用[start_backend.cmd](../start_backend.cmd)启动；后端正在运行且代码有修改时先[停止](../stop_backend.bat)。依赖不装到base或全局npm。
+
+手动方式在本目录运行：
+
+```powershell
+npm ci --cache .npm-cache --no-audit --no-fund
+npm run build
+npm test
+```
+
+开发时后端保持2237，在本目录运行 `npm run dev`：Chat 为 `http://127.0.0.1:5173/`，Studio 为 `http://127.0.0.1:5173/studio/`。`/api`代理到2237，部署只需2237与dist，无需Vite进程。Vite根中间件仅把开发根入口映射到chat/index.html。
+
+## 扩展约定
+
+新页面放新的子目录，以独立HTML/main/style入口注册到vite.config.ts，并在网关明确托管；通用鉴权/API放shared。不要复制另一套登录状态、把用户ID交给客户端选择，或把某个页面的全局CSS加载到另一个页面。新增依赖统一更新根package/lock；不在子目录分别生成node_modules和锁文件。
+
+Chat只列本账号原生聊天，导入公共语料在Studio查看。两端共享HttpOnly Cookie、退出广播、请求取消与响应归属检查；凭据与原话不写浏览器持久存储。旧React缓存及旧Studio构建已迁入忽略的本地备份，根studio目录已移除，Git不保留并行旧入口。
+
+[Chat模块](chat/README.md) · [Studio模块](studio/README.md) · [共享层](shared/README.md)

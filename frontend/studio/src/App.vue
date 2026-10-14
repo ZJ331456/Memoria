@@ -1,9 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElAlert, ElButton, ElCheckbox, ElCollapse, ElCollapseItem, ElDialog, ElInput, ElInputNumber, ElOption, ElSelect, ElTag } from 'element-plus'
-import { API, SessionChanged, sourceParts } from './api'
-const api = new API(), user = ref<any>(null), busy = ref(false), error = ref('')
-const username = ref(''), password = ref(''), page = ref('explorer')
+import { sourceParts } from '../../shared/api'
+import { useAccount } from '../../shared/auth'
+import AuthPanel from '../../shared/AuthPanel.vue'
+import ConsoleHome from './components/ConsoleHome.vue'
+import HistoryBrowser from './components/HistoryBrowser.vue'
+import MemoryInventory from './components/MemoryInventory.vue'
+import AccountsPanel from './components/AccountsPanel.vue'
+import PendingReviews from './components/PendingReviews.vue'
+const account=useAccount({ready:refresh,clear:clearData})
+const {api,user,busy,error,run,logout}=account
+const headings:Record<string,string>={overview:'数据总览',conversations:'历史对话',memories:'长期记忆库',reviews:'候选审核',explorer:'结构化记忆与审核',temporal:'双时间与变化',retrieval:'检索实验室',evaluation:'评测运行记录',accounts:'账号管理'}
+const initialPage=window.location.hash.slice(1)
+const page=ref(headings[initialPage]?initialPage:'overview')
+const summary=ref<any>(null)
+const historySession=ref(''),historyAnchor=ref('')
+const navigation=computed(()=>[{id:'overview',label:'数据总览',icon:'▦'},{id:'conversations',label:'历史对话',icon:'▤',count:summary.value?.sessions},{id:'memories',label:'长期记忆库',icon:'◈',count:summary.value?.memories},{id:'reviews',label:'候选审核',icon:'◎',count:summary.value?.pending_reviews},{id:'explorer',label:'结构化记忆',icon:'◇'},{id:'temporal',label:'双时间与变化',icon:'◷'},{id:'retrieval',label:'检索实验室',icon:'⌕'},{id:'evaluation',label:'评测运行记录',icon:'▥'},...(user.value?.role==='superadmin'?[{id:'accounts',label:'账号管理',icon:'⚙'}]:[])])
+function navigate(id:string){if(id==='conversations'){historySession.value='';historyAnchor.value=''};page.value=id}
+function openConversation(id:string){historySession.value=id;historyAnchor.value='';page.value='conversations'}
+async function openSource(id:string){await run(async()=>{page.value='explorer';await loadSource(id);await nextTick();document.querySelector('.source-panel')?.scrollIntoView({block:'start',behavior:'smooth'})})}
+watch(page,value=>{window.location.hash=value;window.scrollTo({top:0})})
 const claims = ref<any[]>([]), slots = ref<any[]>([]), selected = ref<any>(null), history = ref<any[]>([])
 const sessions = ref<any[]>([]), messages = ref<any[]>([]), source = ref<any>(null), sourceID = ref('')
 const filter = ref(''), status = ref('all'), analysis = ref<any>(null), result = ref<any>(null)
@@ -16,33 +33,22 @@ const runs = ref<any[]>([]), runDetail = ref<any>(null), unavailableRuns = ref(0
 const pretty = (v: any) => JSON.stringify(v, null, 2)
 const labels: Record<string, string> = {residence:'居住地', occupation:'职业', school:'学校', response_language:'回答语言', response_detail:'回答详细度', diet:'饮食', work_habit:'工作习惯', hobby:'爱好', learning_goal:'学习目标', project_goal:'项目目标', time_preference:'时间偏好', budget:'预算'}
 const visible = computed(() => claims.value.filter(c => (status.value === 'all' || c.status === status.value) && `${c.predicate} ${c.value ?? ''} ${c.id}`.includes(filter.value)))
-function clear() {
-  api.reset(); user.value = null; claims.value = []; slots.value = []; selected.value = null; history.value = []
+function clearData() {
+  summary.value=null;historySession.value='';historyAnchor.value=''; claims.value = []; slots.value = []; selected.value = null; history.value = []
   sessions.value = []; messages.value = []; source.value = null; sourceID.value = ''; analysis.value = null; result.value = null
   query.value = ''; context.value = '{}'; fact.value = ''; recorded.value = ''; subject.value = 'self';
-  draftValue.value = ''; draftScope.value = '{}'; reason.value = ''; confirmOpen.value = false; password.value = ''
+  draftValue.value = ''; draftScope.value = '{}'; reason.value = ''; confirmOpen.value = false
   runs.value = []; runDetail.value = null; unavailableRuns.value = 0
-  factStart.value = ''; precision.value = 'unknown'; filter.value = ''; status.value = 'all'; username.value = ''
+  factStart.value = ''; precision.value = 'unknown'; filter.value = ''; status.value = 'all'
 }
-api.onUnauthorized = clear
-async function run(fn: () => Promise<void>) {
-  if (busy.value) return
-  busy.value = true; error.value = ''
-  try { await fn() } catch (e) { if (!(e instanceof SessionChanged) && (e as Error).name !== 'AbortError') error.value = (e as Error).message }
-  finally { busy.value = false }
+async function refresh() {
+  const [state,records,fields,conversationList]=await Promise.all([api.request('/studio/summary'),api.request('/claims?limit=500'),api.request('/claim-slots'),api.request('/sessions')])
+  summary.value=state;claims.value=records;slots.value=fields.slots;sessions.value=conversationList
 }
-async function refresh() { claims.value = await api.request('/claims?limit=500'); slots.value = (await api.request('/claim-slots')).slots; sessions.value = await api.request('/sessions') }
-async function login() {
-  await run(async () => {
-    try { const login = await api.request('/auth/login', {username: username.value, password: password.value}); user.value = login.user; await refresh() }
-    finally { password.value = '' }
-  })
-}
-async function logout() { await run(async () => { try { await api.request('/auth/logout', {}) } finally { clear() } }) }
 async function choose(c: any) { await run(async () => { selected.value = await api.request('/claims/' + c.id); history.value = await api.request('/claims/' + c.id + '/history'); analysis.value = null }) }
 async function loadSource(id = sourceID.value) { source.value = null; source.value = await api.request('/claim-source/' + encodeURIComponent(id)); sourceID.value = id }
 function evidenceParts(e: any) { return source.value && source.value.message_id === e.message_id && source.value.evidence.content_sha256 === e.content_sha256 ? sourceParts(source.value.content, e.start, e.end) : null }
-async function inspectEvidence(id: string) { await run(() => loadSource(id)) }
+async function inspectEvidence(id: string) { await run(async()=>{await loadSource(id);historySession.value=source.value.session_id;historyAnchor.value=id;page.value='conversations'}) }
 function propose(action: string) { decision.value = action; reason.value = ''; confirmOpen.value = true }
 async function applyDecision() { await run(async () => {
   const c = selected.value
@@ -86,33 +92,35 @@ watch([query,mode,selector,budget,topK,predicate,context,fact,recorded,subject,p
 watch(sourceID, () => { if (source.value?.message_id !== sourceID.value) source.value = null })
 async function loadRuns() { await run(async () => { const records = await api.request('/research-runs'); runs.value = records.runs; unavailableRuns.value = records.unavailable }) }
 async function inspectRun(id: string) { await run(async () => { runDetail.value = null; runDetail.value = await api.request('/research-runs/' + id) }) }
-onMounted(() => run(async () => { user.value = await api.request('/auth/me'); await refresh() }))
+function hashChanged(){const value=window.location.hash.slice(1);if(headings[value]&&(value!=='accounts'||user.value?.role==='superadmin'))page.value=value}
+watch(user,value=>{if(value&&page.value==='accounts'&&value.role!=='superadmin')page.value='overview'})
+onMounted(()=>window.addEventListener('hashchange',hashChanged))
+onUnmounted(()=>window.removeEventListener('hashchange',hashChanged))
 </script>
 
 <template>
   <div class="studio">
     <aside class="sidebar">
-      <a class="brand" href="/studio/"><span class="brand-icon">m</span><span>memoria<small>MEMORY STUDIO</small></span></a>
-      <div class="workspace-label">记忆工作空间</div>
-      <nav aria-label="模块">
-        <button v-for="(name, id) in {explorer:'记忆浏览与审核', temporal:'双时间与变化', retrieval:'检索实验室', evaluation:'评测运行记录'}" :key="id" :class="{active:page===id}" @click="page=id"><span>{{ id==='explorer'?'◈':id==='temporal'?'◷':id==='evaluation'?'▤':'⌕' }}</span>{{ name }}</button>
-      </nav>
+      <a class="brand" href="/studio/"><span class="brand-icon">m</span><span>memoria<small>MEMORY WORKSPACE</small></span></a>
+      <div class="workspace-label">MEMORIA CONSOLE</div>
+      <div class="portal-switch"><a href="/">返回 Chat ↗</a><a href="/studio/" class="selected">管理后台</a></div>
+      <nav aria-label="模块"><button v-for="item in navigation" :key="item.id" :class="{active:page===item.id}" @click="navigate(item.id)"><span class="nav-icon">{{ item.icon }}</span><span class="nav-label">{{ item.label }}</span><span v-if="item.count!==undefined" class="nav-count">{{ item.count }}</span></button></nav>
       <div class="sidebar-note"><span class="dot"></span> 来源优先，审核后生效<p>原话、候选与已批准状态分别展示。未知时间保持未知。</p></div>
       <a href="/docs" target="_blank" rel="noopener noreferrer" class="docs-link">API 文档 ↗</a>
     </aside>
     <main>
-      <header><div><span class="eyebrow">MEMORIA / {{ page.toUpperCase() }}</span><h1>{{ page==='explorer'?'让每一条记忆都有来处':page==='temporal'?'理解变化，也保留当时所知':page==='evaluation'?'保留每次运行的证据':'看见一次访问如何发生' }}</h1></div>
-        <div v-if="user" class="account"><el-tag>{{ user.username }}</el-tag><el-button :disabled="busy" @click="logout">退出登录</el-button></div>
+      <header class="console-header"><div><div class="breadcrumb">Memoria <span>/</span> 管理后台 <span>/</span> {{ headings[page] }}</div><h1>{{ headings[page] }}</h1></div>
+        <div v-if="user" class="account"><div class="user-avatar">{{ user.username.slice(0,1).toUpperCase() }}</div><div class="account-label"><strong>{{ user.username }}</strong><span>{{ user.role==='superadmin'?'超级管理员':'个人工作空间' }}</span></div><el-button @click="logout" :disabled="busy">退出 / 切换账号</el-button></div>
       </header>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="notice" />
-      <section v-if="!user" class="login card">
-        <span class="eyebrow">你的私密记忆空间</span><h2>登录工作室</h2><p>访问本账号的来源、候选与版本。不同账号的数据独立保存。</p>
-        <form @submit.prevent="login"><label>用户名<el-input v-model="username" autocomplete="username" /></label><label>密码<el-input v-model="password" type="password" autocomplete="current-password" /></label><el-button native-type="submit" type="primary" :loading="busy">登录</el-button></form>
-        <small>首次账号可通过 API 注册；工作室不会保存明文密码或令牌。</small>
-      </section>
+      <AuthPanel v-if="!user" :account="account" />
       <template v-else>
-        <div class="summary-row"><div><strong>{{ claims.length }}</strong><span>当前 Claim · 最多载入 500 条</span></div><div><strong>{{ claims.filter(c=>c.status==='pending').length }}</strong><span>待审核候选</span></div><div><strong>{{ sessions.length }}</strong><span>可见来源会话</span></div><p>公开语料属于实验空间，<br>不等于当前用户的个人事实。</p></div>
-        <template v-if="page==='explorer'">
+        <ConsoleHome v-if="page==='overview'" :summary="summary" :username="user.username" @open="navigate" @conversation="openConversation" />
+        <HistoryBrowser v-else-if="page==='conversations'" :key="user.id+historySession" :api="api" :initial-session="historySession" :initial-anchor="historyAnchor" @source="openSource" @changed="refresh" />
+        <PendingReviews v-else-if="page==='reviews'" :key="user.id" :api="api" @changed="refresh" />
+        <MemoryInventory v-else-if="page==='memories'" :key="user.id" :api="api" @open="navigate" @source="openSource" />
+        <AccountsPanel v-else-if="page==='accounts'&&user.role==='superadmin'" :key="user.id" :api="api" />
+        <template v-else-if="page==='explorer'">
           <div class="explorer-grid">
             <section class="card list-panel"><div class="section-title"><h2>记忆索引</h2><el-button :disabled="busy" @click="run(refresh)">刷新</el-button></div>
               <el-input v-model="filter" placeholder="搜索值、槽位或 ID" clearable />
@@ -153,7 +161,7 @@ onMounted(() => run(async () => { user.value = await api.request('/auth/me'); aw
           </template><section v-else class="card empty"><span>⌕</span><h3>从一次可解释的查询开始</h3><p>结果展示真实路径与缺项，尚未评测的质量收益不会显示为成绩。</p></section>
         </template>
       </template>
-      <footer>Memoria Studio · 证据、状态与变化 · 数据来自当前登录账号</footer>
+      <footer>Memoria · 会话、证据与长期记忆 · 仅展示当前登录账号的数据</footer>
     </main>
     <el-dialog v-model="confirmOpen" title="明确执行审核决定" width="480px"><p>{{ decision }} · {{ selected?.predicate }} · revision {{ selected?.revision }}</p><p>请核对原话、主体、条件与时间；模型建议不代表事实已经验证。</p><label>原因<el-input v-model="reason" type="textarea" maxlength="500" /></label><template #footer><el-button @click="confirmOpen=false">取消</el-button><el-button type="primary" :disabled="!reason.trim()" :loading="busy" @click="applyDecision">确认 {{ decision }}</el-button></template></el-dialog>
   </div>

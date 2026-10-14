@@ -14,8 +14,8 @@
 # 受影响范围示例
 .\.venv\Scripts\python.exe -m pytest -q tests/test_user_privacy.py tests/test_claims.py tests/test_memory_studio.py
 .\.venv\Scripts\python.exe -m pytest -q tests/test_research_workflow.py tests/test_source_retrieval.py
-# 前端测试单独在 studio 操作
-Push-Location studio
+# 两端共享的前端测试在 frontend 操作
+Push-Location frontend
 npm ci
 npm test
 npm run build

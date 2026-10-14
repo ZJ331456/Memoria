@@ -52,6 +52,10 @@ analyze新增use_relation_model/peer_limit及核验/关系/4类影子策略；ex
 .\.venv\Scripts\python.exe -m pytest -q tests/test_memory_review.py tests/test_mcp_lifecycle.py
 ```
 
-这些测试验证权限、契约与事务，不证明真实 reader 效果或部署可用性。Studio 构建与使用见 [studio/](../../studio/README.md)。
+这些测试验证权限、契约与事务，不证明真实 reader 效果或部署可用性。Studio 构建与使用见 [frontend/](../../frontend/README.md)。
 
 2026-10-13新回答契约及完整请求预算见[实现说明](../../docs/implemented/完整Reader预算与生产引用校验.md)；[test_reader_contract.py](../../tests/test_reader_contract.py)验证新接口登录/Origin/身份参数拒绝。引用通过不标为语义正确，旧memory-query不自动发起reader调用。
+
+本机未提交扩展：登录/me返回服务端role；/api/admin/users及/api/admin/users/{username}/password仅superadmin可用，普通用户403，匿名401。角色只由本机CLI授予，账号内数据仍按UUID隔离，密码修改撤销会话并写无凭据审计。[本机角色说明](../../docs/implemented/用户登录与数据隔离.md#本机qin账号与超级管理员2026-10-14仅本地未提交)。
+
+通用前后台的只读投影见[studio.py](studio.py)：summary、conversations、conversations/{id}/messages、memories，均挂在/api/studio且走当前租户网关。标题/全文字面搜索、来源筛选、页面总量和原话锚点不调用模型；正文保留原content，阅读投影独立。根地址独立Chat与后台/studio/共用Cookie；普通API根JSON保留，/app/已移除。源码和构建已迁至frontend，静态资源从/assets/提供。跨账号ID404，最多100条/页；[详见当前Studio说明](../../docs/implemented/MemoryStudio与统一记忆访问.md#通用前后台与历史资料后台2026-10-14)。

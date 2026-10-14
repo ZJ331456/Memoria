@@ -46,13 +46,10 @@ if (-not $taskLocked) { throw 'Another backend lifecycle command is running. Ret
 $taskExisting = Get-OwnedBackend
 if ($Action -eq 'Stop') {
     if ($taskExisting) {
-        # A Windows venv redirector may have a child Python process. Match the exact
-        # owned command as well as ParentProcessId before terminating that child.
-        $taskOwnedInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $($taskExisting.Id)"
-        Get-CimInstance Win32_Process -Filter "ParentProcessId = $($taskExisting.Id)" | Where-Object {
-            $_.CommandLine -eq $taskOwnedInfo.CommandLine
-        } | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
-        Stop-Process -Id $taskExisting.Id -ErrorAction SilentlyContinue
+        # Ownership was checked above. Stop this process tree, including the venv
+        # redirector and MCP bridges/servers, without killing unrelated Python/Node.
+        $taskStopOutput = & "$env:SystemRoot\System32\taskkill.exe" /PID $taskExisting.Id /T /F 2>&1
+        if ($LASTEXITCODE -ne 0) { throw 'Could not stop the complete backend process tree. Inspect the managed process before retrying.' }
         $taskExisting.WaitForExit(5000) | Out-Null
         Write-Host 'Backend stopped.'
     } else { Write-Host 'No managed backend is running.' }
@@ -65,7 +62,7 @@ if ($Action -eq 'Status') {
     exit 0
 }
 if ($taskExisting) {
-    if (Test-BackendHealth) { Write-Host "Backend already running: $taskUrl/studio/ (PID=$($taskExisting.Id))"; exit 0 }
+    if (Test-BackendHealth) { Write-Host "Backend already running: $taskUrl/ (Chat); $taskUrl/studio/ (Studio); PID=$($taskExisting.Id)"; exit 0 }
     throw 'Managed process exists but health check failed. Inspect logs; use -Action Stop before restarting.'
 }
 if (-not (Test-Path -LiteralPath $taskPython -PathType Leaf)) { throw 'Project .venv is missing; follow README environment setup.' }
@@ -89,11 +86,13 @@ $taskDeadline = (Get-Date).AddSeconds($TimeoutSeconds)
 do {
     if ($taskStarted.HasExited) { throw "Backend exited. Inspect $taskErr" }
     if (Test-BackendHealth) {
-        Write-Host "Backend ready: $taskUrl/studio/ (PID=$($taskStarted.Id))"
+        Write-Host "Chat ready: $taskUrl/ (PID=$($taskStarted.Id))"
+        Write-Host "Memory Studio: $taskUrl/studio/"
         Write-Host "API docs: $taskUrl/docs"
         Write-Host "Logs: $taskLogs"
-        if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'studio\dist\index.html'))) {
-            Write-Warning 'Studio is not built. API is ready; follow README npm ci / npm run build, then restart.'
+        if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\studio\index.html')) -or
+            -not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\chat\index.html'))) {
+            Write-Warning 'Frontend is not built. Run build_frontend.cmd from the repository root, then restart the backend.'
         }
         exit 0
     }

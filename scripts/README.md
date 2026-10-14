@@ -6,7 +6,7 @@
 
 ## 一键业务后台
 
-双击根目录[start_backend.cmd](../start_backend.cmd)，或`.\start_backend.cmd`；`-Action Status`/`-Action Stop`查看或停止该脚本的进程。内部[backend.ps1](backend.ps1)仅用项目venv、私密配置、loopback和隐藏窗口，日志在忽略的data/logs/system，端口占用不另起/误杀。首次依赖和Studio先准备，本地HTTP模型8080仍独立启动。[完整使用及真实验证](../docs/implemented/本机后台启动与停止.md)。
+双击根目录[start_backend.cmd](../start_backend.cmd)启动，[stop_backend.bat](../stop_backend.bat)关闭；`start_backend.cmd -Action Status`查看状态。关闭时先校验根进程归属，再结束业务及其MCP子进程树。内部[backend.ps1](backend.ps1)仅用项目venv、私密配置、loopback和隐藏窗口，日志在忽略的data/logs/system，端口占用不另起/误杀。首次依赖及Chat/Studio统一构建先准备（根[build_frontend.cmd](../build_frontend.cmd)，内部[frontend.ps1](frontend.ps1)），本地HTTP模型8080仍独立启动。[完整使用及真实验证](../docs/implemented/本机后台启动与停止.md)。
 
 ## 环境与模型
 
@@ -80,3 +80,5 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 LoCoMo渲染器写标准LF并规范SVG行尾，图源SHA与Git实际blob一致，PNG/SVG可重绘复核；数值和原始实验不改。
 
 `render_locomo_risk_chart.py`只读取公开四方法聚合，生成质量/拒答和已知Token双面板PNG/SVG及SHA指纹，不读私有gold或增加模型调用；完整1986题结果与负面取舍见[评测图说明](../docs/assets/evaluation/README.md#p0四方法全量消融2026-10-14)。`locomo-compare`离线核验同题/Reader/BGE与祖先调用费用，不覆盖同名冻结比较目录。
+
+本机未提交账号管理：manage_users.py新增set-role USER --role user|superadmin、disable-login USER。角色变更撤销会话，保留最后超管；停用只撤销登录，不删除个人数据。set-password继续隐藏输入12–128字符，无短密码例外。[权限边界](../docs/implemented/用户登录与数据隔离.md#本机qin账号与超级管理员2026-10-14仅本地未提交)。

@@ -1,6 +1,6 @@
 # Memory Review：普通个人记忆审查
 
-[技能目录](../README.md) · [指令](SKILL.md) · [记忆引擎](../../memoria/memory/README.md) · [Memory Studio](../../studio/README.md)
+[技能目录](../README.md) · [指令](SKILL.md) · [记忆引擎](../../memoria/memory/README.md) · [Memory Studio](../../frontend/studio/README.md)
 
 recall_memory 抽查过时/冲突/琐碎普通记忆，必要时同义检索。先预览保留/更新/删除及理由，明确确认后才按 ToolPolicy 调用 memorize/forget_memory。
 

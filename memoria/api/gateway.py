@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.requests import Request as ASGIRequest
@@ -28,6 +28,11 @@ COOKIE = "memoria_session"
 class Credentials(BaseModel):
     model_config = ConfigDict(extra="forbid")
     username: str = Field(min_length=3, max_length=32)
+    password: str = Field(min_length=12, max_length=128)
+
+
+class NewPassword(BaseModel):
+    model_config = ConfigDict(extra='forbid')
     password: str = Field(min_length=12, max_length=128)
 
 
@@ -172,7 +177,9 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers.setdefault("X-Request-ID", uuid.uuid4().hex)
-        if request.url.path.startswith("/studio/"):
+        identity=getattr(request.state,'user',None)
+        if identity:response.headers['X-Memoria-User']=identity['id']
+        if request.url.path == '/' or request.url.path.startswith(("/studio/", "/assets/")):
             response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
         return response
 
@@ -184,6 +191,13 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         user = accounts.authenticate(session_token(request))
         if not user:
             raise HTTPException(401, "请先登录")
+        request.state.user=user
+        return user
+
+    def current_superadmin(request):
+        user=current_user(request)
+        if user['role']!='superadmin':
+            raise HTTPException(403,'需要超级管理员权限')
         return user
 
     def check_rate(request, username):
@@ -226,14 +240,35 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         accounts.logout(session_token(request))
         response.delete_cookie(COOKIE, path="/")
 
+    @app.get('/api/admin/users', tags=['admin'])
+    def admin_users(request: Request):
+        current_superadmin(request)
+        return accounts.list_accounts()
+
+    @app.put('/api/admin/users/{username}/password', status_code=204, tags=['admin'])
+    async def admin_password(username: str, body: NewPassword, request: Request):
+        actor=current_superadmin(request)
+        check_rate(request,actor['username'])
+        try:
+            async with password_slots:
+                await asyncio.to_thread(accounts.reset_password_as_superadmin,session_token(request),username,body.password)
+        except PermissionError:
+            raise HTTPException(403,'需要超级管理员权限')
+        except ValueError:
+            raise HTTPException(404,'账号不存在')
+
     @app.get("/api/health", tags=["system"])
     def health():
         return {"status": "ok", "version": VERSION, "login_required": True}
 
     @app.get("/", include_in_schema=False)
-    def index():
+    def index(request: Request):
+        if 'text/html' in request.headers.get('accept',''):
+            if chat_index.is_file():
+                return FileResponse(chat_index, headers={'Cache-Control':'no-cache'})
+            return frontend_not_built()
         return {"service": "Memoria-Agent", "docs": "/docs", "health": "/api/health",
-                "studio": "/studio/",
+                "studio": "/studio/", "chat": "/",
                 "register": "/api/auth/register", "login": "/api/auth/login"}
 
     # Build schema without opening the legacy database or warming a tenant/model.
@@ -251,13 +286,22 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
                         if isinstance(operation, dict): operation["security"] = [{"UserSession": []}]
         return app.openapi_schema
     app.openapi = openapi
-    studio = Path(__file__).resolve().parents[2] / "studio" / "dist"
-    if (studio / "index.html").is_file():
+    frontend = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+    chat_index = frontend / 'chat' / 'index.html'
+    def frontend_not_built():
+        return JSONResponse({'message':'请先在 frontend 目录执行 npm ci 和 npm run build，再重启服务'}, status_code=503)
+    if (frontend / "studio" / "index.html").is_file():
         # Public shell only; all data still passes authenticated tenant dispatch.
-        app.mount("/studio", StaticFiles(directory=studio, html=True), name="memory-studio")
+        app.mount("/studio", StaticFiles(directory=frontend / 'studio', html=True), name="memory-studio")
     else:
         @app.get("/studio/", include_in_schema=False)
         def studio_not_built():
-            return JSONResponse({"message": "请先在 studio 目录执行 npm ci 和 npm run build，再重启服务"}, status_code=503)
+            return frontend_not_built()
+    if (frontend / 'assets').is_dir():
+        app.mount('/assets', StaticFiles(directory=frontend / 'assets'), name='frontend-assets')
+    @app.get('/app', include_in_schema=False)
+    @app.get('/app/', include_in_schema=False)
+    def retired_workspace():
+        return JSONResponse({'message':'旧工作台已移除；聊天请访问 /，管理请访问 /studio/'},status_code=404)
     app.mount("/", PrivateDispatch(accounts, pool))
     return app

@@ -2,7 +2,7 @@
 
 [English](README.en.md) · [文档导航](docs/README.md) · [研究与实验计划](docs/plans/长期陪伴记忆研究与实验计划书.md) · [AI 协作约定](AGENTS.md)
 
-面向小模型长期陪伴的记忆管理项目：保存原话证据、审核候选、管理条件与变化，在有限上下文中访问适用记忆。入口为 HTTP API、Memory Studio 和研究 CLI，本地 Qwen/BGE 与远程模型使用统一的 OpenAI 兼容业务接口。
+面向小模型长期陪伴的记忆管理项目：保存原话证据、审核候选、管理条件与变化，在有限上下文中访问适用记忆。入口为独立 Chat、Memory Studio、HTTP API 和研究 CLI，本地 Qwen/BGE 与远程模型使用统一的 OpenAI 兼容业务接口。
 
 **当前定位：本机研究原型与受控试用基础。** 已有记忆治理、工程保护与下述LoCoMo全量评测；真实连续人物长期效果、正向画像视图收益及正式商业发布验收尚未完成。下一步算法、存储、安全和运维验收见[研究与商用计划](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
 
@@ -43,6 +43,8 @@
 </details>
 
 ## 首次准备环境
+
+前端源码统一位于[frontend](frontend/README.md)：`chat/`独立聊天、`studio/`管理后台、`shared/`共用登录/API。一套依赖和构建，旧/app/工作台已移除；聊天页只列个人原生对话，公开导入资料在Studio查看。
 
 以下为 **Windows PowerShell**，除注明外从仓库根执行，无需激活.venv。本机路径为`C:\Users\zero\Desktop\Memory-Project\Memoria-Agent`，新机器先获取仓库：
 
@@ -118,21 +120,22 @@ Invoke-RestMethod http://127.0.0.1:8080/v1/models
 
 ## 构建Studio、启动2237业务
 
-已有`.venv`、私密配置和Studio构建时，双击根目录[start_backend.cmd](start_backend.cmd)，或执行：
+已有`.venv`、私密配置和Chat/Studio构建时，双击根目录[start_backend.cmd](start_backend.cmd)，或执行：
 
 ```powershell
 .\start_backend.cmd
+.\stop_backend.bat
 # 查看 / 停止同一脚本管理的进程
 .\start_backend.cmd -Action Status
 .\start_backend.cmd -Action Stop
 ```
 
-后台隐藏运行，访问http://127.0.0.1:2237/studio/；日志在`data/logs/system/`。端口已有其他服务时会提示占用，不重复启动或误杀。脚本只启动业务API；方案B的8080模型服务仍需先准备，首次构建步骤见下文。[配置、端口与停止说明](docs/implemented/本机后台启动与停止.md)。
+后台隐藏运行，根地址http://127.0.0.1:2237/进入Chat，http://127.0.0.1:2237/studio/进入后台；日志在`data/logs/system/`。双击[stop_backend.bat](stop_backend.bat)关闭业务及其MCP子进程；端口已有其他服务时会提示占用，不重复启动或误杀。脚本启动业务服务并托管已构建的两套界面；方案B的8080模型服务仍需先准备，首次构建步骤见下文。[配置、端口与停止说明](docs/implemented/本机后台启动与停止.md)。
 
 先构建，再在**终端二**启动；方案A无需另起8080。
 
 ```powershell
-Push-Location studio
+Push-Location frontend
 npm ci --cache .npm-cache
 npm run build
 Pop-Location
@@ -141,21 +144,21 @@ Pop-Location
 
 | 地址 | 用途 |
 | --- | --- |
-| http://127.0.0.1:2237/studio/ | Memory Studio登录与记忆管理 |
+| http://127.0.0.1:2237/ | 独立Chat：个人聊天、新对话、流式回复与停止生成 |
+| http://127.0.0.1:2237/studio/ | 管理后台：数据总览、历史搜索、记忆/候选与来源核对 |
 | http://127.0.0.1:2237/docs | Swagger接口契约 |
 | http://127.0.0.1:2237/api/health | 业务进程存活，匿名可读 |
-| http://127.0.0.1:2237/ | JSON导航 |
 | http://127.0.0.1:8080/v1/models | 方案B独立模型服务 |
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:2237/api/health
 ```
 
-Studio503时先构建再重启；端口占用先核对已有服务，不重复起两份。修改模型override后重启业务。当前按单个业务进程运行，多worker租户生命周期、任务和MCP协调尚未验收。
+Chat/Studio503时先构建再重启；可双击[build_frontend.cmd](build_frontend.cmd)一次构建两端，源码分工见[frontend](frontend/README.md)。端口占用先核对已有服务，不重复起两份。修改模型override后重启业务。当前按单个业务进程运行，多worker租户生命周期、任务和MCP协调尚未验收。
 
 ### 首次账号与登录
 
-Studio有登录，没有注册页面；新机器可本机隐藏输入建立自己的账号：
+独立Chat与Studio共用登录/注册入口，切换账号会清空旧资料，分别读取各自数据；新机器也可在本机隐藏输入建立自己的账号：
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/manage_users.py reserve your_username
@@ -169,12 +172,12 @@ Studio有登录，没有注册页面；新机器可本机隐藏输入建立自�
 API保持运行，在第三个终端：
 
 ```powershell
-Push-Location studio
+Push-Location frontend
 npm ci --cache .npm-cache
 npm run dev
 ```
 
-访问http://127.0.0.1:5173/studio/，/api代理到2237；部署模式只需构建产物和2237，不需要Vite开发进程。
+Chat访问http://127.0.0.1:5173/，Studio访问http://127.0.0.1:5173/studio/，/api代理到2237；部署模式只需构建产物和2237，不需要Vite开发进程。
 
 ## 可选MCP与公开诊断来源
 

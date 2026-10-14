@@ -26,11 +26,11 @@ htmlcov/
 venv/
 .mcp/
 
-# 本机旧前端构建/依赖缓存（源码已移除）
-frontend/
-studio/node_modules/
-studio/dist/
-studio/.npm-cache/
+# 前端共享依赖与构建产物，Chat/Studio源码正常跟踪
+frontend/node_modules/
+frontend/dist/
+frontend/.npm-cache/
+frontend/*.tsbuildinfo
 npm-debug.log*
 
 # IDE / OS / local runtime

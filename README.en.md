@@ -38,7 +38,7 @@ Production defaults remain. Optional `use_answer_risk` enables pre/post checks; 
 
 ## Local setup and startup
 
-After preparing `.venv`, private `config.toml` and the Studio build, double-click [start_backend.cmd](start_backend.cmd), or run `.\start_backend.cmd` from the repository root. Use `-Action Status` / `-Action Stop` to manage its own background process. It binds `127.0.0.1:2237`, logs to ignored `data/logs/system/`, and refuses occupied ports. The local HTTP model service remains a separate dependency. See [launcher details](docs/implemented/本机后台启动与停止.md).
+After preparing `.venv`, private `config.toml` and the Studio build, double-click [start_backend.cmd](start_backend.cmd), or run `.\start_backend.cmd` from the repository root. Double-click [stop_backend.bat](stop_backend.bat) to stop the owned backend process tree, including its MCP children. Use `start_backend.cmd -Action Status` to check status; the existing `-Action Stop` command also remains available. It binds `127.0.0.1:2237`, logs to ignored `data/logs/system/`, and refuses occupied ports. The local HTTP model service remains a separate dependency. See [launcher details](docs/implemented/本机后台启动与停止.md).
 
 Run from the repository root in Windows PowerShell. Preserve an existing private configuration and use the project virtual environment.
 
@@ -46,14 +46,14 @@ Run from the repository root in Windows PowerShell. Preserve an existing private
 if (-not (Test-Path .venv\Scripts\python.exe)) { python -m venv .venv }
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
-Push-Location studio
+Push-Location frontend
 npm ci --cache .npm-cache
 npm run build
 Pop-Location
 .\.venv\Scripts\python.exe main.py --config config.toml --host 127.0.0.1 --port 2237
 ```
 
-Open `http://127.0.0.1:2237/studio/`; `/docs` exposes the API contracts and `/api/health` checks process liveness. Studio must be built before starting/restarting the service. It currently offers login, without a signup page:
+Open `http://127.0.0.1:2237/` for standalone Chat and `http://127.0.0.1:2237/studio/` for administration; `/docs` exposes the API contracts and `/api/health` checks process liveness. Studio must be built before starting/restarting the service. Chat and Studio share login/signup and an HttpOnly session. Each account sees its own data. Local account setup is also available:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/manage_users.py reserve your_username
@@ -69,7 +69,7 @@ Choose either remote main/fast with in-process local BGE (`local://auto`), or th
 .\.venv\Scripts\python.exe scripts/serve_local_llm.py --model model/Qwen3.5-2B --embedding-model model/bge-small-zh-v1.5 --device cuda --port 8080 --max-context-tokens 8192 --warmup
 ```
 
-MCP and source import are optional, not part of the minimal startup. See [scripts](scripts/README.md), [Studio](studio/README.md), [MCP](docs/implemented/MCP部署与授权.md) and [data provenance](datasets/README.md). No default credentials or synthetic production profiles are included.
+MCP and source import are optional, not part of the minimal startup. See [scripts](scripts/README.md), [frontend](frontend/README.md), [MCP](docs/implemented/MCP部署与授权.md) and [data provenance](datasets/README.md). No default credentials or synthetic production profiles are included.
 
 ## Next work and commercial readiness
 
@@ -80,3 +80,5 @@ Per-user SQLite/WAL is the current storage design. Verified backup/restore, vers
 Source manifests belong in [datasets/](datasets/README.md); raw benchmarks, private gold and per-case artifacts stay in ignored data/. Public aggregates and charts live in [docs/assets/evaluation/](docs/assets/evaluation/README.md). Secrets and model weights remain local; old personal history stays unimported. See [AI instructions](AGENTS.md) and [GitHub conventions](docs/implemented/github提交规范.md).
 
 The four-method table remains the frozen v2 result. The v3 contract-repair, Reader/support reservation and truncated-verifier handling have only engineering validation (88 related tests plus two Windows launcher safety tests). No benchmark or model call was rerun; the historical one-case failure and scores remain unchanged. Higher adversarial phrase score is preferable on that unanswerable subset only; it does not establish semantic correctness and must be assessed together with ordinary F1, unnecessary refusals and total cost.
+
+Independent Chat and Studio: `/` serves a dedicated conversation interface; `/studio/` serves administration. Sources live under `frontend/chat`, `frontend/studio` and `frontend/shared`, with one package/lock and two HTML entries. The old `/app/` workspace is removed. Chat lists native conversations; imported public material remains in Studio. Both reuse the authenticated tenant gateway and shared account lifecycle. Run [build_frontend.cmd](build_frontend.cmd) before starting/restarting the backend. No benchmark or paid model generation was rerun by this interface change.

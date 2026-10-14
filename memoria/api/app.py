@@ -27,6 +27,7 @@ from ..store import MemorySourceUnavailable, MemoryVersionConflict, Store, norma
 from .governance import governance_router
 from .claims import claims_router
 from .research_runs import research_runs_router
+from .studio import studio_router
 
 MemoryKind = Literal["fact", "preference", "profile", "goal", "procedure"]
 
@@ -353,6 +354,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     app.state.governance = governance
     app.include_router(claims_router(service.claims if service else None,service.llm if service else None,
                                      service.runtime.memory if service else None))
+    app.include_router(studio_router(store,service.claims if service else None))
     experiment_owner = settings.database.parent.parent
     app.include_router(research_runs_router(experiment_owner / "experiments" if experiment_owner.name == tenant_user_id else None,
                                             tenant_user_id))
