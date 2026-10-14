@@ -171,3 +171,16 @@ def test_retrieval_does_not_run_document_backfill(tmp_path):
     assert asyncio.run(engine.retrieve('工程冷索引'))[0]['id']==memory['id']
     assert store.memory(memory['id'])['embedding'] is None
     store.close()
+
+
+def test_reordered_chinese_bigrams_find_low_priority_memory_outside_window(tmp_path):
+    store=Store(tmp_path/'bigram.db','json')
+    target=store.add_memory('茶偏好是龙井','preference',1)
+    for i in range(105): store.add_memory('无关工程记录'+str(i),importance=5)
+    engine=MemoryEngine(store,vector_scan_limit=100)
+    for mode in ('keyword','bm25','rrf'):
+        assert asyncio.run(engine.retrieve('龙井偏好',mode=mode,expand_graph=False))[0]['id']==target['id']
+    old=store.correct_memory(target['id'],'茶偏好是碧螺春','preference',1,'工程纠正')
+    assert not asyncio.run(engine.retrieve('龙井',mode='bm25',expand_graph=False))
+    assert asyncio.run(engine.retrieve('碧螺春',mode='bm25',expand_graph=False))[0]['id']==old['id']
+    store.close()

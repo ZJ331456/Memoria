@@ -48,6 +48,8 @@ class Store:
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.create_function('memoria_sha256',1,lambda text: hashlib.sha256(text.encode()).hexdigest(),deterministic=True)
+        self.db.create_function('memoria_bm25',5,lambda tf,length,average,n,df:
+            math.log(1+(n-df+0.5)/(df+0.5))*tf*2.2/(tf+1.2*(0.25+0.75*length/max(1.0,average))),deterministic=True)
         self.lock = threading.RLock()
         self.embedding_namespace = "legacy"
         self.vector_backend = vector_backend
@@ -428,6 +430,18 @@ class Store:
             self.vector_index.upsert(memory_id, vector)
 
     def _init_fts(self) -> None:
+        self.db.executescript('''
+            CREATE TABLE IF NOT EXISTS memory_lexical_stats(
+                memory_id TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
+                token_count INTEGER NOT NULL, content_sha256 TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS memory_terms(
+                memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+                token TEXT NOT NULL, tf INTEGER NOT NULL, PRIMARY KEY(memory_id,token));
+            CREATE INDEX IF NOT EXISTS idx_memory_terms_token ON memory_terms(token,memory_id);
+        ''')
+        for row in self.db.execute('SELECT m.id,m.content FROM memories m LEFT JOIN memory_lexical_stats s ON s.memory_id=m.id '
+                'WHERE s.memory_id IS NULL OR s.content_sha256!=memoria_sha256(m.content)').fetchall():
+            self._index_lexical(row['id'],row['content'])
         try:
             self.db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(id UNINDEXED, content, tokenize='trigram')")
             self.db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(id UNINDEXED, content, tokenize='trigram')")
@@ -438,6 +452,15 @@ class Store:
         self._memory_fts_trigram = bool(definition and "trigram" in definition[0].lower())
         self.db.execute("INSERT INTO memories_fts(id,content) SELECT id,content FROM memories WHERE id NOT IN (SELECT id FROM memories_fts)")
         self.db.execute("INSERT INTO messages_fts(id,content) SELECT id,content FROM messages WHERE id NOT IN (SELECT id FROM messages_fts)")
+
+    def _index_lexical(self, memory_id: str, content: str):
+        from collections import Counter
+        from .memory.lexical import token_sequence
+        terms=Counter(token_sequence(content))
+        self.db.execute('DELETE FROM memory_terms WHERE memory_id=?',(memory_id,))
+        self.db.executemany('INSERT INTO memory_terms VALUES(?,?,?)',[(memory_id,t,tf) for t,tf in terms.items()])
+        self.db.execute('INSERT OR REPLACE INTO memory_lexical_stats VALUES(?,?,?)',
+            (memory_id,sum(terms.values()),hashlib.sha256(content.encode()).hexdigest()))
 
     def close(self) -> None:
         with self.lock:
@@ -891,6 +914,7 @@ class Store:
                 self.db.execute("INSERT INTO memory_source_dependencies(memory_id,message_id) VALUES(?,?)", (item['id'], source_ref))
             self._open_interval(item["id"], timestamp)
             self.db.execute("INSERT INTO memories_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
+            self._index_lexical(item['id'],item['content'])
             if embedding:
                 self._persist_embedding(item["id"], embedding, embedding_namespace)
             if embedding_chunks is not None:
@@ -1001,6 +1025,7 @@ class Store:
             self.db.execute('UPDATE memories SET content_key=? WHERE id=?',(self.memory_content_key(content),item['id']))
             self._open_interval(item["id"], timestamp)
             self.db.execute("INSERT INTO memories_fts(id,content) VALUES (?,?)", (item["id"], content))
+            self._index_lexical(item['id'],content)
             if embedding:
                 self._persist_embedding(item["id"], embedding, embedding_namespace)
             if embedding_chunks is not None:
@@ -1318,47 +1343,29 @@ class Store:
         return [dict(row) for row in rows]
 
     def keyword_memory_candidates(self, query: str, limit: int = 100, *, as_of: str | None = None) -> list[dict[str, Any]]:
+        from .memory.lexical import token_sequence
         if not query.strip() or limit <= 0:
             return []
-        timestamp = normalize_time(as_of) if as_of else None
-        scope, scope_params = self.retrieval_scope(as_of=as_of)
+        tokens=sorted(set(token_sequence(query)))[:256]
+        scope,params=self.retrieval_scope(as_of=as_of)
         with self.lock:
-            rows: list[sqlite3.Row] = []
-            try:
-                match = f'"{query.replace(chr(34), chr(34)*2)}"'
-                rows = self.db.execute(f"""SELECT m.* FROM memories_fts f JOIN memories m ON m.id=f.id
-                    WHERE memories_fts MATCH ? AND {scope}
-                    ORDER BY bm25(memories_fts),m.importance DESC LIMIT ?""", (match, *scope_params, limit)).fetchall()
-            except sqlite3.OperationalError:
-                pass
-            # A full question rarely occurs verbatim in a stored fact. Search its
-            # indexable fragments as well, including when the exact phrase matched
-            # only a few rows. Keep exact matches first and deduplicate by ID.
-            terms = self._memory_search_terms(query)
-            if terms and len(rows) < limit:
-                match = " OR ".join(f'"{term}"' for term in terms)
-                try:
-                    fragments = self.db.execute(f"""SELECT m.* FROM memories_fts f JOIN memories m ON m.id=f.id
-                        WHERE memories_fts MATCH ? AND {scope}
-                        ORDER BY bm25(memories_fts),m.importance DESC LIMIT ?""", (match, *scope_params, limit)).fetchall()
-                    seen = {row["id"] for row in rows}
-                    rows.extend(row for row in fragments if row["id"] not in seen)
-                except sqlite3.OperationalError:
-                    pass
-                if not self._memory_fts_trigram:
-                    # Older SQLite builds use the default FTS tokenizer, which
-                    # cannot match a Chinese three-character substring.
-                    where = " OR ".join("INSTR(lower(content), ?) > 0" for _ in terms)
-                    fragments = self.db.execute(
-                        f"SELECT m.* FROM memories m WHERE {scope} AND ({where}) "
-                        "ORDER BY importance DESC, updated_at DESC LIMIT ?",
-                        (*scope_params, *terms, limit),
-                    ).fetchall()
-                    seen = {row["id"] for row in rows}
-                    rows.extend(row for row in fragments if row["id"] not in seen)
-            if not rows:
-                rows = self.db.execute(f"SELECT m.* FROM memories m WHERE {scope} AND content LIKE ? ORDER BY importance DESC LIMIT ?", (*scope_params, f"%{query}%", limit)).fetchall()
-        return [self._memory_at(dict(row), timestamp) if timestamp else self._memory(dict(row)) for row in rows[:limit]]
+            if tokens:
+                placeholders=','.join('?' for _ in tokens)
+                rows=self.db.execute(f"""WITH eligible AS (
+                    SELECT m.id,s.token_count FROM memories m JOIN memory_lexical_stats s ON s.memory_id=m.id WHERE {scope}
+                ), corpus AS (SELECT COUNT(*) n,COALESCE(AVG(token_count),1) average FROM eligible),
+                df AS (SELECT t.token,COUNT(*) frequency FROM memory_terms t JOIN eligible e ON e.id=t.memory_id
+                    WHERE t.token IN ({placeholders}) GROUP BY t.token),
+                ranked AS (SELECT t.memory_id,SUM(memoria_bm25(t.tf,e.token_count,c.average,c.n,df.frequency)) score
+                    FROM memory_terms t JOIN eligible e ON e.id=t.memory_id JOIN df ON df.token=t.token CROSS JOIN corpus c
+                    GROUP BY t.memory_id)
+                SELECT m.*,r.score lexical_bm25_score FROM ranked r JOIN memories m ON m.id=r.memory_id
+                ORDER BY (INSTR(lower(m.content),lower(?))>0) DESC,r.score DESC,m.id LIMIT ?""",
+                    [*params,*tokens,query,limit]).fetchall()
+            else:
+                rows=self.db.execute(f'SELECT m.*,0.0 lexical_bm25_score FROM memories m WHERE {scope} AND content LIKE ? ORDER BY importance DESC LIMIT ?',
+                    [*params,'%'+query+'%',limit]).fetchall()
+            return [self._memory_at(dict(r),normalize_time(as_of)) if as_of else self._memory(dict(r)) for r in rows]
 
     @staticmethod
     def _memory_search_terms(query: str) -> list[str]:

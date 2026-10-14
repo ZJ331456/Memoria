@@ -13,11 +13,11 @@ from typing import Any
 from ..store import Store
 from .embedding import EmbeddingClient
 from .layer import MarkdownMemoryLayer
+from .lexical import token_sequence
 from ..observability.timing import StageTimings
 
 logger = logging.getLogger(__name__)
 MemoryDecider = Callable[[str, str, list[dict[str, Any]]], Awaitable[dict[str, str]]]
-_STOP_TOKENS = {"我的", "什么", "是什么", "用户", "现在", "偏好", "目标", "信息", "the", "what", "your", "user"}
 
 
 @dataclass(slots=True)
@@ -155,12 +155,7 @@ class MemoryEngine:
         semantic_floor = max(0.45, top_similarity - 0.18)
         semantic = sorted((item for item in items if vector_scores.get(item["id"], -1) >= semantic_floor), key=lambda item: vector_scores[item["id"]], reverse=True)
 
-        doc_freq: dict[str, int] = {}
-        tokenized = {item["id"]: Counter(self._token_sequence(item["content"])) for item in items}
-        for toks in tokenized.values():
-            for token in toks: doc_freq[token] = doc_freq.get(token, 0) + 1
-        avg_len = sum(sum(t.values()) for t in tokenized.values()) / max(1, len(tokenized))
-        bm25_scores = {mid: self._bm25(query_tokens, toks, sum(toks.values()), avg_len, doc_freq, max(1, len(tokenized))) for mid, toks in tokenized.items()}
+        bm25_scores = {item['id']:float(item.get('lexical_bm25_score',0)) for item in lexical_seed}
         bm25_ranked = sorted((mid for mid, sc in bm25_scores.items() if sc > 0), key=lambda m: bm25_scores[m], reverse=True)
         fused: dict[str, float] = {}
         lanes: dict[str, list[str]] = {"keyword": [item["id"] for item in lexical], "vector": [item["id"] for item in semantic], "bm25": bm25_ranked}
@@ -496,13 +491,7 @@ class MemoryEngine:
 
     @staticmethod
     def _token_sequence(text: str) -> list[str]:
-        lowered = text.lower()
-        tokens = re.findall(r"[a-z0-9_]{2,}", lowered)
-        for sequence in re.findall(r"[\u4e00-\u9fff]+", lowered):
-            tokens.extend(sequence[index:index + 2] for index in range(max(1, len(sequence) - 1)))
-            if 2 < len(sequence) <= 4:
-                tokens.append(sequence)
-        return [token for token in tokens if token and token not in _STOP_TOKENS]
+        return token_sequence(text)
 
     @staticmethod
     def _tokens(text: str) -> set[str]:
