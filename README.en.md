@@ -77,4 +77,6 @@ The current asset set retains three result families: complete LoCoMo, registered
 - `frontend/`, `memoria/`, `scripts/`, `tests/`: interfaces, implementation, tools and engineering checks.
 - Ignored `data/` and `model/`: per-account SQLite/WAL, private evidence, credentials, run ledgers and model weights.
 
-Next: continuous-source memory evolution, matched-budget quality/cost, backup/restore, migrations, account lifecycle and monitoring. [Plan](docs/plans/长期陪伴记忆研究与实验计划书.md) · [Sources and licensing](assets/data-sources/README.md) · [AI instructions](AGENTS.md)
+Next algorithm work: source support groups and retraction, progressive retrieval of original experiences, constrained updates and temporary conditions, then matched-budget answer/refusal calibration and valid-view maintenance. These are planned or awaiting verification; current engineering mechanisms do not establish algorithmic superiority. [Code and seven-project comparison (Chinese)](docs/implemented/算法现状与同类项目对照.md) · [Deliverables and ablations (Chinese)](docs/plans/下一阶段算法路线与对照实验.md)
+
+Continuous personal-history effects remain unverified. Backup/restore, migrations, account lifecycle and monitoring remain on the readiness plan. [Plan](docs/plans/长期陪伴记忆研究与实验计划书.md) · [Sources and licensing](assets/data-sources/README.md) · [AI instructions](AGENTS.md)
