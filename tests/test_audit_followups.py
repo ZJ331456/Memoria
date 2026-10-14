@@ -203,3 +203,47 @@ def test_review_reinforcement_target_race_restores_pending_and_allows_retry(tmp_
         assert store.memory(approved['applied_memory_id'])['status'] == 'active'
     finally:
         store.close()
+
+
+@pytest.mark.parametrize('with_default', [False, True])
+def test_claim_cache_expires_at_unselected_parent_start_and_selected_parent_end(tmp_path, monkeypatch, with_default):
+    import memoria.claims as module
+    from memoria.claims import AccessRequest, ClaimDecision, ClaimDraft, ClaimMemory, ViewRequest, sha
+    store = Store(tmp_path / 'cache.db', 'json')
+    claims = ClaimMemory(store, 'engineering-owner')
+    clock = ['2030-01-01T23:59:00.000000+00:00']
+    monkeypatch.setattr(module, 'now', lambda: clock[0])
+    try:
+        sid = store.create_session()['id']
+
+        def approved(value, **kwargs):
+            source = store.add_message(sid, 'user', 'Engineering statement: ' + value)
+            evidence = {'message_id': source['id'], 'start': 0, 'end': len(source['content']),
+                        'quote': source['content'], 'content_sha256': sha(source['content'])}
+            candidate = claims.create(ClaimDraft(predicate='response_language', value=value, evidence=[evidence], **kwargs))
+            return claims.approve(candidate['id'], ClaimDecision(expected_revision=1, reason='Engineering approval'))
+
+        if with_default:
+            approved('中文')
+        parent = store.add_memory('Engineering interview preference')
+        start, end = '2030-01-02T00:00:00.000000+00:00', '2030-01-02T00:02:00.000000+00:00'
+        store.set_temporal(parent['id'], start, end)
+        approved('英文', scope={'activity': 'interview'}, memory_id=parent['id'])
+        request = AccessRequest(predicates=['response_language'], context={'activity': 'interview'})
+        initial = claims.access(request)
+        view_id = initial['compiled_view_id'] or claims.compile(ViewRequest(**request.model_dump()))['id']
+        assert initial['payload']['next_boundary'] == start
+        assert claims.view(view_id)['expires_at'] == start
+        clock[0] = start
+        assert not claims.view(view_id)['valid']
+        current = claims.access(request)
+        assert [c['value'] for c in current['payload']['claims']] == ['英文']
+        assert current['payload']['next_boundary'] == end
+        assert current['path'] == 'retrieve'
+        current_view = current['compiled_view_id']
+        clock[0] = end
+        assert not claims.view(current_view)['valid']
+        expired = claims.access(request)
+        assert [c['value'] for c in expired['payload']['claims']] == (['中文'] if with_default else [])
+    finally:
+        store.close()

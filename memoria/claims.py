@@ -24,7 +24,7 @@ SLOTS = {"residence": False, "occupation": True, "school": True,
          "response_language": False, "response_detail": False, "diet": True,
          "work_habit": True, "hobby": True, "learning_goal": True,
          "project_goal": True, "time_preference": True, "budget": False}
-COMPILER = "deterministic-claims-v2"
+COMPILER = "deterministic-claims-v3"
 
 
 def canonical(value) -> str:
@@ -606,6 +606,13 @@ class ClaimMemory:
                 if not revision or revision["status"]!="approved":
                     continue
                 data = json.loads(revision["data_json"])
+                if not historical and data.get('memory_id'):
+                    # Even a currently unavailable exception can become applicable
+                    # without a write. Its parent's boundaries must expire the view.
+                    boundaries.extend(boundary
+                        for interval in self.store.memory_validity(data['memory_id'])
+                        for boundary in (interval['valid_at'], interval['invalid_at'])
+                        if boundary and boundary > current_time)
                 if not self._valid(data,historical=historical):
                     continue
                 scope = json.loads(root["scope_json"])
