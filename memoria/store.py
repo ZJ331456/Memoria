@@ -717,6 +717,20 @@ class Store:
             row = self.db.execute("SELECT * FROM memories WHERE id=?", (memory_id,)).fetchone()
         return self._memory(dict(row)) if row else None
 
+    def retrieval_scope(self, alias: str = "m", as_of: str | None = None) -> tuple[str, tuple]:
+        """One eligibility predicate, applied before candidate limits in every lane."""
+        moment = normalize_time(as_of) if as_of else now()
+        active = "" if as_of else f"{alias}.status='active' AND "
+        return (active + f"EXISTS (SELECT 1 FROM memory_validity_intervals vi WHERE vi.memory_id={alias}.id "
+                "AND vi.valid_at<=? AND (vi.invalid_at IS NULL OR vi.invalid_at>?))", (moment, moment))
+
+    def retrieval_memories(self, limit: int = 2000, *, as_of: str | None = None) -> list[dict]:
+        scope, params = self.retrieval_scope(as_of=as_of)
+        with self.lock:
+            rows = self.db.execute(f"SELECT m.* FROM memories m WHERE {scope} "
+                "ORDER BY m.importance DESC,m.reinforcement DESC,m.updated_at DESC LIMIT ?", (*params, limit)).fetchall()
+            return [self._memory_at(dict(r), normalize_time(as_of)) if as_of else self._memory(dict(r)) for r in rows]
+
     def _memory_at(self, row: dict[str, Any], timestamp: str) -> dict[str, Any]:
         item = self._memory(row)
         with self.lock:
@@ -903,13 +917,22 @@ class Store:
         with self.lock:
             if namespace and namespace != self.embedding_namespace:
                 return []
-            matches = self.vector_index.search(vector, limit)
-            result = []
-            for memory_id, similarity in matches:
-                row = self.db.execute("SELECT * FROM memories WHERE id=? AND status='active'", (memory_id,)).fetchone()
-                if row:
-                    result.append((self._memory(dict(row)), similarity))
-        return result
+            if not self.vector_index.enabled or self.vector_index.dimension != len(vector):
+                return []
+            total = self.db.execute(f"SELECT COUNT(*) FROM {self.vector_index.map_table}").fetchone()[0]
+            scope, params = self.retrieval_scope()
+            count, result = min(total, max(1, limit)), []
+            while count:
+                matches = self.vector_index.search(vector, count)
+                result = []
+                for memory_id, similarity in matches:
+                    row = self.db.execute(f"SELECT m.* FROM memories m WHERE m.id=? AND {scope}", (memory_id, *params)).fetchone()
+                    if row:
+                        result.append((self._memory(dict(row)), similarity))
+                if len(result) >= limit or count >= total or not self.vector_index.enabled:
+                    break
+                count = min(total, count * 2)
+        return result[:limit]
 
     def chunk_memory_candidates(self, vector: list[float], limit: int = 100, *, memory_ids: list[str] | None = None,
                                 as_of: str | None = None, namespace: str | None = None) -> list[tuple[dict, float, dict]]:
@@ -923,12 +946,10 @@ class Store:
                 return []
             clauses = ["c.namespace=?", "c.dimension=?"]
             params: list[Any] = [self.embedding_namespace, len(vector)]
-            if as_of:
-                timestamp = normalize_time(as_of)
-                clauses.append("EXISTS(SELECT 1 FROM memory_validity_intervals vi WHERE vi.memory_id=m.id AND vi.valid_at<=? AND (vi.invalid_at IS NULL OR vi.invalid_at>?))")
-                params.extend([timestamp, timestamp])
-            else:
-                clauses.append("m.status='active'")
+            timestamp = normalize_time(as_of) if as_of else None
+            scope, scope_params = self.retrieval_scope(as_of=as_of)
+            clauses.append(scope)
+            params.extend(scope_params)
             if memory_ids is not None:
                 clauses.append(f"m.id IN ({','.join('?' for _ in memory_ids)})")
                 params.extend(memory_ids)
@@ -1179,9 +1200,7 @@ class Store:
         if not query.strip() or limit <= 0:
             return []
         timestamp = normalize_time(as_of) if as_of else None
-        temporal = "EXISTS (SELECT 1 FROM memory_validity_intervals v WHERE v.memory_id=m.id AND v.valid_at<=? AND (v.invalid_at IS NULL OR v.invalid_at>?))"
-        scope = temporal if timestamp else "m.status='active'"
-        scope_params = (timestamp, timestamp) if timestamp else ()
+        scope, scope_params = self.retrieval_scope(as_of=as_of)
         with self.lock:
             rows: list[sqlite3.Row] = []
             try:
@@ -1533,12 +1552,8 @@ class Store:
                     for other in (d["from_id"], d["to_id"]):
                         if other not in seen:
                             seen.add(other)
-                            if timestamp:
-                                mem = self.db.execute("""SELECT m.* FROM memories m WHERE m.id=? AND EXISTS
-                                    (SELECT 1 FROM memory_validity_intervals v WHERE v.memory_id=m.id
-                                    AND v.valid_at<=? AND (v.invalid_at IS NULL OR v.invalid_at>?))""", (other, timestamp, timestamp)).fetchone()
-                            else:
-                                mem = self.db.execute("SELECT * FROM memories WHERE id=? AND status='active'", (other,)).fetchone()
+                            scope, params = self.retrieval_scope(as_of=as_of)
+                            mem = self.db.execute(f"SELECT m.* FROM memories m WHERE m.id=? AND {scope}", (other, *params)).fetchone()
                             if mem:
                                 frontier.append(other)
                                 m = self._memory_at(dict(mem), timestamp) if timestamp else self._memory(dict(mem))

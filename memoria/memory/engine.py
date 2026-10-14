@@ -95,8 +95,7 @@ class MemoryEngine:
         lexical_query = self._lexical_query(query)
         lexical_seed = self.store.keyword_memory_candidates(lexical_query, limit=200, as_of=as_of) if lexical_query else []
         indexed = self.store.vector_index_status["enabled"] and not as_of
-        items = (self.store.time_travel(as_of, limit=self.vector_scan_limit) if as_of
-                 else self.store.memories(limit=200 if indexed else self.vector_scan_limit))
+        items = self.store.retrieval_memories(limit=200 if indexed else self.vector_scan_limit, as_of=as_of)
         if kinds:
             items = [item for item in items if item.get("kind") in kinds]
             lexical_seed = [item for item in lexical_seed if item.get("kind") in kinds]
