@@ -18,12 +18,27 @@ class ToolPolicy:
 
     _MEMORIZE = re.compile(r"记住|保存.{0,8}(偏好|信息|记忆)|添加记忆|remember|memorize", re.I)
     _FORGET = re.compile(r"忘掉|忘记|删除.{0,8}(记忆|信息|偏好)|forget|delete.{0,8}memory", re.I)
+    _QUOTED = re.compile(r'"[^"\n]*"|“[^”]*”|「[^」]*」|『[^』]*』|`[^`]*`')
+    _NEGATIVE = re.compile(r"不要|别|不许|禁止|无需|不必|不能|不准|不想|\b(?:not|never|don't|dont|cannot|can't)\b", re.I)
+    _COMMAND = re.compile(
+        r"^(?:(?:请|麻烦你?|帮我|替我|务必|一定要)\s*)*(?:记住|保存|添加记忆|忘掉|忘记|删除)"
+        r"|^(?:(?:please|also)\s+|(?:can|could|would|will)\s+you\s+)*(?:remember|memorize|forget|delete)\b",
+        re.I,
+    )
 
     def authorize(self, user_text: str) -> ToolAuthorization:
-        allowed = set()
-        if self._MEMORIZE.search(user_text):
-            allowed.add("memorize")
-        if self._FORGET.search(user_text):
-            allowed.add("forget_memory")
+        allowed, denied = set(), set()
+        # Only direct commands grant a capability. Quoted examples, recollections
+        # and negated requests must not become authorization for a model tool call.
+        text = self._QUOTED.sub("", user_text)
+        for clause in re.split(r"[。！？!?；;，,\n]+", text):
+            clause = clause.strip()
+            for name, pattern in (("memorize", self._MEMORIZE), ("forget_memory", self._FORGET)):
+                matches = list(pattern.finditer(clause))
+                if any(self._NEGATIVE.search(clause[:match.start()]) for match in matches):
+                    denied.add(name)
+                if matches and self._COMMAND.search(clause):
+                    allowed.add(name)
+        allowed -= denied
         reason = "explicit user intent: " + ",".join(sorted(allowed)) if allowed else "no explicit write intent"
         return ToolAuthorization(allowed, reason)
