@@ -47,6 +47,7 @@ class Store:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self.db.create_function('memoria_sha256',1,lambda text: hashlib.sha256(text.encode()).hexdigest(),deterministic=True)
         self.lock = threading.RLock()
         self.embedding_namespace = "legacy"
         self.vector_backend = vector_backend
@@ -174,6 +175,10 @@ class Store:
                 CREATE INDEX IF NOT EXISTS idx_memory_source_message ON memory_source_dependencies(message_id);
                 CREATE TABLE IF NOT EXISTS memory_source_revocations (
                     message_id TEXT PRIMARY KEY, revoked_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS memory_index_attempts (
+                    memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+                    namespace TEXT NOT NULL, failures INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TEXT NOT NULL, PRIMARY KEY(memory_id,namespace));
                 CREATE TRIGGER IF NOT EXISTS memory_source_deleted BEFORE DELETE ON messages BEGIN
                     UPDATE memory_source_dependencies SET state='deleted' WHERE message_id=OLD.id;
                 END;
@@ -771,6 +776,40 @@ class Store:
         with self.lock:
             row = self.db.execute(f'SELECT m.* FROM memories m WHERE m.id=? AND {scope}', (snapshot['id'], *params)).fetchone()
             return bool(row and self.memory_dependency(dict(row)) == snapshot)
+
+    def embedding_backlog(self, limit: int, *, require_chunks: bool = False) -> tuple[list[dict], int]:
+        scope, params = self.retrieval_scope()
+        namespace = self.embedding_namespace
+        dimension = self.vector_index_status['dimension']
+        missing = 'NOT EXISTS(SELECT 1 FROM memory_embeddings e WHERE e.memory_id=m.id AND e.namespace=?'
+        arguments = [*params,namespace]
+        if dimension:
+            missing += ' AND e.dimension=?'
+            arguments.append(dimension)
+        missing += ')'
+        if require_chunks:
+            missing += " OR (m.kind!='benchmark_history' AND NOT EXISTS(SELECT 1 FROM memory_embedding_chunks c WHERE c.memory_id=m.id AND c.namespace=? AND c.content_sha256=memoria_sha256(m.content)))"
+            arguments.append(namespace)
+        where = f'{scope} AND ({missing})'
+        with self.lock:
+            total = self.db.execute('SELECT COUNT(*) FROM memories m WHERE '+where, arguments).fetchone()[0]
+            rows = self.db.execute('SELECT m.* FROM memories m WHERE '+where+
+                ' AND NOT EXISTS(SELECT 1 FROM memory_index_attempts a WHERE a.memory_id=m.id AND a.namespace=? AND a.next_attempt_at>?) '
+                'ORDER BY m.created_at,m.id LIMIT ?', [*arguments,namespace,now(),limit]).fetchall()
+            return [self._memory(dict(row)) for row in rows], total
+
+    def record_index_attempts(self, items: list[dict], namespace: str, *, require_chunks: bool = False):
+        with self._memory_transaction():
+            for item in items:
+                current=self.memory(item['id'])
+                complete=bool(current and current.get('embedding') and (not require_chunks or current['kind']=='benchmark_history' or current.get('embedding_chunk_count')))
+                if complete:
+                    self.db.execute('DELETE FROM memory_index_attempts WHERE memory_id=? AND namespace=?',(item['id'],namespace))
+                elif current:
+                    row=self.db.execute('SELECT failures FROM memory_index_attempts WHERE memory_id=? AND namespace=?',(item['id'],namespace)).fetchone()
+                    failures=(row[0] if row else 0)+1
+                    self.db.execute('INSERT OR REPLACE INTO memory_index_attempts VALUES(?,?,?,?)',
+                        (item['id'],namespace,failures,after(min(300,5*2**min(failures,6)))))
 
     def _memory_at(self, row: dict[str, Any], timestamp: str) -> dict[str, Any]:
         item = self._memory(row)

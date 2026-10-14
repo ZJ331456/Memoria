@@ -127,3 +127,47 @@ def test_cross_connection_exact_writes_and_word_boundaries(tmp_path):
     a.add_memory_if_absent('therapist','fact',3,'test')
     assert len(a.memories())==3
     a.close(); b.close()
+
+
+def test_reindex_finds_missing_outside_prefix_and_reports_global_remaining(tmp_path):
+    class Embed:
+        enabled=True; namespace='engineering'; timeout_seconds=1
+        async def embed_batch(self,texts): return [[1.0,0.0] for _ in texts]
+    store=Store(tmp_path/'index.db','json')
+    engine=MemoryEngine(store,Embed())
+    for index in range(3): store.add_memory('已有向量'+str(index),importance=5,embedding=[1.0,0.0])
+    missing=[store.add_memory('待补向量'+str(index),importance=1) for index in range(3)]
+    result=asyncio.run(engine.reindex(limit=2))
+    assert result=={'enabled':True,'indexed':2,'remaining':1}
+    assert asyncio.run(engine.reindex(limit=2))=={'enabled':True,'indexed':1,'remaining':0}
+    assert all(store.memory(m['id'])['embedding'] for m in missing)
+    store.close()
+
+
+def test_failed_backfill_does_not_starve_other_rows_or_hide_remaining(tmp_path):
+    class Embed:
+        enabled=True; namespace='engineering'; timeout_seconds=1
+        async def embed_batch(self,texts):
+            if '失败' in texts[0]: raise RuntimeError('engineering failure')
+            return [[1.0,0.0] for _ in texts]
+    store=Store(tmp_path/'failure.db','json')
+    engine=MemoryEngine(store,Embed())
+    store.add_memory('失败工程条目')
+    good=store.add_memory('成功工程条目')
+    assert asyncio.run(engine.reindex(limit=1))['remaining']==2
+    assert asyncio.run(engine.reindex(limit=1))=={'enabled':True,'indexed':1,'remaining':1}
+    assert store.memory(good['id'])['embedding']
+    store.close()
+
+
+def test_retrieval_does_not_run_document_backfill(tmp_path):
+    class Embed:
+        enabled=True; namespace='engineering'; timeout_seconds=1
+        async def embed(self,text): return [1.0,0.0]
+        async def embed_batch(self,texts): raise AssertionError('document maintenance must not block a read')
+    store=Store(tmp_path/'read.db','json')
+    engine=MemoryEngine(store,Embed())
+    memory=store.add_memory('工程冷索引词面')
+    assert asyncio.run(engine.retrieve('工程冷索引'))[0]['id']==memory['id']
+    assert store.memory(memory['id'])['embedding'] is None
+    store.close()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+import time
 from contextlib import suppress
 
 from ..llm import LLMClient
@@ -45,8 +46,12 @@ class MemoryJobWorker:
         return True
 
     async def run(self) -> None:
+        next_index = 0.0
         while True:
             if not await self.process_once():
+                if time.monotonic() >= next_index:
+                    await self.memory.reindex(limit=16)
+                    next_index = time.monotonic()+15
                 await asyncio.sleep(self.poll_seconds)
 
     async def _heartbeat(self, job_id: str) -> None:

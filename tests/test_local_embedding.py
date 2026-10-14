@@ -230,6 +230,7 @@ def test_engine_backfill_and_writes_use_documents_but_retrieval_uses_query(tmp_p
     previous = store.add_memory("用户通常喝茶", "preference")
 
     async def scenario():
+        assert (await engine.reindex())['indexed']==1
         recalled = await engine.retrieve("饮料偏好", expand_graph=False)
         assert recalled[0]["id"] == previous["id"]
         saved = await engine.remember("用户住在北京", "profile", 3, "test")

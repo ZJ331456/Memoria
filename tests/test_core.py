@@ -150,11 +150,12 @@ class FakeEmbedder:
         return [self.vector(text) for text in texts]
 
 
-def test_semantic_retrieval_and_lazy_embedding_backfill(tmp_path: Path):
+def test_semantic_retrieval_after_explicit_embedding_backfill(tmp_path: Path):
     store = Store(tmp_path / "semantic.db")
     hiking = store.add_memory("用户周末常去爬山", "preference", 4, "test")
     store.add_memory("用户偏好喝红茶", "preference", 3, "test")
     engine = MemoryEngine(store, FakeEmbedder())
+    assert asyncio.run(engine.reindex())['indexed']==2
 
     result = asyncio.run(engine.retrieve("休息日偏爱的户外运动", 1))
 

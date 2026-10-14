@@ -107,8 +107,6 @@ class MemoryEngine:
 
         query_vector: list[float] | None = None
         if items and mode in {"dense", "rrf"} and embedder and embedder.enabled:
-            with timers.measure("memory.backfill"):
-                await self._backfill(items, limit=64, timings=timers)
             try:
                 encode_query = getattr(embedder, "embed_query", embedder.embed)
                 with timers.measure("embedding.query"):
@@ -257,7 +255,6 @@ class MemoryEngine:
         document_chunks = None
         if embedder and embedder.enabled:
             try:
-                await self._backfill(items, limit=128, timings=timings)
                 vector, document_chunks = await self._embed_document(content, timings=timings)
             except Exception as exc:
                 logger.warning("记忆向量去重不可用，使用文本去重: %s", type(exc).__name__)
@@ -393,13 +390,16 @@ class MemoryEngine:
                 self.markdown.complete_pending(source_ref=source_ref, content=content, kind=kind)
 
     async def reindex(self, limit: int = 1000) -> dict[str, int | bool]:
-        items = self.store.memories(limit=max(1, min(limit, 5000)))
-        dimension = self.store.vector_index_status["dimension"]
-        missing = [item for item in items if self._needs_embedding(item, dimension)]
+        namespace = self.store.embedding_namespace
+        chunks = bool(getattr(self.embedder,'supports_document_chunks',False))
+        missing, total = self.store.embedding_backlog(max(1,min(limit,5000)),require_chunks=chunks)
         if not self.embedder or not self.embedder.enabled:
-            return {"enabled": False, "indexed": 0, "remaining": len(missing)}
+            return {"enabled": False, "indexed": 0, "remaining": total}
         indexed = await self._backfill(missing, limit=len(missing))
-        return {"enabled": True, "indexed": indexed, "remaining": max(0, len(missing) - indexed)}
+        if namespace == self.store.embedding_namespace:
+            self.store.record_index_attempts(missing,namespace,require_chunks=chunks)
+        _, remaining = self.store.embedding_backlog(0,require_chunks=chunks)
+        return {"enabled": True, "indexed": indexed, "remaining": remaining}
 
     def _needs_embedding(self, item: dict, dimension: int | None) -> bool:
         chunks_required = bool(getattr(self.embedder, "supports_document_chunks", False)) and item.get("kind") != "benchmark_history"
