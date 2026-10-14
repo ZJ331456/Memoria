@@ -21,13 +21,13 @@ from ..memory.embedding import EmbeddingClient
 from ..observability.timing import StageTimings
 from ..prompting.reader_budget import ReaderBudget
 from .history import canonical, identifier
-from .locomo import SOURCE_SHA256, SOURCE_URL, parse_answer, sha, smoke_cases
+from .locomo import ANSWER_STATUS_POLICY, SOURCE_SHA256, SOURCE_URL, parse_answer, sha, smoke_cases
 from .records import RunRecorder, digest_file
 from .retrieval import PrefixRetriever
 from .roles import ExperimentLLM, load_roles
 from .runner import account_settings, local_policy, quantiles
 
-PROTOCOL = 'locomo-text-english-rrf-fallback-v6'
+PROTOCOL = 'locomo-text-english-rrf-fallback-v7'
 STOPWORDS = frozenset('a an the and or of to in on at by with for from about as is are was were be been '
                      'do does did have has had what which who where when why how might could would '
                      'can will s regards regard'.split())
@@ -411,6 +411,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                   'contract_repair_call_limit': 1, 'contract_repair': 'atomic question/evidence/repair user packet; fail if incomplete; never insert citations',
                   'lexical': 'FTS5 Porter unicode61 BM25 OR non-stopword query tokens',
                   'reader_system_sha256': sha(SYSTEM), 'embedding_model': settings.embedding.model,
+                  'answer_status_policy': ANSWER_STATUS_POLICY,
                   'embedding_language_warning': 'Chinese BGE on English' if embedding_model.endswith('zh-v1.5') else None,
                   'retrieval_scope': 'source Dense+English BM25; no production Claim/View access',
                   'owner_user_id': workspace.owner})
@@ -427,7 +428,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         try:
             previous, rows, calls = checkpoint_rows(workspace,resume_from,protocol,cases,histories,retry_errors)
             for field in ('baseline','selector','candidate_limit','anchor_limit','evidence_chars','context_radius',
-                          'rrf_k','lexical','reader_system_sha256','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit',
+                          'rrf_k','lexical','reader_system_sha256','answer_status_policy','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit',
                           'sufficiency_system_sha256','support_system_sha256','adaptive_limits','supplement_policy','stop_policy','verification_policy'):
                 if previous['protocol'].get(field) != recorder.manifest['protocol'].get(field):
                     raise ValueError('Checkpoint inference settings differ')

@@ -415,3 +415,33 @@ def test_stream_reserves_session_before_start_and_cancel_always_releases_it(tmp_
         finally:
             store.close()
     asyncio.run(case())
+
+
+@pytest.mark.parametrize('status', ['abstain', 'clarify'])
+@pytest.mark.parametrize('citations', [[], ['s1']])
+def test_benchmark_nonanswer_cannot_publish_or_score_embedded_facts(status, citations):
+    from memoria.experiments.locomo import parse_answer, UNKNOWN_ANSWER
+    from memoria.experiments.locomo_eval import score
+    from memoria.llm import ChatResult
+    raw = json.dumps({'status': status, 'answer': 'three dogs', 'evidence_ids': citations})
+    result = ChatResult(content=raw)
+    parsed = parse_answer(result, ['s1'])
+    assert result.content == raw  # Provider record is never rewritten.
+    assert parsed == {'status': status, 'answer': UNKNOWN_ANSWER, 'evidence_ids': []}
+    rows = [{'id': 'case', 'status': 'success', 'answer_status': status,
+             'answer': parsed['answer'], 'evidence_ids': parsed['evidence_ids']}]
+    gold = [{'id': 'case', 'category': 4, 'answer': 'three dogs',
+             'evidence_ids': ['s1'], 'unresolved_evidence_ids': []}]
+    assert score(rows, gold)['ordinary_answer_f1'] == 0
+    answered = parse_answer(ChatResult(content=json.dumps({
+        'status': 'answer', 'answer': 'three dogs', 'evidence_ids': ['s1']})), ['s1'])
+    rows[0].update(answer=answered['answer'], answer_status='answer', evidence_ids=['s1'])
+    assert score(rows, gold)['ordinary_answer_f1'] == 1
+
+
+def test_nonanswer_still_rejects_forged_citations_before_fixed_refusal():
+    from memoria.experiments.locomo import parse_answer
+    from memoria.llm import ChatResult
+    with pytest.raises(ValueError):
+        parse_answer(ChatResult(content=json.dumps({
+            'status': 'abstain', 'answer': 'three dogs', 'evidence_ids': ['foreign']})), ['s1'])
