@@ -765,7 +765,7 @@ class Store:
                 f"SELECT * FROM memories{where} ORDER BY importance DESC, reinforcement DESC, updated_at DESC LIMIT ?",
                 (*params, limit),
             ).fetchall()
-        return [self._memory(dict(row)) for row in rows]
+        return self._memory_batch(rows)
 
     def memory(self, memory_id: str) -> dict[str, Any] | None:
         with self.lock:
@@ -787,7 +787,7 @@ class Store:
         with self.lock:
             rows = self.db.execute(f"SELECT m.* FROM memories m WHERE {scope} "
                 "ORDER BY m.importance DESC,m.reinforcement DESC,m.updated_at DESC LIMIT ?", (*params, limit)).fetchall()
-            return [self._memory_at(dict(r), normalize_time(as_of)) if as_of else self._memory(dict(r)) for r in rows]
+            return self._memory_batch(rows,as_of=normalize_time(as_of) if as_of else None)
 
     @staticmethod
     def memory_dependency(item: dict) -> dict:
@@ -819,7 +819,7 @@ class Store:
             rows = self.db.execute('SELECT m.* FROM memories m WHERE '+where+
                 ' AND NOT EXISTS(SELECT 1 FROM memory_index_attempts a WHERE a.memory_id=m.id AND a.namespace=? AND a.next_attempt_at>?) '
                 'ORDER BY m.created_at,m.id LIMIT ?', [*arguments,namespace,now(),limit]).fetchall()
-            return [self._memory(dict(row)) for row in rows], total
+            return self._memory_batch(rows), total
 
     def record_index_attempts(self, items: list[dict], namespace: str, *, require_chunks: bool = False):
         with self._memory_transaction():
@@ -993,7 +993,7 @@ class Store:
                 ) AS replacement_relation
                 FROM memories m JOIN chain c ON c.id=m.id
                 ORDER BY m.created_at ASC, m.id ASC LIMIT 100""", (memory_id,)).fetchall()
-        return [self._memory(dict(row)) for row in rows]
+        return self._memory_batch(rows)
 
     def correct_memory(
         self, memory_id: str, content: str, kind: str, importance: int,
@@ -1148,14 +1148,46 @@ class Store:
         with self.lock:
             return {"enabled": self.vector_index.enabled, "backend": "sqlite-vec" if self.vector_index.enabled else "json", "dimension": self.vector_index.dimension, "namespace": self.embedding_namespace, "error": self.vector_index.error}
 
-    def _memory(self, item: dict[str, Any]) -> dict[str, Any]:
-        result = dict(item)
+    def _memory_batch(self, rows, *, as_of: str | None = None) -> list[dict]:
+        """Request-local metadata batches; no cross-request stale snapshot cache."""
+        items=[dict(row) for row in rows]
+        metadata={'vectors':{},'chunks':{}}
+        intervals={}
         with self.lock:
-            selected = self.db.execute("""SELECT embedding,dimension FROM memory_embeddings
-                WHERE memory_id=? AND namespace=? ORDER BY updated_at DESC LIMIT 1""",
-                (result["id"], self.embedding_namespace)).fetchone()
-            result["embedding_chunk_count"] = self.db.execute("SELECT COUNT(*) FROM memory_embedding_chunks WHERE memory_id=? AND namespace=? AND content_sha256=?",
-                (result["id"], self.embedding_namespace, hashlib.sha256(result["content"].encode()).hexdigest())).fetchone()[0]
+            for start in range(0,len(items),500):
+                ids=[m['id'] for m in items[start:start+500]]
+                marks=','.join('?' for _ in ids)
+                for row in self.db.execute(f'SELECT memory_id,embedding,dimension FROM memory_embeddings WHERE namespace=? AND memory_id IN ({marks}) ORDER BY updated_at DESC',
+                        (self.embedding_namespace,*ids)):
+                    metadata['vectors'].setdefault(row['memory_id'],row)
+                for row in self.db.execute(f'SELECT memory_id,content_sha256,COUNT(*) count FROM memory_embedding_chunks WHERE namespace=? AND memory_id IN ({marks}) GROUP BY memory_id,content_sha256',
+                        (self.embedding_namespace,*ids)):
+                    metadata['chunks'][(row['memory_id'],row['content_sha256'])]=row['count']
+                if as_of:
+                    for row in self.db.execute(f'SELECT memory_id,valid_at,invalid_at FROM memory_validity_intervals WHERE memory_id IN ({marks}) AND valid_at<=? AND (invalid_at IS NULL OR invalid_at>?) ORDER BY valid_at DESC',
+                            (*ids,as_of,as_of)):
+                        intervals.setdefault(row['memory_id'],row)
+            result=[]
+            for item in items:
+                presented=self._memory(item,metadata=metadata)
+                if item['id'] in intervals:
+                    row=intervals[item['id']]
+                    presented.update(valid_at=row['valid_at'],invalid_at=row['invalid_at'])
+                result.append(presented)
+            return result
+
+    def _memory(self, item: dict[str, Any], *, metadata: dict | None = None) -> dict[str, Any]:
+        result = dict(item)
+        if metadata is None:
+            with self.lock:
+                selected = self.db.execute("""SELECT embedding,dimension FROM memory_embeddings
+                    WHERE memory_id=? AND namespace=? ORDER BY updated_at DESC LIMIT 1""",
+                    (result["id"], self.embedding_namespace)).fetchone()
+                result["embedding_chunk_count"] = self.db.execute("SELECT COUNT(*) FROM memory_embedding_chunks WHERE memory_id=? AND namespace=? AND content_sha256=?",
+                    (result["id"], self.embedding_namespace, hashlib.sha256(result["content"].encode()).hexdigest())).fetchone()[0]
+        else:
+            selected=metadata['vectors'].get(result['id'])
+            result['embedding_chunk_count']=metadata['chunks'].get((result['id'],hashlib.sha256(result['content'].encode()).hexdigest()),0)
         result["embedding"] = selected["embedding"] if selected else None
         result["embedding_model"] = self.embedding_namespace if selected else None
         raw = result.get("embedding")
@@ -1365,7 +1397,7 @@ class Store:
             else:
                 rows=self.db.execute(f'SELECT m.*,0.0 lexical_bm25_score FROM memories m WHERE {scope} AND content LIKE ? ORDER BY importance DESC LIMIT ?',
                     [*params,'%'+query+'%',limit]).fetchall()
-            return [self._memory_at(dict(r),normalize_time(as_of)) if as_of else self._memory(dict(r)) for r in rows]
+            return self._memory_batch(rows,as_of=normalize_time(as_of) if as_of else None)
 
     @staticmethod
     def _memory_search_terms(query: str) -> list[str]:
@@ -1648,7 +1680,7 @@ class Store:
                 clause += " AND content LIKE ?"
                 params.append(f"%{query}%")
             rows = self.db.execute(f"SELECT m.* FROM memories m {clause} ORDER BY importance DESC,created_at DESC LIMIT ?", (*params, limit)).fetchall()
-        return [self._memory_at(dict(row), timestamp) for row in rows]
+        return self._memory_batch(rows,as_of=timestamp)
 
     def memory_validity(self, memory_id: str) -> list[dict]:
         with self.lock:

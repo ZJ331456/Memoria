@@ -196,3 +196,19 @@ def test_soft_kind_quotas_fill_relevant_same_type_evidence(tmp_path):
     assert diagnostics['returned_count']==8
     assert len(asyncio.run(MemoryEngine(store).retrieve('工程聚会',limit=3)))==3
     store.close()
+
+
+def test_bulk_read_batches_metadata_without_stale_cross_request_cache(tmp_path):
+    store=Store(tmp_path/'batch.db','json')
+    for i in range(250): store.add_memory('批量工程记录'+str(i),embedding=[1.0,0.0])
+    statements=[]
+    store.db.set_trace_callback(statements.append)
+    results=store.memories(limit=250)
+    store.db.set_trace_callback(None)
+    reads=[q for q in statements if q.lstrip().upper().startswith(('SELECT','WITH'))]
+    assert len(reads)==3  # One parent query, one vectors query, one grouped chunks query.
+    assert all(m['embedding']==[1.0,0.0] for m in results)
+    victim=results[0]
+    store.delete_memory(victim['id'])
+    assert victim['id'] not in {m['id'] for m in store.memories(limit=250)}
+    store.close()
