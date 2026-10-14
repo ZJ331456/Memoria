@@ -817,6 +817,9 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
         except ClaimError:
             store.reset_memory_review(review_id)
             raise
+        except MemoryVersionConflict:
+            store.reset_memory_review(review_id)
+            raise
         except MemorySourceUnavailable as exc:
             store.reset_memory_review(review_id)
             raise HTTPException(409, "来源消息已删除，不能批准悬空记忆") from exc

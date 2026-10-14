@@ -156,3 +156,50 @@ def test_online_export_uses_current_validity_but_history_preserves_valid_version
         assert all(t not in exported.text for t in ['VALID_HISTORICAL_SENTINEL', 'FUTURE_SENTINEL', 'EXPIRED_SENTINEL'])
     finally:
         store.close()
+
+
+@pytest.mark.parametrize('mutation', ['correct', 'delete'])
+def test_review_reinforcement_target_race_restores_pending_and_allows_retry(tmp_path, mutation):
+    from fastapi.testclient import TestClient
+    from tests.test_memory_layers_integration import _app
+    app = _app(tmp_path)
+    store, engine = app.state.store, app.state.service.runtime.memory
+    try:
+        original = store.add_memory('I prefer green tea without sugar every morning', 'preference')
+        content = 'I prefer green tea without sugar every single morning'
+        message = store.add_message(store.create_session()['id'], 'user', content)
+        job = store.enqueue_memory_job(message['id'], content, 'Engineering reply')
+        store.claim_memory_job('audit-worker')
+        review = store.stage_memory_reviews(job['id'], 'audit-worker', [
+            {'content': content, 'kind': 'preference', 'importance': 3}])[0]
+        store.finish_memory_job(job['id'], owner='audit-worker')
+        changed = False
+
+        async def decide(*args):
+            nonlocal changed
+            await asyncio.sleep(0)  # A second writer changes the model's snapshot.
+            if not changed:
+                if mutation == 'correct':
+                    store.correct_memory(original['id'], 'I now prefer black coffee', 'preference', 3, 'engineering')
+                else:
+                    store.delete_memory(original['id'])
+                changed = True
+            return {'action': 'reinforce', 'target_id': original['id'], 'reason': 'Engineering decision'}
+
+        engine.decider = decide
+        client = TestClient(app)
+        headers = {'Authorization': 'Bearer admin-secret'}
+        path = '/api/memory-reviews/' + review['id'] + '/approve'
+        body = {'content': content, 'kind': 'preference', 'importance': 3}
+        response = client.post(path, json=body, headers=headers)
+        assert response.status_code == 409, response.text
+        pending = store.memory_review(review['id'])
+        assert pending['status'] == 'pending' and pending['applied_memory_id'] is None
+        assert not store.has_memory_operation(message['id'], original['id'])
+        retry = client.post(path, json=body, headers=headers)
+        assert retry.status_code == 200, retry.text
+        approved = retry.json()
+        assert approved['status'] == 'approved' and approved['applied_memory_id']
+        assert store.memory(approved['applied_memory_id'])['status'] == 'active'
+    finally:
+        store.close()

@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from ..store import Store
+from ..store import MemoryVersionConflict, Store
 from .embedding import EmbeddingClient
 from .layer import MarkdownMemoryLayer
 from .lexical import token_sequence
@@ -296,6 +296,8 @@ class MemoryEngine:
                 if source_ref and self.store.has_memory_operation(source_ref, target_id):
                     return MemoryWriteResult("skipped", target, target_id, "source already applied")
                 reinforced = self.store.reinforce_memory(target_id, source_ref, require_source=require_source)
+                if reinforced is None:
+                    raise MemoryVersionConflict('强化目标已删除或被替代，请重新核对候选')
                 return MemoryWriteResult("reinforced", reinforced, target_id, decision.get("reason", ""))
             mutable_kinds = {"preference", "profile", "goal", "procedure"}
             if target and action == "supersede" and kind in mutable_kinds and float(target["relation_similarity"]) >= 0.55:
