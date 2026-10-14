@@ -212,3 +212,19 @@ def test_bulk_read_batches_metadata_without_stale_cross_request_cache(tmp_path):
     store.delete_memory(victim['id'])
     assert victim['id'] not in {m['id'] for m in store.memories(limit=250)}
     store.close()
+
+
+@pytest.mark.parametrize('tool', ['recall_memory','search_history'])
+def test_truncated_builtin_output_retains_trusted_freshness_dependency(tmp_path, tool):
+    from memoria.tools import build_registry
+    store=Store(tmp_path/'truncated.db','json')
+    source=store.add_message(store.create_session()['id'],'user','工程截断来源'+('长文'*300))
+    memory=store.add_memory(source['content'],source_ref=source['id'],require_source=True)
+    registry=build_registry(store,MemoryEngine(store))
+    registry.get(tool).max_output_chars=40
+    result=asyncio.run(registry.execute(tool,{'query':'工程截断来源'}))
+    assert result.ok and '截断' in result.content and result.memory_dependencies
+    assert all(store.memory_dependency_valid(d) for d in result.memory_dependencies)
+    store.delete_session(source['session_id'])
+    assert not any(store.memory_dependency_valid(d) for d in result.memory_dependencies)
+    store.close()

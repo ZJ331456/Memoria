@@ -153,7 +153,7 @@ class AgentRuntime:
                     "top_score": context.memories[0].get("retrieval", {}).get("score") if context.memories else None,
                     "sufficient": bool(context.memories and context.memories[0].get("retrieval", {}).get("score", 0) > 0),
                 }
-                memory_dependencies.update({m['id']:m['retrieval']['dependency'] for m in context.memories if m.get('retrieval',{}).get('dependency')})
+                memory_dependencies.update({'memory:'+m['id']:m['retrieval']['dependency'] for m in context.memories if m.get('retrieval',{}).get('dependency')})
 
                 episodes = (
                     self.episodes.search(user_text, self.layers.episode_top_k)
@@ -260,6 +260,12 @@ class AgentRuntime:
                 ]
                 context.metadata["episode_retrieval"]["injected"] = len(injected_episode_ids)
                 context.metadata["episode_retrieval"]["ids"] = injected_episode_ids
+                for episode in episodes:
+                    if episode['id'] in injected_episode_ids:
+                        for source_id in (episode['user_message_id'],episode.get('assistant_message_id')):
+                            source=self.store.message_source(source_id) if source_id else None
+                            if source:
+                                memory_dependencies['message:'+source_id]=self.store.message_dependency(source)
                 if self.skills:
                     active_content = next(
                         (section.content for section in assembled.sections if section.name == "Active Skills"), ""
@@ -449,7 +455,7 @@ class AgentRuntime:
                     context.tool_chain.extend(tool_records)
                     for record in tool_records:
                         for dependency in record.get('memory_dependencies', []):
-                            memory_dependencies[dependency['id']] = dependency
+                            memory_dependencies[dependency.get('dependency_type','memory')+':'+dependency['id']] = dependency
                     if self.skills:
                         context.metadata["skills"]["loaded"].extend(
                             record["loaded_skill"] for record in tool_records if "loaded_skill" in record
@@ -601,13 +607,8 @@ class AgentRuntime:
                     "content": content,
                     "parallel": len(tool_calls) > 1,
                 }
-                if tool_name == 'recall_memory' and tool_ok:
-                    try:
-                        recalled = json.loads(tool_result.content)
-                        record['memory_dependencies'] = [m['retrieval']['dependency'] for m in recalled
-                            if isinstance(m,dict) and m.get('retrieval',{}).get('dependency')]
-                    except (ValueError, TypeError, KeyError):
-                        record['memory_dependencies'] = []
+                if tool_ok:
+                    record['memory_dependencies'] = getattr(tool_result,'memory_dependencies',[])
                 if budget_blocked:
                     record["budget_blocked"] = True
                 if budget_truncated:
@@ -624,7 +625,7 @@ class AgentRuntime:
                             "name": loaded["name"], "revision": loaded.get("revision", ""),
                         }
             if on_event:
-                await on_event({"type": "tool", "tool": {key: value for key, value in record.items() if key != "content"}})
+                await on_event({"type": "tool", "tool": {key: value for key, value in record.items() if key not in {"content","memory_dependencies"}}})
             return record
 
         if len(tool_calls) <= 1:

@@ -795,10 +795,20 @@ class Store:
             'content_sha256': hashlib.sha256(item['content'].encode()).hexdigest()}
 
     def memory_dependency_valid(self, snapshot: dict, *, as_of: str | None = None) -> bool:
+        if snapshot.get('dependency_type')=='message':
+            with self.lock:
+                row=self.db.execute('SELECT * FROM messages WHERE id=?',(snapshot['id'],)).fetchone()
+                return bool(row and not self.source_revoked(snapshot['id']) and self.message_dependency(dict(row))==snapshot)
         scope, params = self.retrieval_scope(as_of=as_of)
         with self.lock:
             row = self.db.execute(f'SELECT m.* FROM memories m WHERE m.id=? AND {scope}', (snapshot['id'], *params)).fetchone()
             return bool(row and self.memory_dependency(dict(row)) == snapshot)
+
+    @staticmethod
+    def message_dependency(item: dict) -> dict:
+        return {key:item.get(key) for key in ('id','session_id','role','created_at')} | {
+            'id':item.get('id',item.get('message_id')),
+            'dependency_type':'message','content_sha256':hashlib.sha256(item['content'].encode()).hexdigest()}
 
     def embedding_backlog(self, limit: int, *, require_chunks: bool = False) -> tuple[list[dict], int]:
         scope, params = self.retrieval_scope()
@@ -1367,12 +1377,13 @@ class Store:
                 match = f'"{query.replace(chr(34), chr(34)*2)}"'
                 rows = self.db.execute("""SELECT m.*,s.title session_title FROM messages_fts f
                     JOIN messages m ON m.id=f.id JOIN sessions s ON s.id=m.session_id
-                    WHERE messages_fts MATCH ? ORDER BY bm25(messages_fts),m.created_at DESC LIMIT ?""", (match, limit)).fetchall()
+                    WHERE messages_fts MATCH ? AND NOT EXISTS(SELECT 1 FROM memory_source_revocations r WHERE r.message_id=m.id)
+                    ORDER BY bm25(messages_fts),m.created_at DESC LIMIT ?""", (match, limit)).fetchall()
             except sqlite3.OperationalError:
                 pass
             if not rows:
-                rows = self.db.execute("SELECT m.*, s.title session_title FROM messages m JOIN sessions s ON s.id=m.session_id WHERE m.content LIKE ? ORDER BY m.created_at DESC LIMIT ?", (f"%{query}%", limit)).fetchall()
-        return [dict(row) for row in rows]
+                rows = self.db.execute("SELECT m.*, s.title session_title FROM messages m JOIN sessions s ON s.id=m.session_id WHERE m.content LIKE ? AND NOT EXISTS(SELECT 1 FROM memory_source_revocations r WHERE r.message_id=m.id) ORDER BY m.created_at DESC LIMIT ?", (f"%{query}%", limit)).fetchall()
+        return [{**dict(row),'source_dependency':self.message_dependency(dict(row))} for row in rows]
 
     def keyword_memory_candidates(self, query: str, limit: int = 100, *, as_of: str | None = None) -> list[dict[str, Any]]:
         from .memory.lexical import token_sequence

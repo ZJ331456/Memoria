@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 
@@ -33,6 +33,7 @@ class ToolResult:
     ok: bool
     content: str
     elapsed_ms: int
+    memory_dependencies: list[dict] = field(default_factory=list)
 
 
 class ToolRegistry:
@@ -91,10 +92,18 @@ class ToolRegistry:
             for hook in self._hooks:
                 await asyncio.wait_for(hook(tool, arguments), timeout=min(tool.timeout_seconds or self.timeout, 5.0))
             value = await asyncio.wait_for(tool.executor(arguments), timeout=tool.timeout_seconds or self.timeout)
+            dependencies=[]
+            # Capture trusted builtin dependencies before JSON/output budget truncation.
+            if tool.owner=='builtin' and name in {'recall_memory','search_history'} and isinstance(value,list):
+                for item in value:
+                    if isinstance(item,dict):
+                        dependency=(item.get('retrieval',{}).get('dependency') if name=='recall_memory' else item.get('source_dependency'))
+                        if dependency:
+                            dependencies.append(dependency)
             content = json.dumps(value, ensure_ascii=False, default=str) if isinstance(value, (dict, list)) else str(value)
             if len(content) > tool.max_output_chars:
                 content = content[:tool.max_output_chars] + f"\n…[输出已截断，原始 {len(content)} 字符]"
-            return ToolResult(name, True, content, int((time.perf_counter()-started)*1000))
+            return ToolResult(name, True, content, int((time.perf_counter()-started)*1000),dependencies)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
