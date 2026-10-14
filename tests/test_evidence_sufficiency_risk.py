@@ -155,7 +155,7 @@ def test_new_modes_freeze_no_gold_bound_calls_and_reject_foreign_sources(tmp_pat
     metrics=json.loads((result/'metrics.json').read_text())
     manifest=json.loads((result/'manifest.json').read_text())
     assert metrics['requested_cases']==8 and metrics['errors']==0
-    assert manifest['protocol']['id'].startswith('locomo-sufficiency-risk-v2-'+method)
+    assert manifest['protocol']['id'].startswith('locomo-sufficiency-risk-v3-'+method)
     assert metrics['reader_calls']==24 and metrics['automatic_memory_writes']==0
     rows=[json.loads(line) for line in (result/'cases.jsonl').read_text().splitlines()]
     assert all(r['adaptive_policy']['calls']<=6 and not r['adaptive_policy']['full_history_reader_allowed'] for r in rows)
@@ -237,3 +237,124 @@ def test_repair_cannot_release_a_second_answer_with_refusal_text():
                         method='targeted',reader_system=bench.SYSTEM,select_context=bench.select_context))
     assert row['answer_status']=='abstain' and row['evidence_ids']==[]
     assert len(row['policy_contract_errors'])==4 and row['adaptive_policy']['calls']==5
+
+
+def test_pipeline_reservation_is_atomic_and_repairs_cannot_steal_support_budget():
+    policy=AdaptiveFallback(max_calls=4,max_input_bytes=1000)
+    report=lambda size: {'input_bytes':size,'fits':True}
+    assert policy.reserve_call('gate',report(100))
+    assert policy.hold_calls('answer_pipeline',[report(100),report(200),report(200)])
+    assert not policy.reserve_call('extra_gate',report(1))
+    assert policy.reserve_call('reader',report(90),reservation='answer_pipeline')
+    assert not policy.reserve_call('reader_repair',report(1))
+    with pytest.raises(ValueError,match='exceeds pipeline'):
+        policy.reserve_call('support',report(201),reservation='answer_pipeline')
+    assert policy.reserve_call('support',report(150),reservation='answer_pipeline')
+    assert policy.reserve_call('support',report(180),reservation='answer_pipeline')
+    assert policy.public()['reserved_calls']==0 and policy.calls==4 and policy.input_bytes==520
+    failed=AdaptiveFallback(max_calls=2,max_input_bytes=256)
+    assert not failed.hold_calls('pipeline',[report(150),report(150)])
+    assert failed.calls==failed.input_bytes==0 and not failed.held
+
+
+@pytest.mark.parametrize('state',['missing_fact','conflict'])
+def test_inconsistent_negative_gate_gets_one_repair_without_promotion(state):
+    from memoria.memory.verification import verify
+    original={**sufficient(),'state':state}
+    invalid_promotion=sufficient()
+    outputs=[original,invalid_promotion];errors=[]
+    async def call(stage,system,packet):
+        if len(outputs)==1: assert 'must not be promoted' in system
+        return ChatResult(content=json.dumps(outputs.pop(0)))
+    with pytest.raises(ValueError,match='cannot promote'):
+        asyncio.run(verify(call,'sufficiency','Assess',{},
+            lambda value:EvidenceSufficiency().validate(value,evidence()),errors))
+    assert len(errors)==2
+
+
+def test_missing_requirement_repair_preserves_unknown_and_exact_source_checks():
+    from memoria.memory.verification import verify
+    outputs=[{**sufficient(),'state':'missing_fact'}, {'state':'missing_fact','requirements':[
+        {'fact':'unavailable pet name','status':'missing','sources':[]}],
+        'missing_queries':['pet name'],'reason':'Missing name.'}]
+    errors=[]
+    async def call(*args):return ChatResult(content=json.dumps(outputs.pop(0)))
+    decision=asyncio.run(verify(call,'sufficiency','Assess',{},
+        lambda value:EvidenceSufficiency().validate(value,evidence()),errors))
+    assert decision['state']=='missing_fact' and len(errors)==1
+    assert not decision['semantic_sufficiency_verified']
+
+
+@pytest.mark.parametrize('twice',[False,True])
+def test_verifier_length_has_bounded_complete_regeneration_and_never_parses_partial(twice):
+    from memoria.memory.verification import verify
+    from memoria.llm.types import IncompleteResponseError
+    calls=[];errors=[]
+    async def call(stage,system,packet):
+        calls.append(system)
+        if len(calls)==1 or twice:
+            # Even syntactically complete JSON with finish_reason=length is invalid.
+            return ChatResult(content=json.dumps(sufficient()),finish_reason='length',usage={'total_tokens':20})
+        return ChatResult(content=json.dumps(sufficient()))
+    task=verify(call,'sufficiency','Assess',{},lambda v:EvidenceSufficiency().validate(v,evidence()),errors)
+    if twice:
+        with pytest.raises(IncompleteResponseError):asyncio.run(task)
+    else: assert asyncio.run(task)['state']=='sufficient'
+    assert len(calls)==2 and 'COMPLETE JSON' in calls[1]
+    assert errors[0]['code']=='output_length' and len(errors)==(2 if twice else 1)
+
+
+def test_support_envelope_covers_unicode_json_escapes_and_complete_repair_input():
+    from memoria.memory.verification import support_envelope,REPAIR_INSTRUCTION
+    from memoria.memory.answer_risk import SYSTEM
+    from memoria.prompting.reader_budget import ReaderBudget
+    settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    meter=ReaderBudget(settings)
+    packet={'question':'Temporary','evidence':evidence()}
+    bound=asyncio.run(support_envelope(meter,SYSTEM,packet))
+    for answer in ('😀'*4000,'\x01'*4000,'"\\'*2000):
+        actual=asyncio.run(meter.measure(settings.main,[{'role':'system','content':SYSTEM+REPAIR_INSTRUCTION},
+            {'role':'user','content':json.dumps({**packet,'proposed_answer':answer},ensure_ascii=False,sort_keys=True,separators=(',',':'))}],None,2048))
+        assert actual['input_bytes']<=bound['input_bytes']
+
+
+def test_runner_repairs_negative_gate_and_truncated_support_inside_reserved_pipeline():
+    from memoria.experiments.locomo_risk import run_case
+    from memoria.llm.types import IncompleteResponseError
+    text=evidence()[0]['text']
+    history=[dict(id='source-a',content=text,text=text,content_sha256=bench.sha(text),
+        source_text_sha256=bench.sha(text),speaker='Temporary A',session_id='s1',session_date_raw='unknown')]
+    chosen=bench.select_context(history,history,question='What pets?')
+    class Client:
+        def __init__(self):self.calls=[];self.gates=0;self.supports=0
+        async def call(self,role,messages,**kw):
+            packet=json.loads(messages[1]['content'])
+            self.calls.append({'usage':{'total_tokens':10}})
+            if messages[0]['content'].startswith('Assess'):
+                self.gates+=1
+                value={**sufficient(),'state':'missing_fact'} if self.gates==1 else {
+                    'state':'missing_fact','requirements':[{'fact':'missing pet details','status':'missing','sources':[]}],
+                    'missing_queries':['pet details'],'reason':'No details.'}
+            elif 'proposed_answer' in packet:
+                self.supports+=1
+                if self.supports==1:raise IncompleteResponseError('length')
+                value=support()
+            else:value={'status':'answer','answer':'three dogs','evidence_ids':['source-a']}
+            return ChatResult(content=json.dumps(value),usage={'total_tokens':10})
+    # Repair of a negative gate stays negative; the next retrieval adds evidence before a new positive assessment.
+    client=Client()
+    original=client.call
+    async def call(role,messages,**kw):
+        if client.gates>=2 and messages[0]['content'].startswith('Assess'):
+            client.calls.append({'usage':{'total_tokens':10}})
+            return ChatResult(content=json.dumps(sufficient()))
+        return await original(role,messages,**kw)
+    client.call=call
+    async def retrieve(*args):return history,{}
+    row={};settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    asyncio.run(run_case(client,settings,load_roles(None),'What pets?',history,history,chosen,row,retrieve,
+        method='adaptive_risk',reader_system=bench.SYSTEM,select_context=bench.select_context))
+    assert row['answer_status']=='answer' and row['answer']=='three dogs'
+    assert row['adaptive_policy']['calls']==6 and row['adaptive_policy']['reserved_calls']==0
+    assert [e['code'] for e in row['policy_contract_errors']]==['invalid_contract','output_length']
+    assert sum(c['usage']['total_tokens'] for c in client.calls)==60

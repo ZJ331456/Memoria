@@ -237,6 +237,59 @@ def test_abstention_text_cannot_smuggle_unverified_facts(core):
     assert guard.validate(result,messages)['answer']==SAFE_UNKNOWN
 
 
+def test_complete_json_with_length_finish_cannot_pass_citation_guard(core):
+    approved(core);guard,messages=guard_for(core)
+    result=valid_response(guard);result.finish_reason='length'
+    verdict=guard.validate(result,messages)
+    assert verdict['status']=='abstain' and verdict['validation']['reason']=='incomplete_reader_output'
+
+
+def test_opt_in_pipeline_bytes_are_reserved_before_reader_is_called(core):
+    approved(core)
+    class LLM:
+        settings=Settings.load(core[3]);calls=0
+        async def chat(self,messages,**kw):
+            self.calls+=1
+            assert messages[0]['content'].startswith('Assess')
+            item=json.loads(messages[1]['content'])['evidence'][0]
+            return ChatResult(content=json.dumps({'state':'sufficient','requirements':[{'fact':'language',
+                'status':'supported','sources':[{'id':item['id'],'quote':item['text']}]}],
+                'missing_queries':[],'reason':'Engineering only'}))
+    llm=LLM();llm.settings.reader_input_bytes=12000
+    result=asyncio.run(read_memory_answer(core[1].claims,core[1].runtime.memory,llm,
+        QueryRequest(query='我用什么语言回答',use_answer_risk=True)))
+    assert llm.calls==1 and not result['reader_called'] and result['citations']==[]
+    assert result['validation']['reason']=='answer_pipeline_budget_unavailable'
+    assert result['risk_checks']['policy']['calls']==1
+    assert any(t['decision']=='pipeline_budget_unavailable' for t in result['risk_checks']['policy']['trace'])
+
+
+def test_production_truncated_support_regenerates_and_preserves_both_usages(core):
+    approved(core);guard,_=guard_for(core);ids=list(guard.catalog)
+    class LLM:
+        settings=Settings.load(core[3]);calls=0;support_calls=0
+        async def chat(self,messages,**kw):
+            self.calls+=1;packet=json.loads(messages[1]['content']) if messages[0]['content'].startswith(('Assess','Verify')) else {}
+            if messages[0]['content'].startswith('Assess'):
+                source=packet['evidence'][0]
+                value={'state':'sufficient','requirements':[{'fact':'language','status':'supported',
+                    'sources':[{'id':source['id'],'quote':source['text']}]}],'missing_queries':[],'reason':'Direct'}
+            elif messages[0]['content'].startswith('Verify'):
+                self.support_calls+=1
+                if self.support_calls==1:return ChatResult(content='{"verdict":',finish_reason='length',usage={'total_tokens':20})
+                source=packet['evidence'][0]
+                value={'verdict':'supported','claims':[{'statement':'中文','relation':'supported','basis':'explicit',
+                    'sources':[{'id':source['id'],'quote':source['text']}],'reason':'Direct'}],'missing_queries':[],'reason':'Direct'}
+            else:value={'status':'answer','answer':'中文','evidence_ids':ids}
+            return ChatResult(content=json.dumps(value),usage={'total_tokens':10})
+    llm=LLM();result=asyncio.run(read_memory_answer(core[1].claims,core[1].runtime.memory,llm,
+        QueryRequest(query='我用什么语言回答',use_answer_risk=True)))
+    assert result['status']=='answer' and llm.calls==4
+    assert sum(u['total_tokens'] for u in result['risk_checks']['usage'])==40
+    assert result['risk_checks']['contract_errors'][0]['code']=='output_length'
+    assert result['risk_checks']['policy']['reserved_calls']==0
+
+
 def test_claim_conditions_and_negation_cannot_lose_required_citations(core):
     approved(core,'咖啡',predicate='diet'); approved(core,'茶',predicate='diet',polarity='negative')
     guard,messages=guard_for(core,'我的饮食有哪些')

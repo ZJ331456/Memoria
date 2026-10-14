@@ -5,12 +5,13 @@ from collections import defaultdict
 from ..memory.adaptive_fallback import AdaptiveFallback
 from ..memory.answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM, query_risk, is_refusal
 from ..memory.evidence_sufficiency import EvidenceSufficiency, SYSTEM as SUFFICIENCY_SYSTEM
-from ..memory.reader import strict_json
+from ..memory.verification import verify, support_envelope
+from ..llm.types import ContextLengthError, IncompleteResponseError
 from ..prompting.reader_budget import ReaderBudget
 from .history import canonical
 from .locomo import parse_answer
 
-PROTOCOL = 'locomo-sufficiency-risk-v2'
+PROTOCOL = 'locomo-sufficiency-risk-v3'
 UNKNOWN = {'status': 'abstain', 'answer': 'Not mentioned.', 'evidence_ids': []}
 
 
@@ -34,26 +35,28 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
         prepared = await ReaderBudget(settings).prepare(
             [{'role': 'system', 'content': system}, {'role': 'user', 'content': canonical(packet)}],
             selected=model, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
-        if not policy.reserve_call(stage, prepared.report):
+        ticket = 'answer_pipeline' if method == 'adaptive_risk' and stage in {'reader','support'} else None
+        if not policy.reserve_call(stage, prepared.report, reservation=ticket):
             return None
         row['risk_call_stages'].append({'call': len(client.calls), 'stage': stage, 'role': role,
                                        'reader_budget': prepared.report})
+        row['adaptive_policy']=policy.public()
         return await client.call(role, prepared.messages, stream=False)
 
     async def assess(evidence):
         if not evidence:
             return {'state': 'unsupported', 'missing_queries': [question], 'reason': 'empty_packet',
                     'semantic_sufficiency_verified': False}
-        result = await call('sufficiency', SUFFICIENCY_SYSTEM, {'question': question, 'evidence': evidence})
-        if result is None:
-            return {'state': 'unsupported', 'missing_queries': [], 'reason': 'case_budget_exhausted'}
         try:
-            if result.tool_calls:
-                raise ValueError('Assessor tool calls forbidden')
-            decision = EvidenceSufficiency().validate(strict_json(result.content), evidence)
-        except (ValueError, TypeError) as exc:
-            row['policy_contract_errors'].append({'stage': 'sufficiency', 'error': type(exc).__name__})
-            decision = {'state': 'missing_fact', 'missing_queries': [question],
+            decision = await verify(call, 'sufficiency', SUFFICIENCY_SYSTEM,
+                {'question':question, 'evidence':evidence},
+                lambda value: EvidenceSufficiency().validate(value,evidence), row['policy_contract_errors'])
+        except IncompleteResponseError:
+            raise  # A second length failure remains an auditable engineering failure.
+        except ContextLengthError:
+            decision = {'state':'unsupported','missing_queries':[], 'reason':'case_budget_exhausted'}
+        except (ValueError, TypeError):
+            decision = {'state': 'unsupported', 'missing_queries': [question],
                         'reason': 'assessor_contract_rejected', 'semantic_sufficiency_verified': False}
         row['sufficiency_checks'].append({'round': policy.retrieval_rounds, **decision})
         return decision
@@ -91,20 +94,33 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
 
     async def support(answer, evidence):
         cited = [e for e in evidence if e['id'] in answer['evidence_ids']]
-        result = await call('support', SUPPORT_SYSTEM, {'question': question, 'proposed_answer': answer['answer'],
-                                                      'evidence': cited, 'query_risk': risk})
-        if result is None:
-            return {'accepted': False, 'verdict': 'insufficient', 'missing_queries': [], 'reason': 'case_budget_exhausted'}
         try:
-            if result.tool_calls:
-                raise ValueError('Verifier tool calls forbidden')
-            decision = AnswerRisk().validate(strict_json(result.content), question, answer, evidence)
-        except (ValueError, TypeError) as exc:
-            row['policy_contract_errors'].append({'stage': 'support', 'error': type(exc).__name__})
+            decision = await verify(call, 'support', SUPPORT_SYSTEM,
+                {'question':question, 'proposed_answer':answer['answer'], 'evidence':cited, 'query_risk':risk},
+                lambda value: AnswerRisk().validate(value,question,answer,evidence), row['policy_contract_errors'])
+        except IncompleteResponseError:
+            raise
+        except ContextLengthError:
+            decision = {'accepted':False,'verdict':'insufficient','missing_queries':[], 'reason':'case_budget_exhausted'}
+        except (ValueError, TypeError):
             decision = {'accepted': False, 'verdict': 'insufficient', 'missing_queries': [question],
                         'reason': 'support_contract_rejected', 'semantic_entailment_verified': False}
         row['support_checks'].append({'round': policy.retrieval_rounds, **decision})
         return decision
+
+    async def reserve_answer_pipeline(evidence):
+        cfg = roles['reader']
+        meter = ReaderBudget(settings)
+        prepared = await meter.prepare(
+            [{'role':'system','content':reader_system},
+             {'role':'user','content':canonical({'question':question,'evidence':evidence})}],
+            selected=getattr(settings,cfg.slot), max_tokens=cfg.max_tokens,
+            temperature=cfg.temperature, top_p=cfg.top_p)
+        judge = roles['judge']
+        envelope = await support_envelope(meter,SUPPORT_SYSTEM,
+            {'question':question,'evidence':evidence,'query_risk':risk}, selected=getattr(settings,judge.slot),
+            max_tokens=judge.max_tokens,temperature=judge.temperature,top_p=judge.top_p)
+        return policy.hold_calls('answer_pipeline',[prepared.report,envelope,envelope])
 
     async def expand(decision):
         nonlocal all_anchors, chosen
@@ -158,14 +174,21 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
                 answer={**UNKNOWN,'status':'clarify' if decision['state']=='conflict' else 'abstain'}
                 break
             if decision['state'] == 'sufficient':
-                candidate = await read(evidence)
-                if candidate['status'] == 'answer':
-                    decision = await support(candidate, evidence)
-                    if decision['accepted']:
-                        answer = candidate
-                        break
-                else:
-                    decision = {'state': 'missing_fact', 'missing_queries': [question], 'reason': 'reader_abstained'}
+                if not await reserve_answer_pipeline(evidence):
+                    row['pipeline_budget_unavailable'] = True
+                    break  # Do not spend Reader tokens on an answer that cannot be verified.
+                try:
+                    candidate = await read(evidence)
+                    if candidate['status'] == 'answer':
+                        decision = await support(candidate, evidence)
+                        if decision['accepted']:
+                            answer = candidate
+                            break
+                    else:
+                        decision = {'state': 'missing_fact', 'missing_queries': [question], 'reason': 'reader_abstained'}
+                finally:
+                    policy.release('answer_pipeline')
+                    row['adaptive_policy']=policy.public()
             if not await expand(decision):
                 answer = {**UNKNOWN, 'status': 'clarify' if decision.get('state') == 'conflict' else 'abstain'}
                 break

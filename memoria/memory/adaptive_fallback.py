@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-VERSION = 'bounded-targeted-fallback-v1'
+VERSION = 'bounded-targeted-fallback-v2'
 
 
 @dataclass
@@ -16,6 +16,7 @@ class AdaptiveFallback:
     retrieval_rounds: int = 0
     searched_queries: set[str] = field(default_factory=set)
     trace: list[dict] = field(default_factory=list)
+    held: dict[str, list[int]] = field(default_factory=dict)
 
     def __post_init__(self):
         if (not 1 <= len(self.evidence_budgets) <= 3 or any(type(b) is not int or b < 256 or b > 24000 for b in self.evidence_budgets)
@@ -24,11 +25,40 @@ class AdaptiveFallback:
                 or type(self.max_input_bytes) is not int or not 256 <= self.max_input_bytes <= 240000):
             raise ValueError('Invalid adaptive budget')
 
-    def reserve_call(self, stage: str, prepared_report: dict):
+    def hold_calls(self, name: str, reports: list[dict]):
+        """Atomically hold future complete requests without recording them as actual calls."""
+        if name in self.held or not reports:
+            raise ValueError('Invalid reservation')
+        sizes = [r['input_bytes'] for r in reports]
+        if any(type(s) is not int or s < 0 for s in sizes):
+            raise ValueError('Invalid complete request budget')
+        pending = [s for group in self.held.values() for s in group]
+        if (not all(r['fits'] for r in reports) or self.calls + len(pending) + len(sizes) > self.max_calls
+                or self.input_bytes + sum(pending) + sum(sizes) > self.max_input_bytes):
+            self.trace.append({'stage': name, 'decision': 'pipeline_budget_unavailable'})
+            return False
+        self.held[name] = sizes
+        self.trace.append({'stage': name, 'decision': 'pipeline_reserved', 'calls': len(sizes), 'input_bytes': sum(sizes)})
+        return True
+
+    def release(self, name: str):
+        unused = self.held.pop(name, [])
+        if unused:
+            self.trace.append({'stage': name, 'decision': 'reservation_released', 'calls': len(unused), 'input_bytes': sum(unused)})
+
+    def reserve_call(self, stage: str, prepared_report: dict, *, reservation: str | None = None):
         size = prepared_report['input_bytes']
         if type(size) is not int or size < 0 or not prepared_report['fits']:
             raise ValueError('Invalid complete request budget')
-        if self.calls >= self.max_calls or self.input_bytes + size > self.max_input_bytes:
+        pending = [s for group in self.held.values() for s in group]
+        if reservation is not None:
+            group = self.held.get(reservation, [])
+            if not group or size > group[0]:
+                raise ValueError('Request exceeds pipeline reservation')
+            group.pop(0)
+            if not group:
+                self.held.pop(reservation)
+        elif self.calls + len(pending) >= self.max_calls or self.input_bytes + sum(pending) + size > self.max_input_bytes:
             self.trace.append({'stage': stage, 'decision': 'case_budget_exhausted'})
             return False
         self.calls += 1
@@ -63,6 +93,8 @@ class AdaptiveFallback:
 
     def public(self):
         return {'version': VERSION, 'calls': self.calls, 'input_bytes': self.input_bytes,
+                'reserved_calls':sum(len(v) for v in self.held.values()),
+                'reserved_input_bytes':sum(sum(v) for v in self.held.values()),
                 'retrieval_rounds': self.retrieval_rounds, 'max_calls': self.max_calls,
                 'max_input_bytes': self.max_input_bytes, 'evidence_budgets_chars': list(self.evidence_budgets),
                 'full_history_reader_allowed': False, 'trace': self.trace}

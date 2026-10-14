@@ -4,6 +4,10 @@
 
 以下命令从仓库根运行，解释器统一为`.\.venv\Scripts\python.exe`。这里是本机管理工具；Web接口不接受任意脚本、文件路径或他人研究输入。--help只显示参数，不代表模型调用成功。
 
+## 一键业务后台
+
+双击根目录[start_backend.cmd](../start_backend.cmd)，或`.\start_backend.cmd`；`-Action Status`/`-Action Stop`查看或停止该脚本的进程。内部[backend.ps1](backend.ps1)仅用项目venv、私密配置、loopback和隐藏窗口，日志在忽略的data/logs/system，端口占用不另起/误杀。首次依赖和Studio先准备，本地HTTP模型8080仍独立启动。[完整使用及真实验证](../docs/implemented/本机后台启动与停止.md)。
+
 ## 环境与模型
 
 | 文件 | 职责/命令 | 边界 |

@@ -16,6 +16,13 @@ class ContentSafetyError(ProviderError):
     pass
 
 
+class IncompleteResponseError(ValueError):
+    """A recorded provider completion that must never be parsed as a final answer."""
+    def __init__(self, finish_reason):
+        self.finish_reason = finish_reason
+        super().__init__(f'incomplete final content: {finish_reason}')
+
+
 @dataclass(slots=True)
 class ChatResult:
     content: str = ""

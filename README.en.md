@@ -38,6 +38,8 @@ Production defaults remain. Optional `use_answer_risk` enables pre/post checks; 
 
 ## Local setup and startup
 
+After preparing `.venv`, private `config.toml` and the Studio build, double-click [start_backend.cmd](start_backend.cmd), or run `.\start_backend.cmd` from the repository root. Use `-Action Status` / `-Action Stop` to manage its own background process. It binds `127.0.0.1:2237`, logs to ignored `data/logs/system/`, and refuses occupied ports. The local HTTP model service remains a separate dependency. See [launcher details](docs/implemented/本机后台启动与停止.md).
+
 Run from the repository root in Windows PowerShell. Preserve an existing private configuration and use the project virtual environment.
 
 ```powershell
@@ -76,3 +78,5 @@ Prioritize query-only risk gating and source support after fallback, multi-hop/o
 Per-user SQLite/WAL is the current storage design. Verified backup/restore, versioned migrations, full account export/deletion and backup retention, cost/resource quotas, SSRF-safe egress, HTTPS trusted proxies, tenant reclamation, readiness/monitoring/alerts, reproducible CI/releases and license inventories remain pending. See the [research and commercial plan](docs/plans/长期陪伴记忆研究与实验计划书.md) and [module documentation](memoria/README.md).
 
 Source manifests belong in [datasets/](datasets/README.md); raw benchmarks, private gold and per-case artifacts stay in ignored data/. Public aggregates and charts live in [docs/assets/evaluation/](docs/assets/evaluation/README.md). Secrets and model weights remain local; old personal history stays unimported. See [AI instructions](AGENTS.md) and [GitHub conventions](docs/implemented/github提交规范.md).
+
+The four-method table remains the frozen v2 result. The v3 contract-repair, Reader/support reservation and truncated-verifier handling have only engineering validation (88 related tests plus two Windows launcher safety tests). No benchmark or model call was rerun; the historical one-case failure and scores remain unchanged. Higher adversarial phrase score is preferable on that unanswerable subset only; it does not establish semantic correctness and must be assessed together with ordinary F1, unnecessary refusals and total cost.

@@ -107,3 +107,23 @@ def test_roles_send_explicit_generation_settings_and_record_actual_usage(tmp_pat
     assert (client.calls[0]["ttft_ms"] is not None) == stream
     assert client.timings.stages["llm.reader"]["calls"] == 1
     assert {file for file, row in recorded} == {"prompts.jsonl", "calls.jsonl"}
+
+
+def test_truncated_completion_retains_usage_error_and_partial_output_in_private_ledger(tmp_path):
+    from memoria.llm.types import IncompleteResponseError
+    config=tmp_path/'config.toml'
+    config.write_text('[llm.main]\nmodel="fixture"\nbase_url="http://127.0.0.1:8080/v1"\n',encoding='utf-8')
+    records=[]
+    class Recorder:
+        def append(self,file,row):records.append((file,row))
+    def handler(request):
+        return httpx.Response(200,json={'choices':[{'message':{'content':'{"partial":'},'finish_reason':'length'}],
+            'usage':{'prompt_tokens':10,'completion_tokens':20,'total_tokens':30}})
+    client=ExperimentLLM(Settings.load(config),load_roles(None),Recorder(),StageTimings())
+    client.transport=httpx.MockTransport(handler)
+    with pytest.raises(IncompleteResponseError) as error:
+        asyncio.run(client.call('judge',[{'role':'user','content':'engineering input'}]))
+    assert error.value.finish_reason=='length'
+    assert len(client.calls)==1 and client.calls[0]['usage']['total_tokens']==30
+    assert client.calls[0]['finish_reason']=='length' and client.calls[0]['error'].startswith('IncompleteResponseError')
+    assert client.calls[0]['response']=='{"partial":'

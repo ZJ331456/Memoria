@@ -370,9 +370,14 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         from .locomo_risk import PROTOCOL as RISK_PROTOCOL
         from ..memory.answer_risk import SYSTEM as SUPPORT_SYSTEM
         from ..memory.evidence_sufficiency import SYSTEM as SUFFICIENCY_SYSTEM
+        from ..memory.verification import REPAIR_INSTRUCTION
         protocol = {**protocol, 'id': RISK_PROTOCOL + '-' + fallback + '-' + scope,
                     'sufficiency_system_sha256': sha(SUFFICIENCY_SYSTEM),
                     'support_system_sha256': sha(SUPPORT_SYSTEM),
+                    'verification_policy':{'version':'bounded-contract-repair-v1',
+                        'repair_system_sha256':sha(REPAIR_INSTRUCTION), 'max_attempts_per_check':2,
+                        'judge_max_tokens':2048, 'reader_support_reservation':'reader + support + one support retry',
+                        'answer_bound_chars':4000},
                     'supplement_policy':'retain_previous_evidence_then_up_to_80_rrf_supplements',
                     'stop_policy':'unsupported/conflict after first supplement; no complete-history Reader',
                     'adaptive_limits': {'evidence_chars': [evidence_chars,16000,20000] if fallback=='adaptive_risk'
@@ -381,7 +386,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
     settings = account_settings(copy.deepcopy(settings), workspace, profile)
     roles = roles or load_roles(None)
     if risk_method:
-        roles = {**roles, 'judge': replace(roles['reader'], max_tokens=1536)}
+        roles = {**roles, 'judge': replace(roles['reader'], max_tokens=2048)}
     local_policy(settings, roles, allow_remote)
     selected = copy.deepcopy(getattr(settings, roles['reader'].slot))
     if roles['reader'].thinking == 'disabled_by_deepseek_api':
@@ -423,7 +428,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
             previous, rows, calls = checkpoint_rows(workspace,resume_from,protocol,cases,histories,retry_errors)
             for field in ('baseline','selector','candidate_limit','anchor_limit','evidence_chars','context_radius',
                           'rrf_k','lexical','reader_system_sha256','embedding_model','fallback','fallback_call_limit','contract_repair_call_limit',
-                          'sufficiency_system_sha256','support_system_sha256','adaptive_limits','supplement_policy','stop_policy'):
+                          'sufficiency_system_sha256','support_system_sha256','adaptive_limits','supplement_policy','stop_policy','verification_policy'):
                 if previous['protocol'].get(field) != recorder.manifest['protocol'].get(field):
                     raise ValueError('Checkpoint inference settings differ')
             if previous['models'] != recorder.manifest['models'] or previous['model_snapshots'] != recorder.manifest['model_snapshots']:

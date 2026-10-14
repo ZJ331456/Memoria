@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ..llm import LLMClient
+from ..llm.types import IncompleteResponseError
 from ..observability.timing import StageTimings
 from .records import safe_endpoint
 
@@ -86,7 +87,7 @@ class ExperimentLLM(LLMClient):
             row.update(usage=result.usage or None, retries=result.retries, finish_reason=result.finish_reason,
                        response=result.content, tool_calls=result.tool_calls)
             if result.finish_reason not in {None, "stop"} or not result.content.strip():
-                raise ValueError(f"incomplete final content: {result.finish_reason}")
+                raise IncompleteResponseError(result.finish_reason)
             return result
         except BaseException as exc:
             row["error"] = f"{type(exc).__name__}: {exc}"
