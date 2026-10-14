@@ -251,10 +251,7 @@ class MemoryEngine:
         canonical = self._canonical(content)
         for item in items:
             if item["kind"] == kind and canonical == self._canonical(item["content"]):
-                if source_ref and self.store.has_memory_operation(source_ref, item["id"]):
-                    return MemoryWriteResult("skipped", item, item["id"], "source already applied")
-                reinforced = self.store.reinforce_memory(item["id"], source_ref, require_source=require_source)
-                return MemoryWriteResult("reinforced", reinforced, item["id"], "exact match")
+                return self._commit_write(content,kind,importance,source,source_ref=source_ref,require_source=require_source,reason='exact match')
 
         vector: list[float] | None = None
         document_chunks = None
@@ -309,7 +306,8 @@ class MemoryEngine:
             mutable_kinds = {"preference", "profile", "goal", "procedure"}
             if target and action == "supersede" and kind in mutable_kinds and float(target["relation_similarity"]) >= 0.55:
                 reason = decision.get("reason", "")
-                saved = self.store.add_memory(content, kind, importance, source, vector, target_id, reason, source_ref, require_source=require_source, embedding_namespace=embedding_namespace, embedding_chunks=document_chunks)
+                committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=target_id,reason=reason,source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+                saved = committed.memory
                 try:
                     organized = self.organize(content, kind)
                     with self.store.lock:
@@ -320,7 +318,8 @@ class MemoryEngine:
                     saved = self.store.memory(saved["id"]) or saved
                 except Exception as exc:
                     logger.warning("记忆已保存，属性或关联补充失败: %s", type(exc).__name__)
-                return MemoryWriteResult("superseded", saved, target_id, reason)
+                committed.memory = saved
+                return committed
 
         if not self.decider:
             for item in related:
@@ -328,13 +327,15 @@ class MemoryEngine:
                 if full and full.get("source") == "user_correction" and source not in {"manual", "reviewed_conversation"}:
                     continue
                 if full and full.get("status") == "active" and kind in {"preference", "profile", "goal", "procedure"} and self._contradicts(content, full["content"]):
-                    saved = self.store.add_memory(content, kind, importance, source, vector, item["id"], "contradiction auto-supersede", source_ref, require_source=require_source, embedding_namespace=embedding_namespace, embedding_chunks=document_chunks)
+                    committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=item['id'],reason='contradiction auto-supersede',source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+                    saved = committed.memory
                     try:
                         self.store.record_evolution(saved["id"], f"矛盾替代 {item['id']}: {content[:120]}")
                     except Exception as exc:
                         logger.warning("记忆已替代，演化记录补充失败: %s", type(exc).__name__)
-                    return MemoryWriteResult("superseded", saved, item["id"], "contradiction auto-supersede")
-        saved = self.store.add_memory(content, kind, importance, source, vector, source_ref=source_ref, require_source=require_source, embedding_namespace=embedding_namespace, embedding_chunks=document_chunks)
+                    return committed
+        committed = self._commit_write(content,kind,importance,source,vector,source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+        saved = committed.memory
         try:
             organized = self.organize(content, kind)
             with self.store.lock:
@@ -345,7 +346,13 @@ class MemoryEngine:
             saved = self.store.memory(saved["id"]) or saved
         except Exception as exc:
             logger.warning("记忆已保存，属性或关联补充失败: %s", type(exc).__name__)
-        return MemoryWriteResult("created", saved, reason="independent memory")
+        committed.memory = saved
+        return committed
+
+    def _commit_write(self, content, kind, importance, source, vector=None, **kwargs):
+        action, saved = self.store.add_memory_if_absent(content,kind,importance,source,vector,**kwargs)
+        previous = kwargs.get('supersedes_id') if action=='superseded' else saved['id'] if action in {'reinforced','skipped'} else None
+        return MemoryWriteResult(action,saved,previous,kwargs.get('reason','independent memory'))
 
     def refresh_markdown(self) -> str:
         if not self.markdown or not self.markdown.enabled:
@@ -516,7 +523,7 @@ class MemoryEngine:
 
     @staticmethod
     def _canonical(text: str) -> str:
-        return re.sub(r"[^\w\u4e00-\u9fff]+", "", text.lower())
+        return Store.canonical_memory(text)
 
     @staticmethod
     def _similar(a: set[str], b: set[str]) -> float:

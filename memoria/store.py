@@ -159,10 +159,14 @@ class Store:
                 "supersedes_id": "ALTER TABLE memories ADD COLUMN supersedes_id TEXT",
                 "last_reinforced_at": "ALTER TABLE memories ADD COLUMN last_reinforced_at TEXT",
                 "source_ref": "ALTER TABLE memories ADD COLUMN source_ref TEXT",
+                "content_key": "ALTER TABLE memories ADD COLUMN content_key TEXT",
             }
             for column, statement in migrations.items():
                 if column not in memory_columns:
                     self.db.execute(statement)
+            for row in self.db.execute('SELECT id,content FROM memories WHERE content_key IS NULL').fetchall():
+                self.db.execute('UPDATE memories SET content_key=? WHERE id=?', (self.memory_content_key(row['content']),row['id']))
+            self.db.execute('CREATE INDEX IF NOT EXISTS idx_memory_content_key ON memories(kind,content_key,status)')
             self.db.executescript("""
                 CREATE TABLE IF NOT EXISTS memory_source_dependencies (
                     memory_id TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
@@ -784,6 +788,33 @@ class Store:
         if row is None or row["role"] != "user":
             raise MemorySourceUnavailable("来源用户消息已删除，不能批准悬空记忆")
 
+    @staticmethod
+    def canonical_memory(content: str) -> str:
+        import unicodedata
+        return re.sub(r'\s+', ' ', unicodedata.normalize('NFKC', content).casefold()).strip()
+
+    @classmethod
+    def memory_content_key(cls, content: str) -> str:
+        return hashlib.sha256(cls.canonical_memory(content).encode()).hexdigest()
+
+    def add_memory_if_absent(self, content: str, kind: str, importance: int, source: str, embedding=None, **kwargs) -> tuple[str, dict]:
+        """Model work stays outside; the final exact recheck and mutation are atomic."""
+        with self._memory_transaction():
+            ref = kwargs.get('source_ref')
+            if kwargs.get('require_source'):
+                self._require_memory_source(ref)
+            if self.source_revoked(ref):
+                raise MemorySourceUnavailable('来源已撤销')
+            scope, params = self.retrieval_scope()
+            row = self.db.execute(f'SELECT m.* FROM memories m WHERE m.kind=? AND m.content_key=? AND {scope} ORDER BY m.created_at,m.id LIMIT 1',
+                (kind,self.memory_content_key(content),*params)).fetchone()
+            if row:
+                if ref and self.has_memory_operation(ref,row['id']):
+                    return 'skipped', self.memory(row['id'])
+                return 'reinforced', self.reinforce_memory(row['id'],ref,require_source=kwargs.get('require_source',False))
+            saved = self.add_memory(content,kind,importance,source,embedding,**kwargs)
+            return ('superseded' if kwargs.get('supersedes_id') else 'created'), saved
+
     def source_revoked(self, source_ref: str | None) -> bool:
         with self.lock:
             return bool(source_ref and self.db.execute('SELECT 1 FROM memory_source_revocations WHERE message_id=?', (source_ref,)).fetchone())
@@ -814,6 +845,7 @@ class Store:
             self.db.execute("""INSERT INTO memories
                 (id,content,kind,importance,source,created_at,updated_at,embedding,status,reinforcement,supersedes_id,last_reinforced_at,source_ref)
                 VALUES (:id,:content,:kind,:importance,:source,:created_at,:updated_at,:embedding,:status,:reinforcement,:supersedes_id,:last_reinforced_at,:source_ref)""", item)
+            self.db.execute('UPDATE memories SET content_key=? WHERE id=?',(self.memory_content_key(item['content']),item['id']))
             if source_ref and (require_source or source == 'reviewed_conversation' or self.message_source(source_ref)):
                 self.db.execute("INSERT INTO memory_source_dependencies(memory_id,message_id) VALUES(?,?)", (item['id'], source_ref))
             self._open_interval(item["id"], timestamp)
@@ -925,6 +957,7 @@ class Store:
             self.db.execute("""INSERT INTO memories
                 (id,content,kind,importance,source,created_at,updated_at,embedding,status,reinforcement,supersedes_id,last_reinforced_at,source_ref)
                 VALUES (:id,:content,:kind,:importance,:source,:created_at,:updated_at,:embedding,:status,:reinforcement,:supersedes_id,:last_reinforced_at,:source_ref)""", item)
+            self.db.execute('UPDATE memories SET content_key=? WHERE id=?',(self.memory_content_key(content),item['id']))
             self._open_interval(item["id"], timestamp)
             self.db.execute("INSERT INTO memories_fts(id,content) VALUES (?,?)", (item["id"], content))
             if embedding:

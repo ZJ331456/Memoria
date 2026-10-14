@@ -97,3 +97,33 @@ def test_query_embedding_race_never_returns_deleted_snapshot(tmp_path):
         store.close()
     started=release=None
     asyncio.run(case())
+
+
+def test_concurrent_exact_writes_recheck_inside_transaction(tmp_path):
+    class Embed:
+        enabled=True; namespace='engineering'; timeout_seconds=1
+        async def embed(self,text):
+            await asyncio.sleep(0)
+            return [1.0,0.0]
+    store=Store(tmp_path/'dedup.db','json')
+    engine=MemoryEngine(store,Embed())
+    async def case():
+        return await asyncio.gather(*(engine.remember('相同工程事实','fact',3,'test') for _ in range(2)))
+    results=asyncio.run(case())
+    assert sorted(r.action for r in results)==['created','reinforced']
+    assert len(store.memories())==1
+    store.close()
+
+
+def test_cross_connection_exact_writes_and_word_boundaries(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    path=tmp_path/'connections.db'
+    a,b=Store(path,'json'),Store(path,'json')
+    def write(store): return store.add_memory_if_absent('same fact','fact',3,'test')[0]
+    with ThreadPoolExecutor(2) as pool:
+        assert sorted(pool.map(write,(a,b)))==['created','reinforced']
+    assert len(a.memories())==1
+    a.add_memory_if_absent('the rapist','fact',3,'test')
+    a.add_memory_if_absent('therapist','fact',3,'test')
+    assert len(a.memories())==3
+    a.close(); b.close()
