@@ -64,3 +64,19 @@ def test_unbound_value_cannot_be_approved_as_current_state(tmp_path):
     assert app.state.service.claims.list()==[]
     assert app.state.store.memory_review(review['id'])['status']=='pending'
     app.state.store.close()
+
+
+def test_linked_condition_approval_retains_source_bound_scope(tmp_path):
+    app,client=core(tmp_path)
+    review,body=candidate(app,client,'面试模拟时我希望用英文回答')
+    body['kind']='preference'
+    body['claim'].update(predicate='response_language',value='英文',scope={'activity':'interview'},
+        condition_evidence=body['claim']['evidence'])
+    response=client.post('/api/memory-reviews/'+review['id']+'/approve',json=body)
+    assert response.status_code==200,response.text
+    service=app.state.service
+    result=asyncio.run(MemoryAccessOrchestrator(service.claims,service.runtime.memory).access(QueryRequest(query='面试模拟时我用什么语言回答？')))
+    assert result['state']['payload']['complete']
+    assert result['state']['payload']['claims'][0]['scope']=={'activity':'interview'}
+    assert result['state']['payload']['claims'][0]['condition_evidence']
+    app.state.store.close()
