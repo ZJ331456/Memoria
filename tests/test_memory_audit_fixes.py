@@ -61,6 +61,7 @@ def test_revoked_source_cannot_create_replace_or_reinforce_after_restart(tmp_pat
     other = store.add_memory('独立事实')
     store.undo_memory_sources([source['id']])
     store.close()
+
     store = Store(path, 'json')
     with pytest.raises(MemorySourceUnavailable):
         asyncio.run(MemoryEngine(store).remember('工程撤销样例', 'fact', 3, 'reviewed_conversation', source['id'], require_source=True))
@@ -73,3 +74,26 @@ def test_revoked_source_cannot_create_replace_or_reinforce_after_restart(tmp_pat
     assert not asyncio.run(MemoryEngine(store).retrieve('撤销样例'))
     assert store.memory(first['id'])['status']=='superseded'
     store.close()
+
+
+def test_query_embedding_race_never_returns_deleted_snapshot(tmp_path):
+    class Gated:
+        enabled=True; namespace='engineering'; timeout_seconds=1
+        async def embed(self,text):
+            started.set()
+            await release.wait()
+            return [1.0,0.0]
+    async def case():
+        nonlocal started,release
+        started,release=asyncio.Event(),asyncio.Event()
+        store=Store(tmp_path/'race.db','json')
+        engine=MemoryEngine(store,Gated())
+        item=store.add_memory('工程查询竞态',embedding=[1.0,0.0])
+        task=asyncio.create_task(engine.retrieve('工程查询'))
+        await asyncio.wait_for(started.wait(),2)
+        store.delete_memory(item['id'])
+        release.set()
+        assert await task==[]
+        store.close()
+    started=release=None
+    asyncio.run(case())

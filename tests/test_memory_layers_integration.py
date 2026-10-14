@@ -216,12 +216,16 @@ def test_disabled_layers_report_status_without_exposing_episode_endpoints(tmp_pa
 def test_review_cannot_promote_a_missing_source_message(tmp_path: Path):
     app = _app(tmp_path)
     store = app.state.store
-    job = store.enqueue_memory_job("deleted-message-id", "原始请求", "原始回复")
+    session = store.create_session()
+    source = store.add_message(session['id'], 'user', '原始请求')
+    job = store.enqueue_memory_job(source['id'], "原始请求", "原始回复")
     store.claim_memory_job("test-worker")
     review = store.stage_memory_reviews(job["id"], "test-worker", [
         {"content": "没有来源的候选记忆", "kind": "fact", "importance": 3},
     ])[0]
     store.finish_memory_job(job["id"], owner="test-worker")
+    store.db.execute('DELETE FROM messages WHERE id=?', (source['id'],))
+    store.db.commit()
     client = TestClient(app)
     response = client.post(
         f"/api/memory-reviews/{review['id']}/approve",

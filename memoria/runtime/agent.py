@@ -112,6 +112,7 @@ class AgentRuntime:
         context.metadata["turn_id"] = turn_id
         context.metadata["turn_kind"] = turn_kind
         user_message: dict[str, Any] | None = None
+        memory_dependencies = {}
         memory_budget = (
             TurnMemoryBudget(self.layers.retrieval_max_calls, self.layers.retrieval_max_chars)
             if self.layers and self.layers.enabled else None
@@ -152,6 +153,7 @@ class AgentRuntime:
                     "top_score": context.memories[0].get("retrieval", {}).get("score") if context.memories else None,
                     "sufficient": bool(context.memories and context.memories[0].get("retrieval", {}).get("score", 0) > 0),
                 }
+                memory_dependencies.update({m['id']:m['retrieval']['dependency'] for m in context.memories if m.get('retrieval',{}).get('dependency')})
 
                 episodes = (
                     self.episodes.search(user_text, self.layers.episode_top_k)
@@ -311,6 +313,10 @@ class AgentRuntime:
                         "truncated_messages": budget.truncated_messages,
                         "preserved_context_frame": budget.preserved_context_frame,
                     }
+                    if any(not self.store.memory_dependency_valid(d) for d in memory_dependencies.values()):
+                        context.response = SAFE_UNKNOWN
+                        context.metadata['memory_freshness'] = 'dependency_changed_before_reader'
+                        break
                     if citation_guard and (claim_access['path']=='clarify' or not any(v['eligible'] for v in citation_guard.catalog.values())):
                         context.response=citation_safe_answer=SAFE_UNKNOWN
                         context.metadata['citation_validation']={'valid':True,'reason':'access_requires_clarification','semantic_entailment_verified':False}
@@ -318,7 +324,7 @@ class AgentRuntime:
                         break
                     try:
                         prepared=await self.reader_budget.prepare(context.messages,None if citation_guard else self.tool_presentation.schemas(),
-                                                                 stream=bool(on_event and not citation_guard))
+                                                                 stream=bool(on_event and not citation_guard and not memory_dependencies))
                     except ContextLengthError:
                         context.response=citation_safe_answer='当前完整请求超过阅读预算，请缩短输入或减少上下文后重试。'
                         context.metadata['reader_budget']={'fits':False,'request_sent':False}
@@ -336,7 +342,7 @@ class AgentRuntime:
                             break
                     try:
                         tracer.mark_llm_request()
-                        if on_event and not citation_guard:
+                        if on_event and not citation_guard and not memory_dependencies:
                             async def stream_delta(text: str):
                                 tracer.mark_visible_text(text)
                                 await on_event({"type": "delta", "content": text})
@@ -441,6 +447,9 @@ class AgentRuntime:
                             memory_budget,
                         )
                     context.tool_chain.extend(tool_records)
+                    for record in tool_records:
+                        for dependency in record.get('memory_dependencies', []):
+                            memory_dependencies[dependency['id']] = dependency
                     if self.skills:
                         context.metadata["skills"]["loaded"].extend(
                             record["loaded_skill"] for record in tool_records if "loaded_skill" in record
@@ -461,6 +470,9 @@ class AgentRuntime:
 
                 await self.pipeline.run(Phase.AFTER_REASONING, context)
                 with self.store._memory_transaction():
+                    if any(not self.store.memory_dependency_valid(d) for d in memory_dependencies.values()):
+                        context.response = SAFE_UNKNOWN
+                        context.metadata['memory_freshness'] = 'dependency_changed_before_publish'
                     if citation_guard:
                         if context.response!=citation_safe_answer:
                             context.response=SAFE_REJECTED
@@ -472,7 +484,7 @@ class AgentRuntime:
                             context.metadata['citation_validation']=verdict['validation']
                             context.metadata['citations']=verdict['citations']
                     assistant_message = self.store.add_message(session_id, "assistant", context.response)
-                if citation_guard and on_event:
+                if (citation_guard or memory_dependencies) and on_event:
                     tracer.mark_visible_text(context.response)
                     await on_event({'type':'delta','content':context.response})
                 if not skip_memory_enqueue:
@@ -589,6 +601,13 @@ class AgentRuntime:
                     "content": content,
                     "parallel": len(tool_calls) > 1,
                 }
+                if tool_name == 'recall_memory' and tool_ok:
+                    try:
+                        recalled = json.loads(tool_result.content)
+                        record['memory_dependencies'] = [m['retrieval']['dependency'] for m in recalled
+                            if isinstance(m,dict) and m.get('retrieval',{}).get('dependency')]
+                    except (ValueError, TypeError, KeyError):
+                        record['memory_dependencies'] = []
                 if budget_blocked:
                     record["budget_blocked"] = True
                 if budget_truncated:

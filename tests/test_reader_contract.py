@@ -48,6 +48,28 @@ def guard_for(core,query='我用什么语言回答',**kw):
     return guard,messages
 
 
+@pytest.mark.parametrize('mutation', ['delete','correct','revoke'])
+def test_plain_memory_answer_buffered_until_dependency_validation(core, mutation):
+    store,service,sid,_=core
+    source=store.add_message(sid,'user','工程普通记忆独立样例')
+    memory=store.add_memory(source['content'],source_ref=source['id'],require_source=True)
+    service.runtime.retrieval_planner.planner=None
+    events=[]
+    async def event(value): events.append(value)
+    async def reader(*args,**kwargs):
+        if mutation=='delete': store.delete_memory(memory['id'])
+        elif mutation=='correct': store.correct_memory(memory['id'],'更正后的工程记忆','fact',3,'工程更正')
+        else: store.undo_memory_sources([source['id']])
+        return ChatResult(content='此处不应发布旧记忆')
+    async def no_stream(*args,**kwargs): raise AssertionError('memory answer must be buffered')
+    service.llm.chat=reader
+    service.llm.chat_stream=no_stream
+    message,_,trace=asyncio.run(service.runtime.run(sid,'工程普通记忆独立样例',on_event=event,skip_memory_enqueue=True))
+    assert message['content']==SAFE_UNKNOWN
+    assert [e['content'] for e in events if e['type']=='delta']==[SAFE_UNKNOWN]
+    assert trace['metadata']['memory_freshness']=='dependency_changed_before_publish'
+
+
 def valid_response(guard):
     return ChatResult(content=json.dumps({'status':'answer','answer':'临时工程回答','evidence_ids':[k for k,v in guard.catalog.items() if v['eligible']]},ensure_ascii=False))
 

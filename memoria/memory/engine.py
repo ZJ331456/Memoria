@@ -202,12 +202,19 @@ class MemoryEngine:
                     int(by_id[mid]["importance"])), reverse=True)
             except Exception as exc:
                 logger.warning("记忆图扩展失败: %s", type(exc).__name__)
+        # Embedding/model I/O yielded the event loop. Revalidate before publishing snapshots.
+        with self.store.lock:
+            stale = [mid for mid in ranked_ids if not self.store.memory_dependency_valid(self.store.memory_dependency(by_id[mid]), as_of=as_of)]
+            ranked_ids = [mid for mid in ranked_ids if mid not in stale]
+        if diagnostics is not None:
+            diagnostics['stale_candidate_ids'] = stale
         ranked_ids = self._apply_kind_quotas(ranked_ids, by_id, max(1, limit))
         result = []
         for memory_id in ranked_ids:
             item = dict(by_id[memory_id])
             item.pop("embedding", None)
             item["retrieval"] = {
+                "dependency": self.store.memory_dependency(item),
                 "score": round(fused[memory_id], 6),
                 "keyword_rank": self._rank(lanes["keyword"], memory_id),
                 "bm25_rank": self._rank(lanes["bm25"], memory_id),

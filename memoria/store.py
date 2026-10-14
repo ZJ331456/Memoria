@@ -755,6 +755,17 @@ class Store:
                 "ORDER BY m.importance DESC,m.reinforcement DESC,m.updated_at DESC LIMIT ?", (*params, limit)).fetchall()
             return [self._memory_at(dict(r), normalize_time(as_of)) if as_of else self._memory(dict(r)) for r in rows]
 
+    @staticmethod
+    def memory_dependency(item: dict) -> dict:
+        return {key:item.get(key) for key in ('id','updated_at','status','source_ref')} | {
+            'content_sha256': hashlib.sha256(item['content'].encode()).hexdigest()}
+
+    def memory_dependency_valid(self, snapshot: dict, *, as_of: str | None = None) -> bool:
+        scope, params = self.retrieval_scope(as_of=as_of)
+        with self.lock:
+            row = self.db.execute(f'SELECT m.* FROM memories m WHERE m.id=? AND {scope}', (snapshot['id'], *params)).fetchone()
+            return bool(row and self.memory_dependency(dict(row)) == snapshot)
+
     def _memory_at(self, row: dict[str, Any], timestamp: str) -> dict[str, Any]:
         item = self._memory(row)
         with self.lock:
