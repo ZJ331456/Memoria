@@ -181,6 +181,8 @@ Chat访问http://127.0.0.1:5173/，Studio访问http://127.0.0.1:5173/studio/，/
 
 ## 可选MCP与公开诊断来源
 
+手机飞书机器人对话使用独立的[消息入口与绑定流程](docs/implemented/飞书机器人对话接入.md)：安装requirements-feishu.txt、运行私密配置命令、发布平台事件/权限后，登录Chat点击“连接飞书”。MCP文档授权不会自动接收机器人消息；应用ID、Secret及绑定只保存本机忽略目录。
+
 这些不是最小启动必需项，仅配置已有账号：
 
 ```powershell

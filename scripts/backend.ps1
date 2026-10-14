@@ -89,6 +89,9 @@ do {
         Write-Host "Chat ready: $taskUrl/ (PID=$($taskStarted.Id))"
         Write-Host "Memory Studio: $taskUrl/studio/"
         Write-Host "API docs: $taskUrl/docs"
+        if (Test-Path -LiteralPath (Join-Path $taskRoot 'data\config\feishu-bot.json')) {
+            Write-Host 'Feishu bot: privately configured channels start with this backend. Check connection and pair after login in Chat.'
+        }
         Write-Host "Logs: $taskLogs"
         if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\studio\index.html')) -or
             -not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\chat\index.html'))) {

@@ -39,6 +39,7 @@ evaluate_retrieval.py读取公开注册协议、要求clean代码及指纹/分�
 | install_mcp.py | 无参数时在项目.mcp安装锁定搜索/飞书npm依赖和校验后的官方GitHub二进制；`--help`只显示说明，未知参数拒绝 |
 | configure_mcp.py | `--user your_username`写账号独立工具白名单配置 |
 | configure_feishu.py | `--user your_username`私密输入与OAuth；`--login-only`重授权 |
+| configure_feishu_bot.py | 独立机器人消息入口；隐藏输入或`--from-user your_username`复用加密应用凭据，`--disable`关闭；无默认绑定 |
 | mcp_server.py | 正式本机stdio桥接，读取指定账号凭据，避免命令行Secret |
 | check_mcp.py | `--user your_username [--server search/github/feishu]`真实初始化与只读业务调用 |
 | prepare_real_dialogues.py | `--limit 50 --user your_username`复现公开LCCC子集和回执，重复导入核对原文 |

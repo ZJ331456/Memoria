@@ -73,6 +73,8 @@ MCP and source import are optional, not part of the minimal startup. See [script
 
 ## Next work and commercial readiness
 
+Feishu bot messaging is separate from document MCP/OAuth. The optional `requirements-feishu.txt` SDK and local DPAPI configuration enable a private-message listener; each person must pair from their logged-in Chat/Studio account. See the [bot setup and verified scope](docs/implemented/飞书机器人对话接入.md). Private app credentials, bindings and conversations remain outside Git.
+
 Prioritize query-only risk gating and source support after fallback, multi-hop/open-domain evidence coverage and time precision, then registered comparisons with trusted local Reader token budgets and independent holdouts. Production finite-state citation validation and complete request budgeting are implemented; semantic support and general free-text citation validation remain incomplete. Consented continuous personal histories are still needed for Claim/condition/update and long-term studies; independent human research evaluation remains deferred.
 
 Per-user SQLite/WAL is the current storage design. Verified backup/restore, versioned migrations, full account export/deletion and backup retention, cost/resource quotas, SSRF-safe egress, HTTPS trusted proxies, tenant reclamation, readiness/monitoring/alerts, reproducible CI/releases and license inventories remain pending. See the [research and commercial plan](docs/plans/长期陪伴记忆研究与实验计划书.md) and [module documentation](memoria/README.md).

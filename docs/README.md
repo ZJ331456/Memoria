@@ -27,6 +27,7 @@
 | [模型统一接口](implemented/本地与远程OpenAI统一接口.md) | Qwen/BGE HTTP、进程与远程模式 |
 | [分块与记录](implemented/实验记录与长记忆分块索引.md) | 长文完整span、父/块一致性、命中片段、阶段计时 |
 | [MCP与飞书授权](implemented/MCP部署与授权.md) | 搜索/GitHub/飞书、私密配置、OAuth和只读验证 |
+| [飞书机器人对话](implemented/飞书机器人对话接入.md) | 手机私聊、官方长连接、独立账号绑定、收件箱去重和回复；与MCP分离 |
 | [研究工具](implemented/真实历史标注与评测.md) | 来源/授权/AI/真人标注、冻结、runner与独立scorer |
 | [固定21轮自动评测](implemented/DenseRRF自动评测与视图性能.md) | 来源召回、真实reader、失败/成本、空状态副本基准 |
 | [旧六轮QA](implemented/真实QA对照评测结果.md) | 窗口/compact历史版本，不混入21轮 |
@@ -37,7 +38,7 @@
 
 | 文档 | 用途 |
 | --- | --- |
-| [研究与实验计划 v19](plans/长期陪伴记忆研究与实验计划书.md) | 算法/真实数据/B0–B7、第18节商业验收、第19–24节算法/Reader/LoCoMo/P0、第26节独立Chat与前端扩展 |
+| [研究与实验计划 v20](plans/长期陪伴记忆研究与实验计划书.md) | 算法/真实数据/B0–B7、第18节商业验收、第19–24节算法/Reader/LoCoMo/P0、第26节独立Chat与前端扩展、第27节飞书机器人 |
 | [研究来源](plans/研究来源.md) | 一手机制与外部数据适用边界，不是项目实测成绩 |
 | [计划目录](plans/README.md) | 文档分工与人工暂停要求 |
 

@@ -20,6 +20,7 @@ from starlette.requests import Request as ASGIRequest
 from ..accounts import AccountStore, SESSION_TTL, user_directory
 from ..config import Settings
 from ..models_config import apply_overrides
+from ..channels.feishu import FeishuHub
 from .app import VERSION, _create_tenant_app
 
 COOKIE = "memoria_session"
@@ -116,17 +117,21 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     accounts = AccountStore(root / "auth/accounts.db")
     pool = TenantPool(settings, root)
     password_slots = asyncio.Semaphore(2)
+    feishu = FeishuHub(root, accounts, pool)
 
     @asynccontextmanager
     async def lifespan(app):
         try:
+            await feishu.start()
             yield
         finally:
+            await feishu.close()
             await pool.close()
             accounts.close()
 
     app = FastAPI(title="Memoria authenticated memory API", version=VERSION, lifespan=lifespan)
     app.state.accounts, app.state.tenants, app.state.data_root = accounts, pool, root
+    app.state.feishu = feishu
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins),
                        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
                        allow_headers=["Content-Type", "Authorization", "X-Agent-Key", "X-Request-ID"], allow_credentials=True)
@@ -260,6 +265,21 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     @app.get("/api/health", tags=["system"])
     def health():
         return {"status": "ok", "version": VERSION, "login_required": True}
+
+    @app.get('/api/channels/feishu', tags=['channels'])
+    def feishu_status(request: Request):
+        return feishu.status(current_user(request)['id'])
+
+    @app.post('/api/channels/feishu/pairing', tags=['channels'])
+    def feishu_pairing(request: Request):
+        user=current_user(request)
+        check_rate(request,user['username'])
+        try:return feishu.pairing(user['id'])
+        except ValueError as exc:raise HTTPException(503,str(exc))
+
+    @app.delete('/api/channels/feishu/binding',status_code=204,tags=['channels'])
+    async def feishu_unbind(request: Request):
+        feishu.unbind(current_user(request)['id'])
 
     @app.get("/", include_in_schema=False)
     def index(request: Request):

@@ -4,6 +4,7 @@ import { ElAlert, ElButton, ElCheckbox, ElCollapse, ElCollapseItem, ElDialog, El
 import { sourceParts } from '../../shared/api'
 import { useAccount } from '../../shared/auth'
 import AuthPanel from '../../shared/AuthPanel.vue'
+import FeishuPanel from '../../shared/FeishuPanel.vue'
 import ConsoleHome from './components/ConsoleHome.vue'
 import HistoryBrowser from './components/HistoryBrowser.vue'
 import MemoryInventory from './components/MemoryInventory.vue'
@@ -110,7 +111,7 @@ onUnmounted(()=>window.removeEventListener('hashchange',hashChanged))
     </aside>
     <main>
       <header class="console-header"><div><div class="breadcrumb">Memoria <span>/</span> 管理后台 <span>/</span> {{ headings[page] }}</div><h1>{{ headings[page] }}</h1></div>
-        <div v-if="user" class="account"><div class="user-avatar">{{ user.username.slice(0,1).toUpperCase() }}</div><div class="account-label"><strong>{{ user.username }}</strong><span>{{ user.role==='superadmin'?'超级管理员':'个人工作空间' }}</span></div><el-button @click="logout" :disabled="busy">退出 / 切换账号</el-button></div>
+        <div v-if="user" class="account"><div class="user-avatar">{{ user.username.slice(0,1).toUpperCase() }}</div><div class="account-label"><strong>{{ user.username }}</strong><span>{{ user.role==='superadmin'?'超级管理员':'个人工作空间' }}</span></div><FeishuPanel :key="user.id" :api="api"/><el-button @click="logout" :disabled="busy">退出 / 切换账号</el-button></div>
       </header>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="notice" />
       <AuthPanel v-if="!user" :account="account" />

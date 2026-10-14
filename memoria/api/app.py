@@ -645,20 +645,18 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
         if not item: raise HTTPException(404, "来源消息不存在，可能已删除")
         return item
 
-    @app.post("/api/sessions/{session_id}/chat", response_model=ChatResponse, tags=["agent"], summary="执行一轮 Agent 对话")
-    async def chat(session_id: str, body: ChatBody, request: Request):
+    async def execute_turn(session_id: str, content: str, request_id: str | None = None):
         if session_id in deleting_sessions: raise HTTPException(409, "该会话正在删除")
         if not store.session(session_id): raise HTTPException(404, "会话不存在")
         lock = session_locks.setdefault(session_id, asyncio.Lock())
         if lock.locked(): raise HTTPException(409, "该会话已有一轮对话正在执行")
-        request_id = getattr(request.state, "request_id", None)
         try:
             async with lock:
                 if session_id in deleting_sessions:
                     raise HTTPException(409, "该会话正在删除")
                 if not store.session(session_id):
                     raise HTTPException(404, "会话不存在")
-                task = asyncio.create_task(service.chat_with_trace(session_id, body.content.strip(), request_id=request_id))
+                task = asyncio.create_task(service.chat_with_trace(session_id, content.strip(), request_id=request_id))
                 active_turns[session_id] = task
                 message, memories, trace = await task
             return {"message": message, "memories_created": memories, "trace": trace}
@@ -667,6 +665,13 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
         finally:
             active_turns.pop(session_id, None)
             if not lock.locked(): session_locks.pop(session_id, None)
+
+    # Trusted channels enter only after resolving an authenticated account binding.
+    app.state.chat_turn = execute_turn
+
+    @app.post("/api/sessions/{session_id}/chat", response_model=ChatResponse, tags=["agent"], summary="执行一轮 Agent 对话")
+    async def chat(session_id: str, body: ChatBody, request: Request):
+        return await execute_turn(session_id, body.content, getattr(request.state, "request_id", None))
 
     @app.post("/api/sessions/{session_id}/chat/stream", tags=["agent"], summary="以 SSE 流式执行一轮 Agent 对话")
     async def chat_stream(session_id: str, body: ChatBody, request: Request):

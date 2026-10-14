@@ -68,6 +68,12 @@ class AccountStore:
             row = self.db.execute("SELECT id, username, role FROM users WHERE username=?", (normalize_username(username),)).fetchone()
         return dict(row) if row else None
 
+    def enabled_user(self,user_id:str)->dict|None:
+        """Trusted channel binding lookup; callers cannot select arbitrary tenants."""
+        with self._lock:
+            row=self.db.execute('SELECT id,username,role FROM users WHERE id=? AND password_hash IS NOT NULL',(user_id,)).fetchone()
+            return dict(row) if row else None
+
     def reserve(self, username: str) -> dict:
         username = normalize_username(username)
         with self._lock, self.db:

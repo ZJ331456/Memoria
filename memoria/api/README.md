@@ -19,10 +19,11 @@
 
 | 路径 | 行为 |
 | --- | --- |
-| `/`、`/api/health`、`/docs`、`/openapi.json` | JSON 导航、服务存活、Swagger 与接口模式；健康成功不表示模型可用 |
+| `/`、`/api/health`、`/docs`、`/openapi.json` | 浏览器根地址独立Chat、普通请求JSON导航、存活/Swagger/接口模式；健康不表示模型可用 |
 | `/api/auth/register`、`/api/auth/login`、`/api/auth/me`、`/api/auth/logout` | 账号注册、登录会话和退出 |
 | `/studio/` | 同源公开静态壳；页面数据仍需登录，未构建时返回 503 |
-| `/api/sessions`、`/api/sessions/{id}/chat/stream` | 当前账号会话、聊天和 SSE；聊天 API 保留，旧聊天前端已移除 |
+| `/api/sessions`、`/api/sessions/{id}/chat/stream` | 当前账号会话、聊天和SSE；Chat/飞书可信绑定共用会话锁、取消与Reader |
+| `/api/channels/feishu`、`/api/channels/feishu/pairing`、`/api/channels/feishu/binding` | 登录后的本账号状态/绑定码/解绑；不公开应用凭据或对外Webhook |
 | `/api/memories`、`/api/memory-reviews`、`/api/messages/{id}/source` | 普通记忆、自动候选审核与原话回查 |
 | `/api/claim-slots`、`/api/claim-source/{id}`、`/api/claims` | 12 槽位、来源资格与结构化候选/版本/审核 |
 | `/api/claim-views`、`/api/memory-access` | 条件视图及明确槽位/条件/双时间访问 |

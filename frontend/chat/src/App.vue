@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import AuthPanel from '../../shared/AuthPanel.vue'
+import FeishuPanel from '../../shared/FeishuPanel.vue'
 import { useAccount } from '../../shared/auth'
 import { dateLabel, isCancelled } from '../../shared/console'
 
@@ -100,7 +101,7 @@ onUnmounted(()=>{alive=false;clearTimeout(timer)})
       <footer class="chat-sidebar-footer"><a href="/studio/">◇ <span>Memory Studio<small>查看资料与管理记忆</small></span> ↗</a><div v-if="user" class="chat-account"><span class="account-avatar">{{ user.username[0].toUpperCase() }}</span><strong>{{ user.username }}</strong><button :disabled="busy" @click="logout">退出 / 换号</button></div><div v-else class="chat-login-note">登录后保存自己的聊天记录</div></footer>
     </aside>
     <main class="chat-main">
-      <header class="chat-header"><div><button class="mobile-menu" aria-label="打开会话列表" @click="mobileOpen=!mobileOpen">☰</button><span>Memoria <span class="header-slash">/</span> {{ selected?'对话':'Chat' }}</span><span class="chat-status"><i/> {{ sending?phase:'在这里，慢慢聊' }}</span></div><a href="/studio/">Studio ↗</a></header>
+      <header class="chat-header"><div><button class="mobile-menu" aria-label="打开会话列表" @click="mobileOpen=!mobileOpen">☰</button><span>Memoria <span class="header-slash">/</span> {{ selected?'对话':'Chat' }}</span><span class="chat-status"><i/> {{ sending?phase:'在这里，慢慢聊' }}</span></div><div><FeishuPanel v-if="user" :key="user.id" :api="api"/><a href="/studio/">Studio ↗</a></div></header>
       <div v-if="error" class="chat-error" role="alert">{{ error }}<button aria-label="关闭提示" @click="error=''">×</button></div>
       <div v-if="!user" class="chat-login"><div class="login-heading"><span class="welcome-symbol">✳</span><h1>让每次对话，都有延续。</h1><p>与 Memoria 聊聊今天，也聊聊更长远的事。</p></div><AuthPanel :account="account" /></div>
       <template v-else>
