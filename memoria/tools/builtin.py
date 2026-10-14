@@ -39,7 +39,11 @@ def build_registry(
             result = await memory.remember(a["content"], a.get("kind", "fact"), int(a.get("importance", 3)), "agent_tool")
             return result.public_dict()
         return store.add_memory(a["content"], a.get("kind", "fact"), int(a.get("importance", 3)), "agent_tool")
-    async def forget(a): return {"deleted": store.delete_memory(a["memory_id"])}
+    async def forget(a):
+        deleted = store.delete_memory(a["memory_id"])
+        if memory:
+            memory.refresh_markdown()
+        return {"deleted": deleted}
     async def history(a): return store.search_messages(a["query"], int(a.get("limit", 6)))
     async def access_claims(a):
         return claims.access(AccessRequest.model_validate(a))

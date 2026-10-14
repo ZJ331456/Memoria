@@ -343,7 +343,7 @@ class MemoryEngine:
     def refresh_markdown(self) -> str:
         if not self.markdown or not self.markdown.enabled:
             return ""
-        return self.markdown.sync_memory(self.store.memories(limit=5000))
+        return self.markdown.sync_memory(self.store.retrieval_memories(limit=5000))
 
     async def correct(self, memory_id: str, content: str, kind: str, importance: int, reason: str, *, timings: StageTimings | None = None) -> dict[str, Any] | None:
         embedder = self.embedder
@@ -374,7 +374,7 @@ class MemoryEngine:
         if not self.markdown or not self.markdown.enabled:
             return
         if result.action in {"created", "reinforced", "superseded"}:
-            self.markdown.sync_memory(self.store.memories(limit=5000))
+            self.refresh_markdown()
             if source_ref:
                 self.markdown.complete_pending(source_ref=source_ref, content=content, kind=kind)
 

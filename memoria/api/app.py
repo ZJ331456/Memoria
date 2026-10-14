@@ -739,6 +739,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             async with lock:
                 if not store.delete_session(session_id):
                     raise HTTPException(404, "会话不存在")
+                service.runtime.memory.refresh_markdown()
             return Response(status_code=204)
         finally:
             deleting_sessions.discard(session_id)

@@ -28,3 +28,25 @@ def test_current_retrieval_excludes_future_and_expired_in_all_lanes(tmp_path, ba
         assert {m['id'] for m, _ in store.vector_memory_candidates([1.0, 0.0], 1)} == {live['id']}
     assert {m['id'] for m in asyncio.run(engine.retrieve('工程时间', as_of=datetime.now(timezone.utc).isoformat()))} == {live['id']}
     store.close()
+
+
+@pytest.mark.parametrize('mutation', ['delete', 'edit'])
+def test_source_loss_hides_derived_memory_including_history_and_projection(tmp_path, mutation):
+    from memoria.memory.layer import MarkdownMemoryLayer
+    store = Store(tmp_path/'source.db', 'json')
+    session = store.create_session()['id']
+    source = store.add_message(session, 'user', '工程原话证据')
+    memory = store.add_memory(source['content'], source='reviewed_conversation', source_ref=source['id'], require_source=True)
+    layer = MarkdownMemoryLayer(tmp_path/'markdown')
+    engine = MemoryEngine(store, markdown=layer)
+    assert '工程原话证据' in engine.refresh_markdown()
+    if mutation == 'delete':
+        store.delete_session(session)
+    else:
+        store.db.execute('UPDATE messages SET content=? WHERE id=?', ('被编辑的原文', source['id']))
+        store.db.commit()
+    assert not asyncio.run(engine.retrieve('工程原话'))
+    assert not asyncio.run(engine.retrieve('工程原话', as_of=memory['created_at']))
+    assert '工程原话证据' not in engine.refresh_markdown()
+    assert store.memory(memory['id'])  # Preserve audit state without treating it as usable evidence.
+    store.close()

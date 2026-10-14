@@ -163,6 +163,23 @@ class Store:
             for column, statement in migrations.items():
                 if column not in memory_columns:
                     self.db.execute(statement)
+            self.db.executescript("""
+                CREATE TABLE IF NOT EXISTS memory_source_dependencies (
+                    memory_id TEXT PRIMARY KEY REFERENCES memories(id) ON DELETE CASCADE,
+                    message_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'active');
+                CREATE INDEX IF NOT EXISTS idx_memory_source_message ON memory_source_dependencies(message_id);
+                CREATE TRIGGER IF NOT EXISTS memory_source_deleted BEFORE DELETE ON messages BEGIN
+                    UPDATE memory_source_dependencies SET state='deleted' WHERE message_id=OLD.id;
+                END;
+                CREATE TRIGGER IF NOT EXISTS memory_source_changed BEFORE UPDATE OF content,role ON messages
+                WHEN NEW.content!=OLD.content OR NEW.role!=OLD.role BEGIN
+                    UPDATE memory_source_dependencies SET state='changed' WHERE message_id=OLD.id;
+                END;
+                INSERT OR IGNORE INTO memory_source_dependencies(memory_id,message_id,state)
+                    SELECT m.id,m.source_ref,CASE WHEN u.id IS NULL THEN 'deleted' ELSE 'active' END
+                    FROM memories m LEFT JOIN messages u ON u.id=m.source_ref AND u.role='user'
+                    WHERE m.source_ref IS NOT NULL AND (m.source='reviewed_conversation' OR u.id IS NOT NULL);
+            """)
             trace_columns = {row[1] for row in self.db.execute("PRAGMA table_info(turn_traces)").fetchall()}
             if "metadata_json" not in trace_columns:
                 self.db.execute("ALTER TABLE turn_traces ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
@@ -722,7 +739,9 @@ class Store:
         moment = normalize_time(as_of) if as_of else now()
         active = "" if as_of else f"{alias}.status='active' AND "
         return (active + f"EXISTS (SELECT 1 FROM memory_validity_intervals vi WHERE vi.memory_id={alias}.id "
-                "AND vi.valid_at<=? AND (vi.invalid_at IS NULL OR vi.invalid_at>?))", (moment, moment))
+                "AND vi.valid_at<=? AND (vi.invalid_at IS NULL OR vi.invalid_at>?)) "
+                f"AND NOT EXISTS (SELECT 1 FROM memory_source_dependencies sd LEFT JOIN messages u ON u.id=sd.message_id "
+                f"WHERE sd.memory_id={alias}.id AND (sd.state!='active' OR u.id IS NULL OR u.role!='user'))", (moment, moment))
 
     def retrieval_memories(self, limit: int = 2000, *, as_of: str | None = None) -> list[dict]:
         scope, params = self.retrieval_scope(as_of=as_of)
@@ -771,6 +790,8 @@ class Store:
             self.db.execute("""INSERT INTO memories
                 (id,content,kind,importance,source,created_at,updated_at,embedding,status,reinforcement,supersedes_id,last_reinforced_at,source_ref)
                 VALUES (:id,:content,:kind,:importance,:source,:created_at,:updated_at,:embedding,:status,:reinforcement,:supersedes_id,:last_reinforced_at,:source_ref)""", item)
+            if source_ref and (require_source or source == 'reviewed_conversation' or self.message_source(source_ref)):
+                self.db.execute("INSERT INTO memory_source_dependencies(memory_id,message_id) VALUES(?,?)", (item['id'], source_ref))
             self._open_interval(item["id"], timestamp)
             self.db.execute("INSERT INTO memories_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
             if embedding:
