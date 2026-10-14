@@ -28,6 +28,13 @@ class Tool:
 
 
 @dataclass(slots=True)
+class ToolValue:
+    """Trusted server-side evidence metadata, independent of serialized output."""
+    value: Any
+    memory_dependencies: list[dict] = field(default_factory=list)
+
+
+@dataclass(slots=True)
 class ToolResult:
     name: str
     ok: bool
@@ -93,6 +100,9 @@ class ToolRegistry:
                 await asyncio.wait_for(hook(tool, arguments), timeout=min(tool.timeout_seconds or self.timeout, 5.0))
             value = await asyncio.wait_for(tool.executor(arguments), timeout=tool.timeout_seconds or self.timeout)
             dependencies=[]
+            if tool.owner == 'builtin' and isinstance(value, ToolValue):
+                dependencies = value.memory_dependencies
+                value = value.value
             # Capture trusted builtin dependencies before JSON/output budget truncation.
             if tool.owner=='builtin' and name in {'recall_memory','search_history'} and isinstance(value,list):
                 for item in value:

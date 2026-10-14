@@ -44,3 +44,5 @@ max_iterations=0 仍受 200 步硬上限，正值最多 200。上下文超限以
 ## 严格个人记忆回答
 
 已有有限个人状态规则分支使用CitationGuard，只发送实际选中完整Claim/条件和服务器引用目录。生成先缓冲，检查严格字段、展示ID、审批、账号/span-SHA及调用后的新鲜状态；after_reasoning改写拒绝，最终复核与助手入库同事务，之后才发delta。缺证据/条件或预算不足可直接澄清。通用聊天、工具规划和access_claims后的自由文本尚未全部转为契约；校验不是语义蕴含证明。[实现范围](../../docs/implemented/完整Reader预算与生产引用校验.md) · [工程案例](../../tests/test_reader_contract.py)。
+
+Claim与情景工具现在携带独立于输出文本的来源/状态依赖，Reader前及发布前复核并缓冲输出；Claim直接重新选择状态。工程反例与剩余边界见[逐项修复](../../docs/implemented/算法逻辑审查逐项修复.md)。

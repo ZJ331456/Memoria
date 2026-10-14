@@ -11,7 +11,7 @@ from ..memory.episodic import EpisodicMemory
 from ..skills import SkillCatalog
 from ..store import Store
 from .http_get import DEFAULT_ALLOWED_HOSTS, fetch_url
-from .registry import Tool, ToolRegistry
+from .registry import Tool, ToolRegistry, ToolValue
 
 
 def _schema(properties: dict, required: list[str]) -> dict:
@@ -46,11 +46,24 @@ def build_registry(
         return {"deleted": deleted}
     async def history(a): return store.search_messages(a["query"], int(a.get("limit", 6)))
     async def access_claims(a):
-        return claims.access(AccessRequest.model_validate(a))
+        request = AccessRequest.model_validate(a)
+        with store._memory_transaction():
+            result = claims.access(request)
+            return ToolValue(result, [claims.access_dependency(request, result['payload'])])
     async def recall_episodes(a):
         if not episodes:
             return {"error": "episodic memory is disabled"}
-        return episodes.search(str(a["query"]), int(a.get("limit", 3)))
+        with store._memory_transaction():
+            result = episodes.search(str(a["query"]), int(a.get("limit", 3)))
+            dependencies = []
+            for item in result:
+                for message_id in (item['user_message_id'], item.get('assistant_message_id')):
+                    if message_id:
+                        source = store.message_source(message_id)
+                        if not source:
+                            raise ValueError('Episode source unavailable')
+                        dependencies.append(store.message_dependency(source))
+            return ToolValue(result, dependencies)
     async def clock(a): return datetime.now(ZoneInfo(a.get("timezone", "Asia/Shanghai"))).isoformat()
     async def calculate(a): return _safe_calculate(a["expression"])
     async def load_skill(a):

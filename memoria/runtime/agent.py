@@ -319,7 +319,7 @@ class AgentRuntime:
                         "truncated_messages": budget.truncated_messages,
                         "preserved_context_frame": budget.preserved_context_frame,
                     }
-                    if any(not self.store.memory_dependency_valid(d) for d in memory_dependencies.values()):
+                    if any(not self._memory_dependency_valid(d) for d in memory_dependencies.values()):
                         context.response = SAFE_UNKNOWN
                         context.metadata['memory_freshness'] = 'dependency_changed_before_reader'
                         break
@@ -476,7 +476,7 @@ class AgentRuntime:
 
                 await self.pipeline.run(Phase.AFTER_REASONING, context)
                 with self.store._memory_transaction():
-                    if any(not self.store.memory_dependency_valid(d) for d in memory_dependencies.values()):
+                    if any(not self._memory_dependency_valid(d) for d in memory_dependencies.values()):
                         context.response = SAFE_UNKNOWN
                         context.metadata['memory_freshness'] = 'dependency_changed_before_publish'
                     if citation_guard:
@@ -548,6 +548,11 @@ class AgentRuntime:
                     "failed", "", f"{type(exc).__name__}: {exc}", context.tool_chain, trace["id"],
                 )
                 raise
+
+    def _memory_dependency_valid(self, dependency: dict) -> bool:
+        if dependency.get('dependency_type') == 'claim_access':
+            return bool(self.claims and self.claims.access_dependency_valid(dependency))
+        return self.store.memory_dependency_valid(dependency)
 
     async def _execute_tools_parallel(
         self,

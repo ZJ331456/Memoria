@@ -667,6 +667,21 @@ class ClaimMemory:
                        "next_boundary":min(boundaries) if boundaries else None}
         return payload
 
+    def access_dependency(self, request: AccessRequest, payload: dict) -> dict:
+        return {'dependency_type': 'claim_access', 'id': self._key(request), 'user_id': self.user_id,
+                'request': request.model_dump(), 'payload_sha256': sha(canonical(payload))}
+
+    def access_dependency_valid(self, snapshot: dict) -> bool:
+        if snapshot.get('user_id') != self.user_id:
+            return False
+        try:
+            request = AccessRequest.model_validate(snapshot['request'])
+            with self.store._memory_transaction():
+                # Re-select directly: a cached view is not an independent freshness check.
+                return sha(canonical(self._select(request))) == snapshot['payload_sha256']
+        except (ClaimError, ValueError, KeyError, TypeError):
+            return False
+
     def _key(self, request: AccessRequest) -> str:
         return sha(canonical(request.model_dump(exclude={"ttl_seconds"})))
 
