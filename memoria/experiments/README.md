@@ -39,7 +39,7 @@ B2_fts 无命中不暗退窗口，B2_fts_compact 只规范化临时检索键、�
 
 未提交/不可用人工评分保持 human_correct=null；失败进入 status/字面分母，不伪造人工 False。保留失败、未知 usage 与新评分修订，不覆盖旧运行。字面匹配/引用召回不等于语义质量、偏好遵守或长期效果。
 
-2026-10-12 既有开发协议 lccc50-codex-dev-qa-20261012-v2：50 匿名对话/206 原话/64 QA（41 可知、23 不可知），AI 辅助 gold，真实连续人物 0。此前六轮 384 次 QA 与后续固定 21 轮（768 纯召回题次、576 reader）为不同批次，不合并。后批窗口/Dense/RRF 字面匹配 166/161/158（各 192），召回补全没有带来本批字面收益。分母/来源见 [自动评测](../../docs/implemented/DenseRRF自动评测与视图性能.md)及 [此前 QA](../../docs/implemented/真实QA对照评测结果.md)。
+2026-10-12 既有开发协议 lccc50-codex-dev-qa-20261012-v2：50 匿名对话/206 原话/64 QA（41 可知、23 不可知），AI 辅助 gold，真实连续人物 0。此前六轮 384 次 QA 与后续固定 21 轮（768 纯召回题次、576 reader）为不同批次，不合并。后批窗口/Dense/RRF 字面匹配 166/161/158（各 192），召回补全没有带来本批字面收益。分母/来源见 [自动评测](../../docs/implemented/DenseRRF自动评测与视图性能.md)及 [此前 QA](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/implemented/真实QA对照评测结果.md)。
 
 access_eval 用真实账号副本，0 Claim 仅为空状态开销，不证明正向视图加速。Studio 只读规范 manifest/执行 metrics，核验 owner/SHA，不展示原始 gold/prompt、独立 score 或逐题钻取，不启动 runner。人工项按用户选择暂缓，真实长期历史缺口仍保留。
 
@@ -56,7 +56,7 @@ access_eval 用真实账号副本，0 Claim 仅为空状态开销，不证明正
 
 ## 官方构建Benchmark的十题入口
 
-`research.py --user USERNAME locomo-smoke --help`显示独立入口。普通真实历史协议不被LoCoMo替换；新授权只对指定官方文件做10题，按类别/源顺序固定，不凭gold换题。真实运行10次DeepSeek/0错误，4回答6拒答；旧compact词面均无英文命中、实际仅Dense，候选/呈现证据召回34%/22%。诊断非官方F1/J/语义准确率，完整Claim演化尚未测试。[契约与限制](../../docs/implemented/LoCoMo十题真实调用诊断.md)。
+`research.py --user USERNAME locomo-smoke --help`显示独立入口。普通真实历史协议不被LoCoMo替换；新授权只对指定官方文件做10题，按类别/源顺序固定，不凭gold换题。真实运行10次DeepSeek/0错误，4回答6拒答；旧compact词面均无英文命中、实际仅Dense，候选/呈现证据召回34%/22%。诊断非官方F1/J/语义准确率，完整Claim演化尚未测试。[契约与限制](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/implemented/LoCoMo十题真实调用诊断.md)。
 
 ## LoCoMo英文全量入口
 

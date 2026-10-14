@@ -1,6 +1,8 @@
-# Memoria-Agent 项目协作说明
+# Memoria 项目协作说明
 
 进入本项目后先读取 `docs/README.md`。修改相关模块时读取对应的 `docs/implemented/` 说明；推进研究时读取 `docs/plans/长期陪伴记忆研究与实验计划书.md`。提交或推送前必须读取 `docs/implemented/github提交规范.md`。
+
+文档布局统一为 `docs/implemented` 与 `docs/plans` 两个子目录；图片、公开评测聚合和来源清单放根目录 `assets`。公开评测按实验类别保留最新完整组，移除被替代的冒烟/开发导出和重复图片时更新引用与来源指纹，并用固定 Git 提交追溯旧公开记录；真实原文、gold、祖先 run/失败和费用账本仍保留在本机 `data`，不改写历史成绩。
 
 ## 当前方向
 

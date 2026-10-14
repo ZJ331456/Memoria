@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT = ROOT / "docs/assets/evaluation/registered-20261012.json"
+DEFAULT = ROOT / "assets/evaluation/registered-20261012.json"
 CHARTS = ("source-recall", "qa-literal-and-citations", "empty-claim-access")
 
 

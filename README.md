@@ -1,238 +1,118 @@
-> **我怎样才能证明：这个系统真的在随着陪伴理解一个人，而且这种能力确实来自我设计的记忆机制？**
+# Memoria
 
-# Memoria-Agent
+**面向小模型长期陪伴的、以原话证据为基础的记忆系统。**
 
-[English](README.en.md) · [文档导航](docs/README.md) · [研究与实验计划](docs/plans/长期陪伴记忆研究与实验计划书.md) · [AI 协作约定](AGENTS.md)
+[English](README.en.md) · [快速开始](#快速开始) · [系统架构](#系统架构) · [评测结果](#locomo-全量评测) · [文档](docs/README.md)
 
-面向小模型长期陪伴的记忆管理项目：保存原话证据、审核候选、管理条件与变化，在有限上下文中访问适用记忆。入口为独立 Chat、Memory Studio、HTTP API 和研究 CLI，本地 Qwen/BGE 与远程模型使用统一的 OpenAI 兼容业务接口。
+Memoria 将原话、审核、条件和版本连接起来，让有限上下文中的回答能够使用有来源、在当前情境下适用的记忆。项目提供独立 Chat、Memory Studio、HTTP API 与研究工具，支持本地 Qwen/BGE 和兼容 OpenAI 接口的远程模型。
 
-**当前定位：本机研究原型与受控试用基础。** 已有记忆治理、工程保护与下述LoCoMo全量评测；真实连续人物长期效果、正向画像视图收益及正式商业发布验收尚未完成。下一步算法、存储、安全和运维验收见[研究与商用计划](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
+![Memoria项目说明：原话、审核、状态与证据回答](assets/images/memoria-overview.png)
+
+> 当前是本机研究原型与受控试用基础。真实连续人物的长期效果、正向画像视图收益和正式商业发布仍待验证。
+
+## 项目关注什么
+
+| 能力 | 当前实现 |
+| --- | --- |
+| 可追溯的记忆 | 保存原话与来源定位；候选审核、纠正、撤销和不可变修订 |
+| 适用的状态 | Claim、条件视图与双时间；区分当前、历史和未知 |
+| 有界的访问 | 普通记忆 BM25 / Dense / RRF 检索，长文分块、证据预算和发布前依赖复核 |
+| 独立的使用入口 | Chat 负责对话，Studio 负责资料、审核与来源回查；账号数据隔离 |
+| 可核对的研究 | 冻结来源、协议和模型配置，记录实际调用、失败、费用下界与产物指纹 |
+
+## 系统架构
+
+![Memoria系统框架：入口、账号、记忆链路、模型与存储](assets/images/memoria-architecture.png)
+
+Claim 按槽位与条件访问，普通记忆使用混合检索；充分性与风险核验通过显式开关启用。完整边界见[系统实现](docs/implemented/系统架构与实现说明.md)。[项目说明 SVG](assets/images/memoria-overview.svg) · [框架图 SVG](assets/images/memoria-architecture.svg)
+
+## 快速开始
+
+以下命令面向 Windows PowerShell。本机验证环境为 Python 3.13.5、Node.js 22.16.0；依赖安装到项目 `.venv` 和 `frontend`。
+
+### 1. 准备环境
+
+```powershell
+git clone https://github.com/ZJ331456/Memoria.git
+Set-Location Memoria
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
+```
+
+已有项目直接进入仓库并保留现有环境、私密配置和账号资料。
+
+### 2. 配置模型
+
+| 方案 | 需要准备 |
+| --- | --- |
+| 远程 LLM + 本地 BGE | 配置 main / fast 的兼容 API；BGE 权重放入 `model/`，Embedding 使用 `local://auto` |
+| 本地 Qwen + BGE HTTP 服务 | 准备本地权重和可选依赖，先启动独立的 8080 模型服务 |
+
+`config.example.toml` 默认使用第二种方案。模型权重不随 Git 下载；已有账号的模型覆盖配置优先于根配置。安装命令、完整 TOML 示例与安全输入凭据的方法见[安装配置指南](docs/implemented/安装配置与启动.md)。
+
+### 3. 构建并启动
+
+```powershell
+.\build_frontend.cmd
+.\start_backend.cmd
+# 查看状态 / 停止
+.\start_backend.cmd -Action Status
+.\stop_backend.cmd
+```
+
+| 入口 | 地址 |
+| --- | --- |
+| Chat | http://127.0.0.1:2237/ |
+| Memory Studio | http://127.0.0.1:2237/studio/ |
+| API 文档 | http://127.0.0.1:2237/docs |
+
+Chat 和 Studio 共用正式登录/注册，项目不提供默认密码。首次账号、开发模式、端口和日志见[启动指南](docs/implemented/安装配置与启动.md)与[后台管理](docs/implemented/本机后台启动与停止.md)。
+
+MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均为可选接入；飞书需正式账号绑定，MCP 文档授权与机器人消息接收分别配置。
 
 ## LoCoMo 全量评测
 
-下表是已冻结的v2实测结果。2026-10-14后续v3已修复状态契约、整段预算和核验截断处理，按要求未重跑全量；旧1题失败及原始分数继续保留，不能当作新版成绩。
+最新公开完整比较使用 **10 段对话、5,882 条原话、1,986 道 QA**，Reader 为 DeepSeek `deepseek-flash` 非思考模式，Embedding 为本地 `bge-small-en-v1.5`。以下是冻结的 v2 历史成绩；后续工程修复未重新运行全量评测。
 
-2026-10-13原全量与2026-10-14 P0消融均使用官方 `locomo10.json` **全部1,986题**：10段长对话、5,882条原话，包含1,540道普通题和446道对抗题。Reader为 **DeepSeek `deepseek-flash`（非思考模式）**，Embedding为本地 **`bge-small-en-v1.5`**；仅评测英文文本来源检索与回答，不读取图像，未使用生产Claim/条件视图。
+| 方法 | 普通 Answer F1 ↑ | 对抗拒答短语分 ↑ | 已知 Token / 题 ↓ |
+| --- | ---: | ---: | ---: |
+| RRF + 邻句，首次回答 | 56.12% | 94.17% | 3,986.38 |
+| RRF + 全历史复核 | 58.65% | 92.38% | 18,414.96 |
+| RRF + 定向补检 | 57.47% | 92.83% | 7,290.80 |
+| 充分性 + 风险核验 + 自适应补检 | 51.15% | 95.96% | 12,663.62 |
 
-多跳、时序、开放域、单跳及普通题Overall均为官方口径 **Answer F1（%）**；Overall按全部1,540道普通题汇总，不是四类别等权平均，也不含对抗题。
+普通题 1,540 道，对抗题 446 道，分别计分。拒答短语分与 F1 均不是人工语义准确率；Token 是包含失败/重试的已知下界，未知 usage 不计零成本。四方法预算不同，没有同协议外部方法排名；自适应组最终 1 题工程失败保留完整分母。
 
-| 方法 | 多跳<br>282题 | 时序<br>321题 | 开放域<br>96题 | 单跳<br>841题 | 普通题Overall<br>1,540题 | 对抗拒答分†<br>446题 | 已知Token/题‡ |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Memoria-Agent：RRF + 邻句，首次回答 | 43.44 | 52.12 | 19.55 | 66.08 | 56.12 | 94.17 | 3986.38 |
-| Memoria-Agent：RRF + 邻句 + 全历史复核 | 45.09 | 55.95 | 22.47 | 68.37 | 58.65 | 92.38 | 18414.96 |
-| Memoria-Agent：RRF + 定向补检 | 44.30 | 56.29 | 21.20 | 66.48 | 57.47 | 92.83 | 7290.80 |
-| Memoria-Agent：充分性 + 风险核验 + 自适应补检 | 37.45 | 46.49 | 11.07 | 62.10 | 51.15 | 95.96 | 12663.62 |
-
-† 对抗分为官方拒答短语分，**不是F1、语义准确率或结构化拒答率**。最终结构化拒答：全历史410/446，定向413/446，风险自适应428/446。前两行是原同批首次/最终阶段，后两行是新的独立run；同冻结题目、Reader配置与本地Embedding快照，预算和额外调用不同，尚无同协议外部方法对照。
-
-四行分别表示：①只读首次RRF召回的紧凑证据及邻句；②首次拒答/非法输出时追加整段同对话历史复核；③用缺项查询补检一次，再读紧凑证据，不做前后支持门控；④先判断必要事实，缺项按预算补检，回答后再核验原文支持。对抗题本身按协议不可答，短语分在该子集上越高越好，但只检查拒答措辞；全部拒答也可能取得高分，必须同时看普通题F1、误拒答和成本，不能单独据此选择方法。
-
-‡ Token/题以全部1,986题为分母，包括所有Reader、缺项规划、前后核验及工程重试的已知usage，**是下界，不是账单**。原账本还存在未知usage/在途费用，新定向和自适应分别有1/7次未知usage，均不计零成本。
-
-原RRF首次证据包上限12,000字符，拒答/非法输出触发最多一次完整同对话历史复核，完整请求上限240,000 UTF-8字节。新定向只补检一次；新自适应最多两轮，证据阶段12,000/16,000/20,000字符，每题每次执行最多6次模型调用、累计160,000完整输入字节，均不向Reader发送完整历史；远程精确Token窗口仍未知。
-
-**P0综合目标尚未达到。** 定向较全历史节省约60.41%已知Token，但普通F1下降1.18个百分点；风险自适应节省约31.23%，对抗短语分提高3.59个百分点，普通F1下降7.50个百分点。普通拒答数为166→201→400，回答零F1数为100→90→55；不能据此宣称幻觉减少，独立语义审核仍未做。新定向最终执行错误0，自适应有1题核验输出达到长度上限，保留全部分母并记失败；历史失败与恢复费用均保留。
-
-生产默认保持，`use_answer_risk`仅显式开启前后核验，完整生产补检尚未接入。实现、预算/引用审计、门控代理、失败及下一步校准见[P0报告](docs/implemented/证据充分性与风险感知回答.md)；原两阶段结果见[历史全量报告](docs/implemented/LoCoMo全量评测与英文检索修复.md)。这些是官方构建的文本benchmark结果，真实本人长期效果和抽取F1仍待新授权连续资料验证。
+**综合质量、拒答与成本目标尚未达到，生产默认保持。** [完整指标与指纹](assets/evaluation/locomo-risk-full-20261014.json) · [协议、失败与限制](docs/implemented/证据充分性与风险感知回答.md#v2完整1986题消融2026-10-14)
 
 <details>
-<summary>查看四方法质量、拒答与成本图及复现来源</summary>
+<summary>查看质量与成本图，以及其他保留实验</summary>
 
-![LoCoMo四方法全量消融](docs/assets/evaluation/locomo-risk-full-20261014.png)
+![LoCoMo四方法全量比较](assets/evaluation/locomo-risk-full-20261014.png)
 
-[完整聚合](docs/assets/evaluation/locomo-risk-full-20261014.json) · [SVG](docs/assets/evaluation/locomo-risk-full-20261014.svg) · [复现与指纹](docs/assets/evaluation/README.md#p0四方法全量消融2026-10-14) · [原两阶段分类图](docs/assets/evaluation/locomo-full-20261013.png)。绘图0新增模型调用、0新评分。
+当前展示保留三组结果：LoCoMo 完整四方法、LCCC 固定 21 轮、同池证据选择。旧冒烟、开发子集和重复导出已从当前资产移除，历史版本与本地原始账本可追溯。[实验资产与复现](assets/evaluation/README.md)
 
 </details>
 
-## 首次准备环境
-
-前端源码统一位于[frontend](frontend/README.md)：`chat/`独立聊天、`studio/`管理后台、`shared/`共用登录/API。一套依赖和构建，旧/app/工作台已移除；聊天页只列个人原生对话，公开导入资料在Studio查看。
-
-以下为 **Windows PowerShell**，除注明外从仓库根执行，无需激活.venv。本机路径为`C:\Users\zero\Desktop\Memory-Project\Memoria`，新机器先获取仓库：
-
-```powershell
-# 已有项目不重复clone
-git clone https://github.com/ZJ331456/Memoria.git
-Set-Location Memoria
-# 本机可直接 Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria'
-
-if (-not (Test-Path .venv\Scripts\python.exe)) { python -m venv .venv }
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-# 保留已有私密配置
-if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
-.\.venv\Scripts\python.exe -c "import sys; print(sys.executable); print('isolated:', sys.prefix != sys.base_prefix)"
-```
-
-本机已验证Python3.13.5、Node22.16.0、npm10.9.2。API最小依赖在requirements.txt；本地模型可选依赖在requirements-local-embedding.txt，向量扩展在requirements-vector.txt。Node用于Studio/MCP。这是当前平台证据，不代表全部系统已验收；不向conda base或全局npm安装项目包。
-
-## 模型方案：选择一种
-
-准备`model/bge-small-zh-v1.5/`，使用本地LLM时另备`model/Qwen3.5-2B/`。模型被Git忽略，clone不会包含权重；本项目没有通用Qwen下载CLI，需有效的本地Safetensors/tokenizer/config。
-
-```powershell
-# 本机RTX4060已验证CUDA wheel；CPU机器选择官方CPU wheel
-.\.venv\Scripts\python.exe -m pip install torch==2.9.0 --index-url https://download.pytorch.org/whl/cu126
-.\.venv\Scripts\python.exe -m pip install -r requirements-local-embedding.txt
-.\.venv\Scripts\python.exe scripts/download_embedding.py
-```
-
-已有环境/模型时跳过；BGE下载固定revision并核对SHA/大小。驱动与wheel按[Embedding说明](docs/implemented/本地Embedding配置.md)和[PyTorch官方安装表](https://pytorch.org/get-started/previous-versions/)核对。
-
-### A. 远程LLM + 进程内本地BGE
-
-在私密config.toml配置main/fast与embedding；模型名称使用账号可调用的ID，下例为本机历史评测使用的DeepSeek名称。
-
-```toml
-[llm.main]
-model = "deepseek-flash"
-base_url = "https://api.deepseek.com/v1"
-api_key = "${DEEPSEEK_API_KEY}"
-[llm.fast]
-model = "deepseek-flash"
-base_url = "https://api.deepseek.com/v1"
-api_key = "${DEEPSEEK_API_KEY}"
-[memory.embedding]
-model = "model/bge-small-zh-v1.5"
-base_url = "local://auto"
-api_key = ""
-```
-
-新机器用环境变量时，在**启动业务服务的同一终端**隐藏输入，不打印Key：
-
-```powershell
-$taskSecureKey = Read-Host 'DeepSeek API Key' -AsSecureString
-$env:DEEPSEEK_API_KEY = [System.Net.NetworkCredential]::new('', $taskSecureKey).Password
-Remove-Variable taskSecureKey
-```
-
-本机qin已有账号绑定DPAPI profile，无需重输或覆盖。`data/users/<UUID>/config/models.override.toml`会覆盖槽位，已有覆盖时只编辑config.toml可能不改变实际配置。`configure_research_model.py`仅保存研究profile，单独执行不激活生产；见[脚本说明](scripts/README.md#研究与模型配置)与[统一接口](docs/implemented/本地与远程OpenAI统一接口.md)。
-
-### B. 本地Qwen/BGE共用HTTP模型服务
-
-在**终端一**启动8080，默认config.example.toml对应此方案：
-
-```powershell
-.\.venv\Scripts\python.exe scripts/serve_local_llm.py --model model/Qwen3.5-2B --embedding-model model/bge-small-zh-v1.5 --device cuda --host 127.0.0.1 --port 8080 --max-context-tokens 8192 --warmup
-# 另一个终端只读确认
-Invoke-RestMethod http://127.0.0.1:8080/health
-Invoke-RestMethod http://127.0.0.1:8080/v1/models
-```
-
-设备可选cpu/auto；本机验证为CUDA。服务提供chat/completions与embeddings，Qwen总输入+输出默认8192 token、BGE单块512 token；health存活不是模型质量证明。warmup加载并运行本地LLM，长文分块由记忆链路执行，直接超长embedding不会静默截断。[完整接口边界](docs/implemented/本地与远程OpenAI统一接口.md)。
-
-## 构建Studio、启动2237业务
-
-已有`.venv`、私密配置和Chat/Studio构建时，双击根目录[start_backend.cmd](start_backend.cmd)，或执行：
-
-```powershell
-.\start_backend.cmd
-.\stop_backend.cmd
-# 查看 / 停止同一脚本管理的进程
-.\start_backend.cmd -Action Status
-.\start_backend.cmd -Action Stop
-```
-
-后台隐藏运行，根地址http://127.0.0.1:2237/进入Chat，http://127.0.0.1:2237/studio/进入后台；日志在`data/logs/system/`。双击[stop_backend.cmd](stop_backend.cmd)关闭业务及其MCP子进程；端口已有其他服务时会提示占用，不重复启动或误杀。脚本启动业务服务并托管已构建的两套界面；方案B的8080模型服务仍需先准备，首次构建步骤见下文。[配置、端口与停止说明](docs/implemented/本机后台启动与停止.md)。
-
-先构建，再在**终端二**启动；方案A无需另起8080。
-
-```powershell
-Push-Location frontend
-npm ci --cache .npm-cache
-npm run build
-Pop-Location
-.\.venv\Scripts\python.exe main.py --config config.toml --host 127.0.0.1 --port 2237
-```
-
-| 地址 | 用途 |
-| --- | --- |
-| http://127.0.0.1:2237/ | 独立Chat：个人聊天、新对话、流式回复与停止生成 |
-| http://127.0.0.1:2237/studio/ | 管理后台：数据总览、历史搜索、记忆/候选与来源核对 |
-| http://127.0.0.1:2237/docs | Swagger接口契约 |
-| http://127.0.0.1:2237/api/health | 业务进程存活，匿名可读 |
-| http://127.0.0.1:8080/v1/models | 方案B独立模型服务 |
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:2237/api/health
-```
-
-Chat/Studio503时先构建再重启；可双击[build_frontend.cmd](build_frontend.cmd)一次构建两端，源码分工见[frontend](frontend/README.md)。端口占用先核对已有服务，不重复起两份。修改模型override后重启业务。当前按单个业务进程运行，多worker租户生命周期、任务和MCP协调尚未验收。
-
-### 首次账号与登录
-
-独立Chat与Studio共用登录/注册入口，切换账号会清空旧资料，分别读取各自数据；新机器也可在本机隐藏输入建立自己的账号：
-
-```powershell
-.\.venv\Scripts\python.exe scripts/manage_users.py reserve your_username
-.\.venv\Scripts\python.exe scripts/manage_users.py set-password your_username
-```
-
-用户名3–32位小写英文/数字/下划线，以字母开头，密码12–128字符；也可通过/api/auth/register注册。本机qin已配置，正常登录即可，重设会撤销会话。正式业务始终要求Cookie/Bearer登录，api_token空不免登录。Studio不保存明文密码或Bearer，见[用户隔离](docs/implemented/用户登录与数据隔离.md)。
-
-### 前端开发模式
-
-API保持运行，在第三个终端：
-
-```powershell
-Push-Location frontend
-npm ci --cache .npm-cache
-npm run dev
-```
-
-Chat访问http://127.0.0.1:5173/，Studio访问http://127.0.0.1:5173/studio/，/api代理到2237；部署模式只需构建产物和2237，不需要Vite开发进程。
-
-## 可选MCP与公开诊断来源
-
-手机飞书机器人对话使用独立的[消息入口与绑定流程](docs/implemented/飞书机器人对话接入.md)：安装requirements-feishu.txt、运行私密配置命令、发布平台事件/权限后，登录Chat点击“连接飞书”。MCP文档授权不会自动接收机器人消息；应用ID、Secret及绑定只保存本机忽略目录。
-
-这些不是最小启动必需项，仅配置已有账号：
-
-```powershell
-.\.venv\Scripts\python.exe scripts/install_mcp.py
-.\.venv\Scripts\python.exe scripts/configure_mcp.py --user your_username
-.\.venv\Scripts\python.exe scripts/check_mcp.py --user your_username
-# 飞书首次私密输入并授权；重授权可加 --login-only
-.\.venv\Scripts\python.exe scripts/configure_feishu.py --user your_username
-```
-
-依赖在.mcp，凭据按账号隔离；飞书回调http://localhost:3000/callback。安装、握手、授权、业务调用分别核验，详情见[MCP文档](docs/implemented/MCP部署与授权.md)。
-
-```powershell
-# 可选公开来源；已有qin语料无需重导
-.\.venv\Scripts\python.exe scripts/prepare_real_dialogues.py --limit 50 --user your_username
-```
-
-50段/206原话来自LCCC，进入账号实验空间；身份/事件时间未知，不生成本人Claim。旧个人历史仍不导入，来源/许可见[来源清单](docs/data-sources/README.md)。
-
-## 实际数据存储
+## 仓库目录
 
 ```text
-data/                              # 全部忽略
-├─ benchmarks/locomo/raw/          # 本地官方benchmark副本
-├─ auth/accounts.db                # 账号、密码摘要、会话摘要、登录尝试
-├─ users/<server UUID>/
-│  ├─ memory/memoria.db             # 原话/记忆/Claim/审核/视图/索引/任务
-│  ├─ markdown/                    # 记忆投影与人工维护内容
-│  ├─ config/                      # 账号模型覆盖/MCP
-│  ├─ secrets/                     # DPAPI profile/OAuth，不写日志
-│  ├─ research/                    # 来源、标注、inputs/gold分离
-│  ├─ experiments/<run_id>/         # 私有执行与原始产物
-│  └─ reports/                     # 账号报告
-└─ legacy/                         # 旧档案封存，未导入
-model/                             # 权重/tokenizer，忽略
+Memoria/
+├─ assets/           # 项目图片、保留评测结果与来源清单
+├─ docs/
+│  ├─ implemented/  # 已实现行为、操作和验证边界
+│  └─ plans/        # 研究路线与待验收事项
+├─ frontend/         # chat / studio / shared
+├─ memoria/          # 记忆、运行时、模型、API与研究代码
+├─ scripts/          # 本机管理、模型准备与图表复现
+├─ tests/            # 工程回归
+├─ data/             # 本机账号、原文、配置和实验账本；Git忽略
+└─ model/            # 本地模型权重；Git忽略
 ```
 
-当前每用户SQLite/WAL+本地文件。完整备份/恢复、账号注销/全量导出、备份删除政策、schema版本迁移及跨机凭据迁移尚缺；普通Markdown导出不是完整备份，NTFS/DPAPI也不是整库加密。[商用存储验收](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
+数据目前采用每账号 SQLite/WAL 与本地文件，配置和凭据保持本机隔离。[数据与权限](docs/implemented/用户登录与数据隔离.md) · [来源与许可](assets/data-sources/README.md) · [AI 协作约定](AGENTS.md)
 
-仓库中的[docs/data-sources/](docs/data-sources/README.md)保存来源、许可与SHA清单；LCCC下载缓存位于data/datasets/，LoCoMo原始benchmark位于data/benchmarks/，私有输入/gold和逐题结果放在账号data/目录，公开结果汇总与图表放在[docs/assets/evaluation/](docs/assets/evaluation/README.md)。
+## 下一步
 
-## 下一步重点与商用缺口
-
-1. **回答风险与误拒答校准：** 已完成充分性/风险核验与定向/自适应全量消融，综合目标未达；下一步校准缺项/冲突状态一致性并预留完整Reader+支持预算，保留原文约束、生产审批和默认策略。
-2. **多跳、开放域与时间推断：** 改善跨片段证据覆盖、指代和时间精度。标注证据ID可见不等于文本足够；需区分检索、证据选择与Reader问题。
-3. **小模型的同预算验证：** 使用可信本地Reader tokenizer做紧凑证据与需求预测对照，另登记同模型/预算/评分的基线及独立留出。完整历史回退结果不能直接推广到1B模型。
-4. **真实长期研究：** 获得新授权的连续本人资料后，再测Claim抽取、条件、更新决策及长期保持/变化。独立真人研究评估暂缓，当前公开语料不补造成本人历史。
-
-当前存储为每用户SQLite/WAL与本地文件。商用还缺备份核验/恢复演练、schema迁移、账号全量导出/注销及备份删除政策；同时需资源/成本配额、SSRF出口治理、HTTPS可信代理、租户回收、readiness/监控/告警、CI与依赖锁定、发布回滚和许可清单。具体阶段与验收见[算法下一阶段](docs/plans/长期陪伴记忆研究与实验计划书.md#231-全量完成与接下来验收)及[商用准备](docs/plans/长期陪伴记忆研究与实验计划书.md#18-下一阶段功能优先级与商用准备)。
-
-模块职责、工程验证与完整阶段记录统一从[文档导航](docs/README.md)查看；AI协作与提交遵循[AGENTS.md](AGENTS.md)及[GitHub规范](docs/implemented/github提交规范.md)。私密配置、原话、逐题结果和模型不进入Git，旧个人历史仍不导入。
+继续验证真实连续来源上的记忆更新与长期效果、同预算回答质量与成本；完善备份恢复、迁移、账号生命周期和运行监护。[研究与商用计划](docs/plans/长期陪伴记忆研究与实验计划书.md)

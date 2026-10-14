@@ -31,11 +31,22 @@ def data_rows(report):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--aggregate',type=Path,default=ROOT/'docs/assets/evaluation/locomo-risk-full-20261014.json')
-    parser.add_argument('--output',type=Path,default=ROOT/'docs/assets/evaluation/locomo-risk-full-20261014')
+    parser.add_argument('--aggregate',type=Path,default=ROOT/'assets/evaluation/locomo-risk-full-20261014.json')
+    parser.add_argument('--output',type=Path,default=ROOT/'assets/evaluation/locomo-risk-full-20261014')
+    parser.add_argument('--check',action='store_true',help='Verify existing chart and source fingerprints without rendering')
     args=parser.parse_args()
     report=json.loads(args.aggregate.read_text(encoding='utf-8'))
     rows=data_rows(report)
+    if args.check:
+        path=args.output.with_name(args.output.name+'-chart.json')
+        saved=json.loads(path.read_text(encoding='utf-8'))
+        sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+        assert saved['source_sha256']==sha(args.aggregate) and saved['rows']==rows
+        assert saved['model_calls']==0 and saved['new_scores']==0
+        assert set(saved['images'])=={args.output.name+'.png',args.output.name+'.svg'}
+        assert all(sha(args.output.parent/name)==value for name,value in saved['images'].items())
+        print('Verified full comparison source, rows and chart fingerprints; no inference or scoring.')
+        return
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
@@ -63,7 +74,7 @@ def main():
     for ax in axes:
         ax.spines[['top','right']].set_visible(False)
         ax.set_axisbelow(True);ax.grid(axis='y',alpha=.15)
-    fig.suptitle(f"Memoria-Agent / LoCoMo text-only / {report['cases']} original QA",fontsize=14,fontweight='bold')
+    fig.suptitle(f"Memoria / LoCoMo text-only / {report['cases']} original QA",fontsize=14,fontweight='bold')
     fig.text(.5,-.015,'DeepSeek flash + local English BGE; historical retries retained. No semantic/human accuracy claim.',
              ha='center',fontsize=9)
     args.output.parent.mkdir(parents=True,exist_ok=True)

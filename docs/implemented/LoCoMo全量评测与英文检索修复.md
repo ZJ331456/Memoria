@@ -1,6 +1,6 @@
 # LoCoMo 英文检索修复与全量评测
 
-2026-10-13，根据十题诊断和用户全量评测要求新增独立协议。历史[十题记录](LoCoMo十题真实调用诊断.md)及其冻结输入、gold、运行产物保持原样；英文正式入口为 `locomo-run`，原 `locomo-smoke` 是v1历史复现入口。
+2026-10-13，根据十题诊断和用户全量评测要求新增独立协议。历史[十题记录](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/implemented/LoCoMo十题真实调用诊断.md)及其冻结输入、gold、运行产物保持原样；英文正式入口为 `locomo-run`，原 `locomo-smoke` 是v1历史复现入口。
 
 ## 实现与协议
 
@@ -35,7 +35,7 @@
 .\.venv\Scripts\python.exe scripts/research.py --user qin locomo-run --input data/benchmarks/locomo/raw/locomo10.json --embedding-device cuda --profile deepseek --roles configs/research-remote-roles.toml --allow-remote --concurrency 4
 ```
 
-原文件SHA见[清单](../data-sources/locomo10.manifest.json)。冻结包在账号research/benchmarks，manifest/cases/prompts/calls/score/anomalies/metrics在账号experiments/run_id，详细报告在账号reports。代码/清单/无原话聚合可提交；原始数据、逐题输出、凭据/UUID、模型不提交。LoCoMo为CC-BY-NC-4.0官方构建研究基准，不变为qin本人来源或商用许可。
+原文件SHA见[清单](../../assets/data-sources/locomo10.manifest.json)。冻结包在账号research/benchmarks，manifest/cases/prompts/calls/score/anomalies/metrics在账号experiments/run_id，详细报告在账号reports。代码/清单/无原话聚合可提交；原始数据、逐题输出、凭据/UUID、模型不提交。LoCoMo为CC-BY-NC-4.0官方构建研究基准，不变为qin本人来源或商用许可。
 
 ## 验收与下一步
 
@@ -86,9 +86,9 @@ TLS/续跑版本完整工程验收525 passed / 199.78s。续跑恢复后Embeddin
 
 计入祖先账本共 **2652次已记录reader尝试**，其中历史连接失败5次；usage已知2647次。已知prompt **36478873**、completion **93238**、total **36572111** Token；货币成本及3在途请求费用未知。全量三阶段活动墙钟合计 **2919.225秒（48.65分钟）**，不含检查点间开发/校验间隔，也不含此前十题开发调用；续跑阶段1073.610秒，故障重试47.659秒。完整病例时延混合三个批次/冷启动，p50=2.105秒、p95=27.419秒，不能当HTTP生产SLO或TLS单因素收益。中断前查询编码无法精确完整计数，运行metrics的编码字段为确认下界，原计量不回写。
 
-原9个异常标签：6个条目可作语法定位诊断，3个无法恢复，原文/标签/主评分不变。LoCoMo有910条带图片来源，606道普通题引用带图来源；不代表都必须看图，但文本模式不宣称完整多模态复现。来源/许可与[清单](../data-sources/locomo10.manifest.json)保持。
+原9个异常标签：6个条目可作语法定位诊断，3个无法恢复，原文/标签/主评分不变。LoCoMo有910条带图片来源，606道普通题引用带图来源；不代表都必须看图，但文本模式不宣称完整多模态复现。来源/许可与[清单](../../assets/data-sources/locomo10.manifest.json)保持。
 
-生产库前后50会话/206消息/0memories/0reviews/0jobs；没有导入benchmark为qin个人画像。逐题问题/参考/模型回答、调用及gold只在账号reports/experiments。公开：[初次完整分母](../assets/evaluation/locomo-full-firstpass-20261013.json)、[最终汇总与指纹](../assets/evaluation/locomo-full-20261013.json)、[结果图](../assets/evaluation/locomo-full-20261013.png)。
+生产库前后50会话/206消息/0memories/0reviews/0jobs；没有导入benchmark为qin个人画像。逐题问题/参考/模型回答、调用及gold只在账号reports/experiments。公开：[初次完整分母](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/assets/evaluation/locomo-full-firstpass-20261013.json)、[最终汇总与指纹](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/assets/evaluation/locomo-full-20261013.json)、[结果图](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/assets/evaluation/locomo-full-20261013.png)。
 
 ## 新发现的质量边界与下一阶段
 
@@ -110,9 +110,9 @@ TLS/续跑版本完整工程验收525 passed / 199.78s。续跑恢复后Embeddin
 
 ## 首页展示与指标口径（2026-10-13）
 
-根[README](../../README.md#locomo-全量评测)及英文首页已整理为能力、启动、当前全量结果与下一步，去除重复的旧第6节大图及第9–13节逐次追加记录。历史LCCC、十题、Reader契约和运行故障记录仍在各实现文档/计划/公开资产中保存，没有删除或改写历史实验。
+根[README](../../README.md#locomo-全量评测)及英文首页已整理为能力、启动、当前全量结果与下一步，去除重复的旧第6节大图及第9–13节逐次追加记录。当前公开资产按实验族保留最新完整结果；旧冒烟、开发子集、重复导出和两个旧结果文档已按2026-10-14最新要求从当前树移除，原始run/失败费用仍在本机，历史公开版本由固定Git提交追溯。
 
-首页使用方法为行、问题类别为列的分类表，数值取自冻结最终聚合；明确首次与最终是同批输出，普通Overall仅含1,540题，对抗列为拒答短语分，不能冒充F1或论文judge J。旧LCCC 64题AI辅助字面匹配与LoCoMo官方分类评分分开解释；本轮无新模型调用、无新评分、无生产数据写入。下一步仍是风险门控、多跳/开放域/时间精度、同Token预算与独立协议验证，真实个人长期效果和Claim F1未完成。
+2026-10-14首页进一步改为完整四方法的质量、拒答和已知Token表；原分类指标已完整复制至[保留聚合](../../assets/evaluation/locomo-risk-full-20261014.json)的baseline_category_metrics。首次与全历史复核来自同批基线输出，普通Overall仅含1,540题，对抗为拒答短语分，不能冒充F1或论文judge J。旧LCCC 64题AI辅助字面匹配与LoCoMo官方分类评分分开解释；本轮无新模型调用、无新评分、无生产数据写入。下一步仍是多跳/开放域/时间精度、同Token预算与独立协议验证，真实个人长期效果和Claim F1未完成。
 
 文档验收：扫描仓库66份Markdown的612个本地链接/锚点，修复标题调整后的Embedding说明回链；中英文两张表24个数值逐一对应冻结JSON，原11个环境/模型/启动命令块完整保留。冻结聚合字节与Git基线一致，diff空白/凭据模式/私有UUID检查通过；仅修改7份文档，不重复运行模型或工程全量测试。
 

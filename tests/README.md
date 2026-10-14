@@ -89,7 +89,7 @@ Pop-Location
 
 2026-10-13完整Reader预算/生产记忆引用最终全量 **495 passed / 198.58s**，相关106 passed / 55.51s；新增32项参数化案例。实际Qwen tokenizer全聊天模板292输入Token，与本地计数路由一致、0生成/权重加载。工程耗时不作为生产性能或研究成绩，真实QA历史与AI gold口径保持不变。[实现及范围](../docs/implemented/完整Reader预算与生产引用校验.md)。
 
-2026-10-13后续LoCoMo入口相关23 passed / 7.37s，最终受影响研究/Reader范围**98 passed / 59.04s**；没有将前述495项旧全量写成新增全量。本轮固定10题实际模型运行另见[诊断报告](../docs/implemented/LoCoMo十题真实调用诊断.md)。
+2026-10-13后续LoCoMo入口相关23 passed / 7.37s，最终受影响研究/Reader范围**98 passed / 59.04s**；没有将前述495项旧全量写成新增全量。本轮固定10题实际模型运行另见[诊断报告](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/implemented/LoCoMo十题真实调用诊断.md)。
 
 本轮新增test_locomo_eval.py验证英文BM25词干、候选先于邻句、预算/同会话/来源篡改、全题/对抗题、异常gold不修写、并发编号与gold隔离。test_local_embedding.py补英文指令/384维/协议指纹；临时输入不代表研究效果。[验收](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
 

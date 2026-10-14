@@ -72,7 +72,7 @@ ChatResult.budget 与运行 trace 保存 input_bytes、可核验时的 input_tok
 
 ## 5. 数据评测到底覆盖什么
 
-本机注册研究清单与冻结输入指纹核对见[公开审计](../assets/evaluation/dataset-scope-20261013.json)。实际是 **1 个真实来源数据集**，不是 3 个：
+本机注册研究清单与冻结输入指纹核对见[公开审计](../../assets/evaluation/dataset-scope-20261013.json)。实际是 **1 个真实来源数据集**，不是 3 个：
 
 | 层级 | 数量与含义 |
 | --- | --- |

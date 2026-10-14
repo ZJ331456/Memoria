@@ -1153,5 +1153,140 @@
     "all labels previously used for diagnostics; no unseen-test generalization claim",
     "historical baseline concurrency 4; new full methods each concurrency 2 run in parallel; wall times not comparable as algorithm latency",
     "official constructed text-only benchmark; not real longitudinal qin history"
-  ]
+  ],
+  "baseline_category_metrics": {
+    "1": {
+      "cases": 282,
+      "answer_f1": 0.4508564801143133,
+      "primary_score": 0.4343626410140912,
+      "execution_statuses": {
+        "success": 282
+      },
+      "answer_statuses": {
+        "answer": 262,
+        "abstain": 20
+      },
+      "candidate_gold_recall_macro": 0.63264057548772,
+      "primary_presented_gold_recall_macro": 0.6612776231897173,
+      "presented_gold_recall_macro": 0.7122626507704896,
+      "citation_gold_recall_macro": 0.49703660208979356
+    },
+    "2": {
+      "cases": 321,
+      "answer_f1": 0.559471984403454,
+      "primary_score": 0.5211615655224497,
+      "execution_statuses": {
+        "success": 321
+      },
+      "answer_statuses": {
+        "answer": 263,
+        "abstain": 58
+      },
+      "candidate_gold_recall_macro": 0.8538421599169262,
+      "primary_presented_gold_recall_macro": 0.8787642782969886,
+      "presented_gold_recall_macro": 0.980269989615784,
+      "citation_gold_recall_macro": 0.7751817237798546
+    },
+    "3": {
+      "cases": 96,
+      "answer_f1": 0.22466727326688232,
+      "primary_score": 0.19550060660021565,
+      "execution_statuses": {
+        "success": 96
+      },
+      "answer_statuses": {
+        "answer": 52,
+        "abstain": 44
+      },
+      "candidate_gold_recall_macro": 0.5325554134697357,
+      "primary_presented_gold_recall_macro": 0.5470481670929241,
+      "presented_gold_recall_macro": 0.8169757033248082,
+      "citation_gold_recall_macro": 0.29891304347826086
+    },
+    "4": {
+      "cases": 841,
+      "answer_f1": 0.6836801680241591,
+      "primary_score": 0.6607570220647118,
+      "execution_statuses": {
+        "success": 841
+      },
+      "answer_statuses": {
+        "answer": 797,
+        "abstain": 44
+      },
+      "candidate_gold_recall_macro": 0.8854538248117321,
+      "primary_presented_gold_recall_macro": 0.9389615537059056,
+      "presented_gold_recall_macro": 0.9710661910424098,
+      "citation_gold_recall_macro": 0.8747522790328973
+    },
+    "5": {
+      "cases": 446,
+      "official_refusal_phrase_rate": 0.9237668161434978,
+      "primary_score": 0.9417040358744395,
+      "execution_statuses": {
+        "success": 446
+      },
+      "answer_statuses": {
+        "abstain": 410,
+        "answer": 36
+      },
+      "candidate_gold_recall_macro": 0.8677130044843049,
+      "primary_presented_gold_recall_macro": 0.9573991031390134,
+      "presented_gold_recall_macro": 0.9977578475336323,
+      "citation_gold_recall_macro": 0.06726457399103139
+    }
+  },
+  "public_asset_retention": {
+    "date": "2026-10-14",
+    "policy": "Latest complete result per experiment family; original private run ledgers retained.",
+    "baseline_category_metrics_source": {
+      "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+      "path": "docs/assets/evaluation/locomo-full-20261013.json",
+      "sha256": "c34704ae1be34855d0717dfef7ba0bc319021cc1726703eeed73886b382dfe79"
+    },
+    "retired_public_artifacts": [
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-full-firstpass-20261013.json",
+        "sha256": "5e9e36b254e6f31ec934c0094ddb4d6caf0180909bb3ee4082eebcb72ea78633"
+      },
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-full-20261013.json",
+        "sha256": "c34704ae1be34855d0717dfef7ba0bc319021cc1726703eeed73886b382dfe79"
+      },
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-full-20261013.png",
+        "sha256": "47f1861da8668e1cd3ecd7c3de6c79ad50ef896cddc00a228cf3849238be2d1b"
+      },
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-full-20261013.svg",
+        "sha256": "df939f4e2b696930b2939839160b8c4bcfbd2e07ed4950117042ceb81546a03b"
+      },
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-full-20261013-chart.json",
+        "sha256": "59d4b777c7598d6aab6c41ce55f1800a558d8516cf5cf7ac67b0cdfec24d5e4e"
+      },
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-smoke-20261013.json",
+        "sha256": "2a4abf166bc2f440d430b738aa6b315d52e9f6d4c0aea670659636b05b4ca343"
+      },
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-risk-development-v1-20261013.json",
+        "sha256": "4e1e8f096d25fd94bb6cf9ff4a5e7f566fe0aa2563ffee47d979f6f072b86e9e"
+      },
+      {
+        "git_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+        "path": "docs/assets/evaluation/locomo-original-triage-20261014.json",
+        "sha256": "627c4eae8567c569efa1552957ec7700e33e10f1d2554eb6166e37500069b7e2"
+      }
+    ],
+    "new_model_calls": 0,
+    "new_scoring": false
+  }
 }

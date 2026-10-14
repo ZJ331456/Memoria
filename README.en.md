@@ -1,86 +1,76 @@
-# Memoria-Agent
+# Memoria
 
-[中文完整版](README.md) · [Documentation](docs/README.md) · [Research and commercial-readiness plan](docs/plans/长期陪伴记忆研究与实验计划书.md)
+**Source-backed memory for small-model, long-term companionship.**
 
-Source-backed memory management for small-model companionship: reviewed Claims, conditions, dual-time revisions, source retrieval, dependent views, bounded evidence and account-isolated execution. Memory Studio provides source review, timelines, retrieval diagnostics and read-only run records. The current scope is a local research prototype and controlled-pilot foundation; public commercial readiness and longitudinal quality remain unverified.
+[中文](README.md) · [Getting started](#getting-started) · [Architecture](#architecture) · [Documentation](docs/README.md)
 
-## LoCoMo full evaluation
+Memoria connects original evidence, review, conditions and revisions so that bounded-context answers can use traceable, applicable memories. It includes independent Chat and Memory Studio interfaces, an authenticated HTTP API, and research tools. Local Qwen/BGE and remote OpenAI-compatible models share the same interfaces.
 
-The 2026-10-13 original run and 2026-10-14 P0 ablations use all **1,986 original QA**: 10 constructed conversations, 5,882 utterances, 1,540 ordinary and 446 adversarial questions. Reader: **DeepSeek `deepseek-flash`, non-thinking**; embedding: local **`bge-small-en-v1.5`**. English text only, without images or production Claim/View access.
+![Memoria project overview](assets/images/memoria-overview.png)
 
-The four ordinary categories and Ordinary Overall use upstream-compatible **Answer F1 (%)**. Overall averages all 1,540 ordinary questions and excludes adversarial questions; it is not an equal-weight category average.
+The current scope is a local research prototype and a controlled-pilot foundation. Longitudinal quality, positive profile-view benefits and commercial readiness remain unverified.
 
-| Method | Multi-hop<br>282 | Temporal<br>321 | Open-domain<br>96 | Single-hop<br>841 | Ordinary Overall<br>1,540 | Adversarial refusal†<br>446 | Known tokens/QA‡ |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Memoria-Agent: RRF + neighbors, primary answer | 43.44 | 52.12 | 19.55 | 66.08 | 56.12 | 94.17 | 3986.38 |
-| Memoria-Agent: RRF + full-history recheck | 45.09 | 55.95 | 22.47 | 68.37 | 58.65 | 92.38 | 18414.96 |
-| Memoria-Agent: RRF + targeted retrieval | 44.30 | 56.29 | 21.20 | 66.48 | 57.47 | 92.83 | 7290.80 |
-| Memoria-Agent: sufficiency + risk + adaptive retrieval | 37.45 | 46.49 | 11.07 | 62.10 | 51.15 | 95.96 | 12663.62 |
+## Architecture
 
-† Official literal refusal score, not F1, semantic accuracy or structured abstention. Structured refusal: full history 410/446, targeted 413/446, risk adaptive 428/446. The first two rows are original same-batch phases; the last two are independent runs. Frozen QA, declared Reader configuration and local embedding snapshots match; context/call budgets differ. No matched external-method ranking is claimed.
+![Memoria architecture](assets/images/memoria-architecture.png)
 
-‡ Known usage from every Reader, planner, verifier and engineering retry divided by all 1,986 questions. These are lower bounds, not invoices: unknown historical/in-flight usage is retained, including 1/7 missing-usage calls in the new targeted/adaptive lineages.
+Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Sufficiency and risk verification require an explicit option. See [implementation and limits](docs/implemented/系统架构与实现说明.md).
 
-Original primary evidence is bounded at 12,000 characters; one full-history recheck can use up to 240,000 UTF-8 request bytes. Targeted retrieval supplements once. Risk adaptive supplements at most twice, with 12,000/16,000/20,000-character evidence stages, at most 6 model calls and 160,000 cumulative input bytes per case attempt. New methods never send the full history to the Reader. Exact remote token windows remain unknown.
+## Getting started
 
-**The combined P0 objective is not met.** Relative to full history, targeted uses 60.41% fewer known tokens but loses 1.18 F1 points. Risk adaptive uses 31.23% fewer, improves adversarial refusal by 3.59 points, and loses 7.50 ordinary F1 points. Ordinary abstentions increase 166 → 201 → 400; answered-zero-F1 cases decrease 100 → 90 → 55, without proving fewer hallucinations. Targeted has zero final execution errors; adaptive retains one length-limited verifier failure in the complete denominator. All original failures and recovery costs remain recorded.
+Windows PowerShell; the locally verified environment uses Python 3.13.5 and Node.js 22.16.0. Keep an existing virtual environment, private configuration and account data.
 
-Production defaults remain. Optional `use_answer_risk` enables pre/post checks; production adaptive retrieval is pending. See the [P0 report](docs/implemented/证据充分性与风险感知回答.md), [original report](docs/implemented/LoCoMo全量评测与英文检索修复.md) and [plan](docs/plans/长期陪伴记忆研究与实验计划书.md#242-v2完整消融结果与下一步校准). Real longitudinal effects and extraction F1 still require authorized continuous personal sources; independent human review remains deferred.
+```powershell
+git clone https://github.com/ZJ331456/Memoria.git
+Set-Location Memoria
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
+```
+
+Configure models before starting. The example defaults to a local Qwen/BGE HTTP service on port 8080. Alternatively, use a remote main/fast LLM with in-process local BGE. Model weights are excluded from Git; per-account overrides take priority. See the [complete setup guide](docs/implemented/安装配置与启动.md).
+
+```powershell
+.\build_frontend.cmd
+.\start_backend.cmd
+.\start_backend.cmd -Action Status
+.\stop_backend.cmd
+```
+
+Chat: http://127.0.0.1:2237/ · Studio: http://127.0.0.1:2237/studio/ · API docs: http://127.0.0.1:2237/docs
+
+Both interfaces require normal account registration/login; there are no default credentials. MCP tools and the Feishu private-message channel are optional and require their own configuration and account authorization.
+
+## Latest complete LoCoMo comparison
+
+All **1,986 QA**, from 10 conversations and 5,882 utterances; DeepSeek `deepseek-flash`, non-thinking, with local `bge-small-en-v1.5`. These are frozen v2 measurements; later engineering changes have not been reevaluated.
+
+| Method | Ordinary Answer F1 ↑ | Adversarial refusal phrase score ↑ | Known tokens / QA ↓ |
+| --- | ---: | ---: | ---: |
+| RRF primary | 56.12% | 94.17% | 3,986.38 |
+| Full-history recheck | 58.65% | 92.38% | 18,414.96 |
+| Targeted retrieval | 57.47% | 92.83% | 7,290.80 |
+| Sufficiency + risk + adaptive retrieval | 51.15% | 95.96% | 12,663.62 |
+
+The 1,540 ordinary and 446 adversarial cases are scored separately. Neither F1 nor literal refusal scores establish semantic accuracy. Known tokens include failures and retries, are lower bounds, and exclude unknown usage. Budgets differ, and no matched external-method ranking is claimed. The adaptive run retains one engineering failure in its full denominator.
+
+**The combined quality/refusal/cost objective is not met; production defaults remain.** [Aggregate](assets/evaluation/locomo-risk-full-20261014.json) · [Protocol and limits](docs/implemented/证据充分性与风险感知回答.md)
 
 <details>
-<summary>Four-method quality, refusal and token cost</summary>
+<summary>Quality/cost chart and retained experiments</summary>
 
-![LoCoMo full P0 ablation](docs/assets/evaluation/locomo-risk-full-20261014.png)
+![LoCoMo complete comparison](assets/evaluation/locomo-risk-full-20261014.png)
 
-[Aggregate](docs/assets/evaluation/locomo-risk-full-20261014.json) · [SVG](docs/assets/evaluation/locomo-risk-full-20261014.svg) · [Provenance and reproduction](docs/assets/evaluation/README.md#p0四方法全量消融2026-10-14). No new inference or scoring is performed by the chart renderer.
+The current asset set retains three result families: complete LoCoMo, registered LCCC diagnostics, and evidence selection. Superseded smoke/development exports and duplicate charts have been removed from the current tree. Historical Git revisions and private run ledgers remain traceable. [Assets and reproduction](assets/evaluation/README.md)
 
 </details>
 
-## Local setup and startup
+## Repository
 
-After preparing `.venv`, private `config.toml` and the Studio build, double-click [start_backend.cmd](start_backend.cmd), or run `.\start_backend.cmd` from the repository root. Double-click [stop_backend.cmd](stop_backend.cmd) to stop the owned backend process tree, including its MCP children. Use `start_backend.cmd -Action Status` to check status; the existing `-Action Stop` command also remains available. It binds `127.0.0.1:2237`, logs to ignored `data/logs/system/`, and refuses occupied ports. The local HTTP model service remains a separate dependency. See [launcher details](docs/implemented/本机后台启动与停止.md).
+- `assets/`: project diagrams, retained result summaries and source manifests.
+- `docs/implemented/`: current behavior, operations, evidence and limitations.
+- `docs/plans/`: research and readiness work awaiting verification.
+- `frontend/`, `memoria/`, `scripts/`, `tests/`: interfaces, implementation, tools and engineering checks.
+- Ignored `data/` and `model/`: per-account SQLite/WAL, private evidence, credentials, run ledgers and model weights.
 
-Run from the repository root in Windows PowerShell. Preserve an existing private configuration and use the project virtual environment.
-
-```powershell
-if (-not (Test-Path .venv\Scripts\python.exe)) { python -m venv .venv }
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
-Push-Location frontend
-npm ci --cache .npm-cache
-npm run build
-Pop-Location
-.\.venv\Scripts\python.exe main.py --config config.toml --host 127.0.0.1 --port 2237
-```
-
-Open `http://127.0.0.1:2237/` for standalone Chat and `http://127.0.0.1:2237/studio/` for administration; `/docs` exposes the API contracts and `/api/health` checks process liveness. Studio must be built before starting/restarting the service. Chat and Studio share login/signup and an HttpOnly session. Each account sees its own data. Local account setup is also available:
-
-```powershell
-.\.venv\Scripts\python.exe scripts/manage_users.py reserve your_username
-.\.venv\Scripts\python.exe scripts/manage_users.py set-password your_username
-```
-
-Password entry is hidden and resets revoke sessions. The existing local qin account is already configured. Empty api_token never bypasses the formal login gateway; each server-owned UUID selects its own database, files, workers and MCP configuration.
-
-Choose either remote main/fast with in-process local BGE (`local://auto`), or the local HTTP Qwen/BGE server. The [Chinese startup guide](README.md#模型方案选择一种) includes optional dependencies, protected Key input, private-override precedence and both complete configurations. Weights are ignored and must already exist locally; the BGE download script verifies a pinned public snapshot.
-
-```powershell
-# Separate terminal, only when choosing local HTTP inference
-.\.venv\Scripts\python.exe scripts/serve_local_llm.py --model model/Qwen3.5-2B --embedding-model model/bge-small-zh-v1.5 --device cuda --port 8080 --max-context-tokens 8192 --warmup
-```
-
-MCP and source import are optional, not part of the minimal startup. See [scripts](scripts/README.md), [frontend](frontend/README.md), [MCP](docs/implemented/MCP部署与授权.md) and [data provenance](docs/data-sources/README.md). No default credentials or synthetic production profiles are included.
-
-## Next work and commercial readiness
-
-Feishu bot messaging is separate from document MCP/OAuth. The optional `requirements-feishu.txt` SDK and local DPAPI configuration enable a private-message listener; each person must pair from their logged-in Chat/Studio account. See the [bot setup and verified scope](docs/implemented/飞书机器人对话接入.md). Private app credentials, bindings and conversations remain outside Git.
-
-Prioritize query-only risk gating and source support after fallback, multi-hop/open-domain evidence coverage and time precision, then registered comparisons with trusted local Reader token budgets and independent holdouts. Production finite-state citation validation and complete request budgeting are implemented; semantic support and general free-text citation validation remain incomplete. Consented continuous personal histories are still needed for Claim/condition/update and long-term studies; independent human research evaluation remains deferred.
-
-Per-user SQLite/WAL is the current storage design. Verified backup/restore, versioned migrations, full account export/deletion and backup retention, cost/resource quotas, SSRF-safe egress, HTTPS trusted proxies, tenant reclamation, readiness/monitoring/alerts, reproducible CI/releases and license inventories remain pending. See the [research and commercial plan](docs/plans/长期陪伴记忆研究与实验计划书.md) and [module documentation](memoria/README.md).
-
-Source manifests belong in [docs/data-sources/](docs/data-sources/README.md). LCCC download caches live in data/datasets/, raw LoCoMo benchmarks in data/benchmarks/, and private gold and per-case artifacts in account-owned data/ directories. Public aggregates and charts live in [docs/assets/evaluation/](docs/assets/evaluation/README.md). Secrets and model weights remain local; old personal history stays unimported. See [AI instructions](AGENTS.md) and [GitHub conventions](docs/implemented/github提交规范.md).
-
-The four-method table remains the frozen v2 result. The v3 contract-repair, Reader/support reservation and truncated-verifier handling have only engineering validation (88 related tests plus two Windows launcher safety tests). No benchmark or model call was rerun; the historical one-case failure and scores remain unchanged. Higher adversarial phrase score is preferable on that unanswerable subset only; it does not establish semantic correctness and must be assessed together with ordinary F1, unnecessary refusals and total cost.
-
-Independent Chat and Studio: `/` serves a dedicated conversation interface; `/studio/` serves administration. Sources live under `frontend/chat`, `frontend/studio` and `frontend/shared`, with one package/lock and two HTML entries. The old `/app/` workspace is removed. Chat lists native conversations; imported public material remains in Studio. Both reuse the authenticated tenant gateway and shared account lifecycle. Run [build_frontend.cmd](build_frontend.cmd) before starting/restarting the backend. No benchmark or paid model generation was rerun by this interface change.
+Next: continuous-source memory evolution, matched-budget quality/cost, backup/restore, migrations, account lifecycle and monitoring. [Plan](docs/plans/长期陪伴记忆研究与实验计划书.md) · [Sources and licensing](assets/data-sources/README.md) · [AI instructions](AGENTS.md)

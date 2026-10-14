@@ -56,7 +56,7 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 .\.venv\Scripts\python.exe scripts/render_eval_charts.py --check
 ```
 
-仅读取公开历史聚合表/注册协议/实现报告，生成PNG/SVG与SHA清单；不读取私有原话/gold，不调用模型或产生新评分。数据口径见[图表说明](../docs/assets/evaluation/README.md)。后台维护、备份恢复与完整注销仍是计划任务。
+仅读取公开历史聚合表/注册协议/实现报告，生成PNG/SVG与SHA清单；不读取私有原话/gold，不调用模型或产生新评分。数据口径见[图表说明](../assets/evaluation/README.md)。后台维护、备份恢复与完整注销仍是计划任务。
 
 ## 同池证据选择
 
@@ -64,7 +64,7 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 
 ## LoCoMo十题测试
 
-新增`locomo-smoke --input LOCAL_FILE`，固定官方SHA及10题，独立bundle/run，不导入生产或真实人物协议；远程仍需`--allow-remote`、账号私有profile和匹配roles。只验证执行链路，不自动扩全量或标语义正确。[本轮结果/英文分支限制](../docs/implemented/LoCoMo十题真实调用诊断.md)。
+新增`locomo-smoke --input LOCAL_FILE`，固定官方SHA及10题，独立bundle/run，不导入生产或真实人物协议；远程仍需`--allow-remote`、账号私有profile和匹配roles。只验证执行链路，不自动扩全量或标语义正确。[本轮结果/英文分支限制](https://github.com/ZJ331456/Memoria/blob/05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d/docs/implemented/LoCoMo十题真实调用诊断.md)。
 
 ## LoCoMo英文正式入口
 
@@ -76,10 +76,10 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 
 `locomo-run --resume-from RUN --retry-errors`：仅对停止run的执行/回退错误恢复，完整分母继承，递归保留祖先调用/成本；未带resume-from则拒绝。
 
-`render_locomo_chart.py`仅从公开locomo-full-20261013.json重绘PNG/SVG与SHA清单，不访问私有数据、不重评分/调用模型；依赖requirements-docs.txt中的matplotlib。`--help`仅说明命令。
-
-LoCoMo渲染器写标准LF并规范SVG行尾，图源SHA与Git实际blob一致，PNG/SVG可重绘复核；数值和原始实验不改。
-
-`render_locomo_risk_chart.py`只读取公开四方法聚合，生成质量/拒答和已知Token双面板PNG/SVG及SHA指纹，不读私有gold或增加模型调用；完整1986题结果与负面取舍见[评测图说明](../docs/assets/evaluation/README.md#p0四方法全量消融2026-10-14)。`locomo-compare`离线核验同题/Reader/BGE与祖先调用费用，不覆盖同名冻结比较目录。
+`render_locomo_risk_chart.py`只读取公开四方法聚合，生成质量/拒答和已知Token双面板PNG/SVG及SHA指纹，不读私有gold或增加模型调用；完整1986题结果与负面取舍见[评测图说明](../assets/evaluation/README.md#p0四方法全量消融2026-10-14)。`locomo-compare`离线核验同题/Reader/BGE与祖先调用费用，不覆盖同名冻结比较目录。
 
 本机未提交账号管理：manage_users.py新增set-role USER --role user|superadmin、disable-login USER。角色变更撤销会话，保留最后超管；停用只撤销登录，不删除个人数据。set-password继续隐藏输入12–128字符，无短密码例外。[权限边界](../docs/implemented/用户登录与数据隔离.md#本机qin账号与超级管理员2026-10-14仅本地未提交)。
+
+## 项目说明与框架图
+
+`render_project_diagrams.py`生成根assets/images内的两幅PNG/SVG及指纹；`--check`校验产物。`render_locomo_risk_chart.py --check`校验当前全量聚合与图表，`render_eval_charts.py --check`校验LCCC保留图。三者不读取私有原话或调用模型；来源与精简规则见[assets](../assets/README.md)。旧基线单独绘图脚本随重复结果移除。

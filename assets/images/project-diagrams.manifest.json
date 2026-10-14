@@ -1,0 +1,14 @@
+{
+  "renderer": "scripts/render_project_diagrams.py",
+  "renderer_sha256": "afe81c9dea7e8055354c27fcfe9e643293dc762b4e534f2d660534dc7c9ca90f",
+  "font_family": "Microsoft YaHei",
+  "architecture_source": "docs/implemented/系统架构与实现说明.md",
+  "model_calls": 0,
+  "new_scores": 0,
+  "files": {
+    "memoria-overview.png": "65c50b58c9088ac495b0bd20320dbf6994d5aca5743a9aef1e7acc5b02a9fe31",
+    "memoria-overview.svg": "65e0c908e6443c6c8605ae14e9f55a615a76c8790b5777276f8d3600df72862a",
+    "memoria-architecture.png": "227f250f9468914ee41264f584c3b0fdb323416503ec19c4e28965e6bb3e5e08",
+    "memoria-architecture.svg": "49416ccc65860b4008a00dc99f2021b652e91b995bc6c59a3a656b8c81707dcd"
+  }
+}

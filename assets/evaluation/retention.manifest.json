@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-14",
+  "history_revision": "05f9fb2ac08b0c8b37a359dd3e53b9cb4abedc7d",
+  "retained_result_families": [
+    "locomo-risk-full-20261014.json",
+    "registered-20261012.json",
+    "evidence-selection-20261012.json"
+  ],
+  "retired_public_assets": [
+    {
+      "path": "docs/assets/evaluation/locomo-full-firstpass-20261013.json",
+      "sha256": "5e9e36b254e6f31ec934c0094ddb4d6caf0180909bb3ee4082eebcb72ea78633"
+    },
+    {
+      "path": "docs/assets/evaluation/locomo-full-20261013.json",
+      "sha256": "c34704ae1be34855d0717dfef7ba0bc319021cc1726703eeed73886b382dfe79"
+    },
+    {
+      "path": "docs/assets/evaluation/locomo-full-20261013.png",
+      "sha256": "47f1861da8668e1cd3ecd7c3de6c79ad50ef896cddc00a228cf3849238be2d1b"
+    },
+    {
+      "path": "docs/assets/evaluation/locomo-full-20261013.svg",
+      "sha256": "df939f4e2b696930b2939839160b8c4bcfbd2e07ed4950117042ceb81546a03b"
+    },
+    {
+      "path": "docs/assets/evaluation/locomo-full-20261013-chart.json",
+      "sha256": "59d4b777c7598d6aab6c41ce55f1800a558d8516cf5cf7ac67b0cdfec24d5e4e"
+    },
+    {
+      "path": "docs/assets/evaluation/locomo-smoke-20261013.json",
+      "sha256": "2a4abf166bc2f440d430b738aa6b315d52e9f6d4c0aea670659636b05b4ca343"
+    },
+    {
+      "path": "docs/assets/evaluation/locomo-risk-development-v1-20261013.json",
+      "sha256": "4e1e8f096d25fd94bb6cf9ff4a5e7f566fe0aa2563ffee47d979f6f072b86e9e"
+    },
+    {
+      "path": "docs/assets/evaluation/locomo-original-triage-20261014.json",
+      "sha256": "627c4eae8567c569efa1552957ec7700e33e10f1d2554eb6166e37500069b7e2"
+    }
+  ],
+  "retired_reports": [
+    "docs/implemented/真实QA对照评测结果.md",
+    "docs/implemented/LoCoMo十题真实调用诊断.md"
+  ],
+  "private_run_ledgers": "unchanged",
+  "new_model_calls": 0,
+  "new_scores": 0
+}
