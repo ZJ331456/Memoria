@@ -2,13 +2,13 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { API, SessionChanged } from './api'
 
 export function useAccount(hooks: {ready: () => Promise<void>; clear: () => void}) {
-  const api = new API(), user = ref<any>(null), busy = ref(false), error = ref('')
+  const api = new API(), user = ref<any>(null), busy = ref(false), error = ref(''), notice = ref('')
   const username = ref(''), password = ref(''), repeatPassword = ref(''), authMode = ref('login')
   const events = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('memoria-auth') : null
   let version = 0
   function clear() {
     version++; api.reset(); user.value = null
-    username.value = ''; password.value = ''; repeatPassword.value = ''; error.value = ''
+    username.value = ''; password.value = ''; repeatPassword.value = ''; error.value = ''; notice.value = ''
     hooks.clear()
   }
   api.onUnauthorized = clear
@@ -29,7 +29,7 @@ export function useAccount(hooks: {ready: () => Promise<void>; clear: () => void
   }
   async function login() {
     await run(async () => {
-      api.reset(); version++
+      api.reset(); version++; notice.value = ''
       try {
         if (authMode.value === 'register') {
           if (password.value !== repeatPassword.value) throw new Error('两次输入的密码不一致')
@@ -47,6 +47,11 @@ export function useAccount(hooks: {ready: () => Promise<void>; clear: () => void
       finally { clear(); events?.postMessage({type: 'identity-change'}) }
     })
   }
+  function passwordChanged() {
+    clear()
+    notice.value = '密码已修改，原有登录已失效。请使用新密码重新登录。'
+    events?.postMessage({type: 'identity-change'})
+  }
   async function check() {
     if (!user.value || document.hidden) return
     try {
@@ -58,5 +63,5 @@ export function useAccount(hooks: {ready: () => Promise<void>; clear: () => void
   if (events) events.onmessage = event => { if (event.data?.type === 'identity-change') { clear(); void restore() } }
   onMounted(() => { window.addEventListener('focus', check); document.addEventListener('visibilitychange', check); void run(restore) })
   onUnmounted(() => { clear(); events?.close(); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check) })
-  return {api, user, busy, error, username, password, repeatPassword, authMode, login, logout, run}
+  return {api, user, busy, error, notice, username, password, repeatPassword, authMode, login, logout, passwordChanged, run}
 }

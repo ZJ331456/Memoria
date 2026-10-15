@@ -14,3 +14,6 @@ body{background:#f5f7fb}button{transition:background .15s,border-color .15s}butt
 .reader-view-actions{display:flex;gap:6px;flex-shrink:0}.reader-view-actions .el-button+.el-button{margin-left:0}.reader-heading .reader-view-actions .el-button{padding:5px 7px}.stat-card small,.conversation-item p,.section-title p{color:#8291a8}.message-header strong{font-size:11px}.conversation-item strong{font-size:13px}
 
 .sidebar{overflow-y:auto}.sidebar-note{margin-top:30px}nav button{padding-top:10px;padding-bottom:10px}.message-header .text-button{font-size:10px}
+
+.reader-heading{flex-wrap:wrap}.reader-heading>div:first-child{min-width:0}.reader-view-actions{flex-wrap:wrap}
+@media(max-width:650px){.console-header .account{flex-wrap:wrap;justify-content:flex-end}}

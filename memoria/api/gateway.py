@@ -37,6 +37,12 @@ class NewPassword(BaseModel):
     password: str = Field(min_length=12, max_length=128)
 
 
+class PasswordChange(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    current_password: str = Field(min_length=12, max_length=128)
+    new_password: str = Field(min_length=12, max_length=128)
+
+
 def session_token(request: Request) -> str:
     header = request.headers.get("authorization", "")
     if header:
@@ -244,6 +250,21 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     def logout(request: Request, response: Response):
         accounts.logout(session_token(request))
         response.delete_cookie(COOKIE, path="/")
+
+    @app.post('/api/auth/password', status_code=204, tags=['auth'])
+    async def change_password(body: PasswordChange, request: Request, response: Response):
+        actor = current_user(request)
+        peer = request.client.host if request.client else 'unknown'
+        if not accounts.throttle(f'password-change:ip:{peer}', maximum=30) or not accounts.throttle(f'password-change:user:{actor["id"]}'):
+            raise HTTPException(429, '密码修改尝试过多，10分钟后重试')
+        try:
+            async with password_slots:
+                await asyncio.to_thread(accounts.change_password, session_token(request), body.current_password, body.new_password)
+        except PermissionError:
+            raise HTTPException(401, '登录已失效，请重新登录')
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        response.delete_cookie(COOKIE, path='/')
 
     @app.get('/api/admin/users', tags=['admin'])
     def admin_users(request: Request):

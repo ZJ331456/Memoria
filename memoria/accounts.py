@@ -105,6 +105,35 @@ class AccountStore:
         self.db.execute('INSERT INTO account_events(occurred_at,actor_user_id,target_user_id,action) VALUES(?,?,?,?)',
                         (time.time(),actor,target,action))
 
+    def change_password(self, token: str, current_password: str, new_password: str) -> None:
+        """Verify the current secret and atomically revoke every session for its owner."""
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
+        with self._lock:
+            row = self.db.execute('''SELECT u.id,u.salt,u.password_hash FROM login_sessions s
+                JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?''',
+                (token_hash, time.time())).fetchone()
+        if not row or not row['password_hash']:
+            raise PermissionError('登录已失效，请重新登录')
+        expected = bytes(row['password_hash'])
+        verified = password_hash(current_password, bytes(row['salt']))
+        if not hmac.compare_digest(verified, expected):
+            raise ValueError('当前密码不正确')
+        if hmac.compare_digest(current_password.encode(), new_password.encode()):
+            raise ValueError('新密码不能与当前密码相同')
+        salt = secrets.token_bytes(16)
+        hashed = password_hash(new_password, salt)
+        with self._lock, self.db:
+            self.db.execute('BEGIN IMMEDIATE')
+            # Hashing runs outside the lock. A reset, logout or expiry during it
+            # must never overwrite a newer password or revive a revoked session.
+            actor = self.authenticate(token)
+            current = self.db.execute('SELECT password_hash FROM users WHERE id=?', (row['id'],)).fetchone()
+            if not actor or actor['id'] != row['id'] or not current or not current['password_hash'] or not hmac.compare_digest(bytes(current['password_hash']), expected):
+                raise PermissionError('登录已失效，请重新登录')
+            self.db.execute('UPDATE users SET salt=?,password_hash=? WHERE id=?', (salt, hashed, row['id']))
+            self.db.execute('DELETE FROM login_sessions WHERE user_id=?', (row['id'],))
+            self._event('self_password_change', row['id'], row['id'])
+
     def set_role(self, username: str, role: str) -> dict:
         """Local administrator operation; public HTTP cannot grant roles."""
         username = normalize_username(username)
@@ -180,6 +209,7 @@ class AccountStore:
         token = secrets.token_urlsafe(32)
         with self._lock, self.db:
             # A concurrent password reset must not issue a session for the old hash.
+            self.db.execute('BEGIN IMMEDIATE')
             current = self.db.execute("SELECT password_hash,role FROM users WHERE id=?", (row["id"],)).fetchone()
             if not current or not current["password_hash"] or not hmac.compare_digest(bytes(current["password_hash"]), bytes(row["password_hash"])):
                 return None

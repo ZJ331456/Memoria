@@ -5,6 +5,8 @@
 - `auth.ts`：Chat/Studio共用账号生命周期、登录/注册/退出、跨标签变化信号和重新激活校验。
 - `AuthPanel.vue`：共享账号表单，不保存密码或令牌。
 - `FeishuPanel.vue`：只读连接状态、本账号一次性绑定码和明确解绑；不公开应用凭据，不持久化绑定码。
+- `PasswordPanel.vue`：验证旧密码的当前账号改密弹窗，关闭/成功/换号清空字段，成功撤销旧登录并通知两个界面重新认证。
+- `MarkdownContent.vue` / `markdown.ts`：保存和流式消息共享的Markdown渲染与HTML白名单，图片不自动加载；来源原文不改写。
 - `api.ts`：同源Cookie、401清理、请求分通道取消、旧响应丢弃、服务端归属核对及增量SSE解析。
 - `console.ts`：日期、字面高亮、有限中文阅读投影；source指纹和Unicode范围始终使用原文。
 

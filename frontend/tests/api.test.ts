@@ -80,3 +80,13 @@ test('a stalled data read times out visibly and the next request can recover',as
     assert.deepEqual(await api.request('/studio/summary'),{sessions:53})
   } finally {globalThis.fetch=previous}
 })
+
+test('a wrong current password remains an actionable error and keeps the account signed in',async()=>{
+  const previous=globalThis.fetch
+  globalThis.fetch=async()=>new Response('{"detail":"当前密码不正确"}',{status:400})
+  try {
+    const api=new API();let cleared=false;api.onUnauthorized=()=>{cleared=true}
+    await assert.rejects(api.request('/auth/password',{current_password:'engineering',new_password:'engineering-new'}),/当前密码不正确/)
+    assert.equal(cleared,false)
+  } finally {globalThis.fetch=previous}
+})

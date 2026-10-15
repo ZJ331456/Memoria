@@ -37,3 +37,5 @@ npm test
 Chat只列本账号原生聊天，导入公共语料在Studio查看。两端共享HttpOnly Cookie、退出广播、请求取消与响应归属检查；凭据与原话不写浏览器持久存储。旧React缓存及旧Studio构建已迁入忽略的本地备份，根studio目录已移除，Git不保留并行旧入口。
 
 [Chat模块](chat/README.md) · [Studio模块](studio/README.md) · [共享层](shared/README.md)
+
+Chat/Studio共用当前账号改密弹窗及安全Markdown组件；消息排版、外链/图片边界与临时浏览器验收见[前端说明](../docs/implemented/Chat与Studio前端架构.md#账号改密与聊天阅读2026-10-15)。依赖仅安装frontend目录，jsdom仅供工程DOM/XSS验证，不进入生产模型或实验语料。

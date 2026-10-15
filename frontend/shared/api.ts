@@ -40,7 +40,7 @@ export class API {
       if (response.status === 401 && path !== '/auth/login') { this.onUnauthorized(); throw new SessionChanged() }
       const result = response.status === 204 ? undefined : await response.json()
       if (changed()) throw new SessionChanged()
-      if (!response.ok) throw new Error(typeof result?.message === 'string' ? result.message : '请求失败，请刷新数据后重试（' + response.status + '）')
+      if (!response.ok) throw new Error(typeof result?.message === 'string' ? result.message : typeof result?.detail === 'string' ? result.detail : '请求失败，请刷新数据后重试（' + response.status + '）')
       return result as T
     } catch (e) {
       if (changed()) throw new SessionChanged()

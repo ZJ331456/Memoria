@@ -26,7 +26,7 @@
 
 ### 2.2 用户登录与安全限制
 
-正式入口强制登录：POST /api/auth/register、POST /api/auth/login、GET /api/auth/me、POST /api/auth/logout。登录返回 access_token（12 小时有效），业务请求携带用户 Bearer 或 HttpOnly Cookie；旧 X-API-Key 和单独 X-Agent-Key 不能绕过登录。健康与接口文档公开，/metrics 按用户登录隔离。
+正式入口强制登录：POST /api/auth/register、POST /api/auth/login、GET /api/auth/me、POST /api/auth/logout。当前账号可用POST /api/auth/password提交current_password与new_password自助改密，成功204并撤销全部旧登录；字段、400/401/422/429与并发约束见[自助改密说明](用户登录与数据隔离.md#当前账号自助修改密码2026-10-15)。登录返回 access_token（12 小时有效），业务请求携带用户 Bearer 或 HttpOnly Cookie；旧 X-API-Key 和单独 X-Agent-Key 不能绕过登录。健康与接口文档公开，/metrics 按用户登录隔离。
 
 /api/shared/* 登录后仍需该用户库中的 X-Agent-Key 与空间 ACL；共享治理是该用户内部的 Agent 协作域，不默认跨登录用户共享。模型配置的 PUT 接口仅内部核心可用，公开网关返回 403，由本机管理员维护模型文件。写请求检查 Origin / Sec-Fetch-Site、实际请求体大小及登录频率；远程访问必须 HTTPS。完整字段、目录、密码设置和范围见 [用户登录与隔离](用户登录与数据隔离.md)。
 

@@ -2,6 +2,8 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import AuthPanel from '../../shared/AuthPanel.vue'
 import FeishuPanel from '../../shared/FeishuPanel.vue'
+import PasswordPanel from '../../shared/PasswordPanel.vue'
+import MarkdownContent from '../../shared/MarkdownContent.vue'
 import { useAccount } from '../../shared/auth'
 import { dateLabel, isCancelled } from '../../shared/console'
 
@@ -9,14 +11,18 @@ const conversations=ref<any[]>([]),total=ref(0),listPage=ref(1),search=ref(''),l
 const selected=ref(''),title=ref('新的对话'),messages=ref<any[]>([]),messageTotal=ref(0),oldestPage=ref(1),reading=ref(false)
 const draft=ref(''),sending=ref(false),pendingUser=ref(''),answer=ref(''),phase=ref(''),mobileOpen=ref(false)
 const feed=ref<HTMLElement|null>(null),composer=ref<HTMLTextAreaElement|null>(null)
+const rawMessages=ref(new Set<string>()),copied=ref(''),followTail=ref(true)
 const account=useAccount({ready:loadConversations,clear:clearData})
 const {api,user,busy,error,logout}=account
-let alive=true,timer:ReturnType<typeof setTimeout>,identity=0
+let alive=true,timer:ReturnType<typeof setTimeout>,copyTimer:ReturnType<typeof setTimeout>,identity=0
 const selectedConversation=computed(()=>conversations.value.find(item=>item.id===selected.value))
 
-function clearData(){identity++;conversations.value=[];messages.value=[];messageTotal.value=0;total.value=0;selected.value='';title.value='新的对话';draft.value='';pendingUser.value='';answer.value='';phase.value='';sending.value=false;reading.value=false;loading.value=false;search.value='';listPage.value=1;oldestPage.value=1;mobileOpen.value=false}
+function clearData(){identity++;conversations.value=[];messages.value=[];messageTotal.value=0;total.value=0;selected.value='';title.value='新的对话';draft.value='';pendingUser.value='';answer.value='';phase.value='';sending.value=false;reading.value=false;loading.value=false;search.value='';listPage.value=1;oldestPage.value=1;mobileOpen.value=false;rawMessages.value.clear();copied.value='';followTail.value=true;clearTimeout(copyTimer)}
 function fail(e:unknown){if(alive&&!isCancelled(e))error.value=(e as Error).message}
-async function scrollBottom(){await nextTick();feed.value?.scrollTo({top:feed.value.scrollHeight,behavior:'smooth'})}
+async function scrollBottom(force=false){if(!force&&!followTail.value)return;if(force)followTail.value=true;await nextTick();feed.value?.scrollTo({top:feed.value.scrollHeight,behavior:sending.value?'auto':'smooth'})}
+function trackScroll(){const el=feed.value;if(el)followTail.value=el.scrollHeight-el.scrollTop-el.clientHeight<100}
+function toggleRaw(id:string){rawMessages.value.has(id)?rawMessages.value.delete(id):rawMessages.value.add(id)}
+async function copyMessage(message:any){const at=identity;try{await navigator.clipboard.writeText(message.content);if(alive&&at===identity){copied.value=message.id;clearTimeout(copyTimer);copyTimer=setTimeout(()=>copied.value='',1800)}}catch{if(alive&&at===identity)error.value='复制失败，请选择文字后复制'}}
 async function loadConversations(){
   if(!user.value)return
   const q=search.value,p=listPage.value,at=identity;loading.value=true
@@ -26,11 +32,11 @@ async function loadConversations(){
     conversations.value=result.items;total.value=result.total;listPage.value=result.page
   }catch(e){fail(e)}finally{if(at===identity)loading.value=false}
 }
-function newChat(){if(sending.value)return;selected.value='';title.value='新的对话';messages.value=[];messageTotal.value=0;pendingUser.value='';answer.value='';reading.value=false;oldestPage.value=1;draft.value='';error.value='';mobileOpen.value=false;void nextTick(()=>composer.value?.focus())}
+function newChat(){if(sending.value)return;selected.value='';title.value='新的对话';messages.value=[];messageTotal.value=0;pendingUser.value='';answer.value='';reading.value=false;oldestPage.value=1;draft.value='';error.value='';mobileOpen.value=false;followTail.value=true;rawMessages.value.clear();void nextTick(()=>composer.value?.focus())}
 async function choose(item:any){
   if(sending.value)return
   selected.value=item.id;title.value=item.title;messages.value=[];draft.value='';error.value='';mobileOpen.value=false
-  await loadMessages(Math.max(1,Math.ceil(item.message_count/50)));await scrollBottom()
+  await loadMessages(Math.max(1,Math.ceil(item.message_count/50)));await scrollBottom(true)
 }
 async function loadMessages(page:number,prepend=false){
   const id=selected.value,at=identity;if(!id)return
@@ -47,7 +53,7 @@ async function loadMessages(page:number,prepend=false){
 async function send(){
   const text=draft.value.trim(),at=identity
   if(!text||sending.value||!user.value||busy.value||reading.value)return
-  sending.value=true;error.value='';pendingUser.value=text;answer.value='';phase.value='正在思考';draft.value='';await scrollBottom()
+  sending.value=true;error.value='';pendingUser.value=text;answer.value='';phase.value='正在思考';draft.value='';await scrollBottom(true)
   try{
     if(!selected.value){
       const session=await api.request('/sessions',{title:text.slice(0,36)})
@@ -79,7 +85,8 @@ async function send(){
 async function cancel(){try{await api.request('/sessions/'+encodeURIComponent(selected.value)+'/cancel',{});phase.value='正在停止'}catch(e){fail(e)}}
 function keydown(event:KeyboardEvent){if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();void send()}}
 watch(search,()=>{clearTimeout(timer);timer=setTimeout(()=>{listPage.value=1;void loadConversations()},250)})
-onUnmounted(()=>{alive=false;clearTimeout(timer)})
+watch(draft,async()=>{await nextTick();const el=composer.value;if(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px'}})
+onUnmounted(()=>{alive=false;clearTimeout(timer);clearTimeout(copyTimer)})
 </script>
 
 <template>
@@ -103,22 +110,22 @@ onUnmounted(()=>{alive=false;clearTimeout(timer)})
       <footer class="chat-sidebar-footer"><a href="/studio/">◇ <span>Memory Studio<small>查看资料与管理记忆</small></span> ↗</a><div v-if="user" class="chat-account"><span class="account-avatar">{{ user.username[0].toUpperCase() }}</span><strong>{{ user.username }}</strong><button :disabled="busy" @click="logout">退出 / 换号</button></div><div v-else class="chat-login-note">登录后保存自己的聊天记录</div></footer>
     </aside>
     <main class="chat-main">
-      <header class="chat-header"><div><button class="mobile-menu" aria-label="打开会话列表" @click="mobileOpen=!mobileOpen">☰</button><span>Memoria <span class="header-slash">/</span> {{ selected?'对话':'Chat' }}</span><span class="chat-status"><i/> {{ sending?phase:'在这里，慢慢聊' }}</span></div><div><FeishuPanel v-if="user" :key="user.id" :api="api"/><a href="/studio/">Studio ↗</a></div></header>
+      <header class="chat-header"><div><button class="mobile-menu" aria-label="打开会话列表" @click="mobileOpen=!mobileOpen">☰</button><span>Memoria <span class="header-slash">/</span> {{ selected?'对话':'Chat' }}</span><span class="chat-status"><i/> {{ sending?phase:'在这里，慢慢聊' }}</span></div><div><PasswordPanel v-if="user" :key="'password-'+user.id" :api="api" :disabled="busy||sending" @changed="account.passwordChanged"/><FeishuPanel v-if="user" :key="user.id" :api="api"/><a href="/studio/">Studio ↗</a></div></header>
       <div v-if="error" class="chat-error" role="alert">{{ error }}<button aria-label="关闭提示" @click="error=''">×</button></div>
       <div v-if="!user" class="chat-login"><div class="login-heading"><span class="welcome-symbol">✳</span><h1>让每次对话，都有延续。</h1><p>与 Memoria 聊聊今天，也聊聊更长远的事。</p></div><AuthPanel :account="account" /></div>
       <template v-else>
-        <div ref="feed" class="chat-feed" :class="{welcome:!selected&&!pendingUser}" aria-label="对话消息" aria-live="polite">
+        <div ref="feed" class="chat-feed" :class="{welcome:!selected&&!pendingUser}" aria-label="对话消息" aria-live="polite" @scroll="trackScroll">
           <section v-if="!selected&&!pendingUser" class="chat-welcome"><span class="welcome-kicker">YOUR SPACE, YOUR PACE</span><span class="welcome-symbol">✳</span><h1>今天，想聊些什么？</h1><p>从此刻的一件小事开始。<br>你的对话会保存在自己的账号下。</p><div class="welcome-detail"><span>○ 一段新的对话</span><span>◇ 记忆由你管理</span></div></section>
           <div v-else class="message-column">
             <button v-if="oldestPage>1" class="load-earlier" :disabled="reading||sending" @click="loadMessages(oldestPage-1,true)">{{ reading?'正在加载…':'加载更早的消息' }}</button>
             <div class="chat-conversation-title"><h1>{{ title }}</h1><span>仅当前账号可见</span></div>
             <p v-if="reading&&!messages.length" class="chat-loading">正在读取对话…</p>
-            <article v-for="message in messages" :key="message.id" class="chat-message" :class="message.role"><span class="chat-message-avatar">{{ message.role==='assistant'?'✳':'你' }}</span><div class="chat-message-body"><div class="chat-message-meta"><strong>{{ message.role==='assistant'?'Memoria':'你' }}</strong><time>{{ dateLabel(message.created_at,true) }}</time></div><div class="chat-message-text">{{ message.content }}</div></div></article>
+            <article v-for="message in messages" :key="message.id" class="chat-message" :class="message.role"><span class="chat-message-avatar" aria-hidden="true">{{ message.role==='assistant'?'✳':'你' }}</span><div class="chat-message-body"><div class="chat-message-meta"><strong>{{ message.role==='assistant'?'Memoria':'你' }}</strong><time>{{ dateLabel(message.created_at,true) }}</time></div><MarkdownContent v-if="message.role==='assistant'&&!rawMessages.has(message.id)" class="chat-message-text" :content="message.content"/><div v-else class="chat-message-text">{{ message.content }}</div><div class="message-actions"><button :aria-label="message.role==='assistant'?'复制助手回复':'复制我的消息'" @click="copyMessage(message)">{{ copied===message.id?'已复制':'复制' }}</button><button v-if="message.role==='assistant'" @click="toggleRaw(message.id)">{{ rawMessages.has(message.id)?'阅读模式':'查看原文' }}</button></div></div></article>
             <article v-if="pendingUser" class="chat-message user"><span class="chat-message-avatar">你</span><div class="chat-message-body"><div class="chat-message-meta"><strong>你</strong></div><div class="chat-message-text">{{ pendingUser }}</div></div></article>
-            <article v-if="sending" class="chat-message assistant"><span class="chat-message-avatar">✳</span><div class="chat-message-body"><div class="chat-message-meta"><strong>Memoria</strong><span>{{ phase }}</span></div><div v-if="answer" class="chat-message-text">{{ answer }}</div><div v-else class="thinking-dots"><i/><i/><i/></div></div></article>
+            <article v-if="sending" class="chat-message assistant"><span class="chat-message-avatar">✳</span><div class="chat-message-body"><div class="chat-message-meta"><strong>Memoria</strong><span>{{ phase }}</span></div><MarkdownContent v-if="answer" class="chat-message-text" :content="answer"/><div v-else class="thinking-dots" role="status" aria-label="正在等待回复"><i/><i/><i/></div></div></article>
           </div>
         </div>
-        <div class="composer-area"><form class="chat-composer" @submit.prevent="send"><textarea ref="composer" v-model="draft" aria-label="消息内容" rows="2" maxlength="20000" placeholder="给 Memoria 发消息…" :disabled="sending||busy||reading" @keydown="keydown"/><div class="composer-controls"><span>Enter 发送 · Shift + Enter 换行</span><button v-if="sending" type="button" class="stop-generation" @click="cancel">■ 停止</button><button v-else class="send-message" type="submit" aria-label="发送消息" :disabled="!draft.trim()||busy||reading">↑</button></div></form><div class="composer-note">回复由当前配置的模型生成，请核对重要信息。<a href="/studio/#conversations">导入资料与记忆管理 ↗</a></div></div>
+        <div class="composer-area"><button v-if="selected&&!followTail" class="jump-latest" @click="scrollBottom(true)">↓ 回到最新消息</button><form class="chat-composer" @submit.prevent="send"><textarea ref="composer" v-model="draft" aria-label="消息内容" rows="2" maxlength="20000" placeholder="给 Memoria 发消息…" :disabled="sending||busy||reading" @keydown="keydown"/><div class="composer-controls"><span>Enter 发送 · Shift + Enter 换行</span><button v-if="sending" type="button" class="stop-generation" @click="cancel">■ 停止</button><button v-else class="send-message" type="submit" aria-label="发送消息" :disabled="!draft.trim()||busy||reading">↑</button></div></form><div class="composer-note">回复由当前配置的模型生成，请核对重要信息。<a href="/studio/#conversations">导入资料与记忆管理 ↗</a></div></div>
       </template>
     </main>
   </div>
