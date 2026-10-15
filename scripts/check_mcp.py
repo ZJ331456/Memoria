@@ -22,7 +22,7 @@ async def check(server):
         tools = await client.connect()
         row.update(initialized=True, tool_names=[t.name for t in tools])
         if server.name == "search":
-            result = await client.call("search", {"query": "小模型 长期记忆", "limit": 3, "engines": ["baidu"]}, timeout=60)
+            result = await client.call("search", {"query": "长期陪伴 记忆管理", "limit": 3, "engines": ["baidu"]}, timeout=60)
             parsed = json.loads(result)
             results = parsed.get("results", [])
             if not results or any(not r.get("url", "").startswith(("http://", "https://")) for r in results):

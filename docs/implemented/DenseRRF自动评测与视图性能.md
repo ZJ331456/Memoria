@@ -31,7 +31,7 @@ BGE中文small v1.5原话完整tokenizer分块，父消息最佳块余弦；quer
 
 BGE本地CUDA/512维/FP32，权重SHA `354763b9b1357bc9c44f62c6be2276321081ed2567773608c0d0785b61d5a026`，namespace `embedding-local:fb2b88ca2ec04dc58274575b1e74358195015e24f8ecc3e98c1a8c5b32f9de65`。设备RTX 4060 Laptop 8188 MiB；Python3.13.5、torch2.9.0+cu126、transformers5.5.3。`--embedding-device auto`仅本次运行直读已有权重，未改生产HTTP配置/base环境。GPU/CPU资源峰值未采样。
 
-Reader为deepseek-flash非思考模式，温度0/top_p1、1024输出、无重试、并发1。服务端权重revision/供应商缓存行为未知，不能保证每次复现相同答案；远程结果不作为约1B或本地Qwen能力。原始prompt/response/error/usage仅在账号独立实验目录，不进Git。本批040427c实验时，生产memory-access尚未接入Dense补检；后续6ea773f已实现普通记忆RRF来源补检，见[统一访问](MemoryStudio与统一记忆访问.md)，其质量不由本批成绩证明。生产Claim仍与匿名来源分域。
+Reader为deepseek-flash非思考模式，温度0/top_p1、1024输出、无重试、并发1。服务端权重revision/供应商缓存行为未知，不能保证每次复现相同答案；远程结果不代表本地 Qwen 配置的效果。原始prompt/response/error/usage仅在账号独立实验目录，不进Git。本批040427c实验时，生产memory-access尚未接入Dense补检；后续6ea773f已实现普通记忆RRF来源补检，见[统一访问](MemoryStudio与统一记忆访问.md)，其质量不由本批成绩证明。生产Claim仍与匿名来源分域。
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/research.py --user qin run --mode retrieval --protocol lccc50-codex-dev-qa-20261012-v2 --baseline B2_rrf --embedding-device auto

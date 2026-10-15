@@ -1,10 +1,10 @@
 # Memoria
 
-**面向小模型长期陪伴的、以原话证据为基础的记忆系统。**
+**面向长期陪伴、以原话证据为基础的记忆系统。**
 
 [English](README.en.md) · [快速开始](#快速开始) · [系统架构](#系统架构) · [评测结果](#locomo-全量评测) · [文档](docs/README.md)
 
-Memoria 将原话、审核、条件和版本连接起来，让有限上下文中的回答能够使用有来源、在当前情境下适用的记忆。项目提供独立 Chat、Memory Studio、HTTP API 与研究工具，支持本地 Qwen/BGE 和兼容 OpenAI 接口的远程模型。
+Memoria 将原话、审核、条件和版本连接起来，让有限上下文中的回答能够使用有来源、在当前情境下适用的记忆。项目提供独立 Chat、Memory Studio、HTTP API 与研究工具，当前后台使用 DeepSeek 大模型与本地 BGE Embedding；也支持本地 Qwen 和兼容 OpenAI 接口的模型配置。
 
 ![Memoria — Memory that stays in context.](assets/images/memoria-overview.png)
 

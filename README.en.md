@@ -1,10 +1,10 @@
 # Memoria
 
-**Source-backed memory for small-model, long-term companionship.**
+**Source-backed memory for long-term companionship.**
 
 [中文](README.md) · [Getting started](#getting-started) · [Architecture](#architecture) · [Documentation](docs/README.md)
 
-Memoria connects original evidence, review, conditions and revisions so that bounded-context answers can use traceable, applicable memories. It includes independent Chat and Memory Studio interfaces, an authenticated HTTP API, and research tools. Local Qwen/BGE and remote OpenAI-compatible models share the same interfaces.
+Memoria connects original evidence, review, conditions and revisions so that bounded-context answers can use traceable, applicable memories. It includes independent Chat and Memory Studio interfaces, an authenticated HTTP API, and research tools. The current backend uses DeepSeek with local BGE embeddings. Local Qwen and other OpenAI-compatible configurations remain supported.
 
 ![Memoria — Memory that stays in context.](assets/images/memoria-overview.png)
 

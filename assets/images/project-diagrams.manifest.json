@@ -1,16 +1,16 @@
 {
   "renderer": "scripts/render_project_diagrams.py",
-  "renderer_sha256": "d63e8fb54aee13920fefcceec3c8f1accc0e233d7b49510908bb0e69175a708f",
+  "renderer_sha256": "88d90a2967cabd69b49cb014aefbacb43fe4e4bae7342ca1ec3f97ca50ecc255",
   "language": "en",
   "font_family": "Segoe UI",
   "architecture_source": "docs/implemented/系统架构与实现说明.md",
-  "architecture_source_sha256": "b5f0ddd489e566dce020f4e7b2ff7afb8ce6eb4cd680d94ef14fdcf31b06fe60",
+  "architecture_source_sha256": "5ce727370bfeb914c630cd591b4a11cdebcf65ebbb04e3550eeceb5b75866ef4",
   "architecture_source_hash_format": "utf-8-lf",
   "poster": {
     "creation_tool": "built-in image_gen",
-    "image_generation_calls": 1,
+    "image_generation_calls": 2,
     "prompt": "assets/images/memoria-overview.prompt.txt",
-    "prompt_sha256": "e1900201bde52bab9830e56a3427a88649b53a3e2099bbe8bf231c92bf90eab7",
+    "prompt_sha256": "beddb40aa42af51aa928f461af246db4ac95eaf18d63b15036ddcb3529c729e1",
     "svg_type": "embedded-raster",
     "size": [
       1672,
@@ -29,8 +29,8 @@
   "research_model_calls": 0,
   "new_scores": 0,
   "files": {
-    "memoria-overview.png": "3a76a777aee256d90e507487b5a2bd45c176c63322eaa6ef82986a4936f0d88f",
-    "memoria-overview.svg": "c8e43cd63eeb94ea1127e3d2043b00f21d44a347100a3df5e97de6e53386551d",
+    "memoria-overview.png": "b0629bf41d8fa15be04a4276b25408d93c625cceac153b86d97096a47555d13e",
+    "memoria-overview.svg": "7d325e6549f72fb95fe59adc5ea2762e475d5bc409fc2cff7fc2b836c9a02794",
     "memoria-architecture.png": "ce16e11f6643dfb2d215a385f8ff8eeb96e39e50856405c7b0ca53206e8fe7a3",
     "memoria-architecture.svg": "6af39cff63fa277b7854dc5892f6ebab7261018e9a53fab7778f465992fb95ba"
   }

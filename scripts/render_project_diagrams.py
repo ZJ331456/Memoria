@@ -279,7 +279,7 @@ def render():
         "renderer": "scripts/render_project_diagrams.py", "renderer_sha256": digest(Path(__file__)),
         "language": "en", "font_family": font_family, "architecture_source": SOURCE.relative_to(ROOT).as_posix(),
         "architecture_source_sha256": source_digest(SOURCE), "architecture_source_hash_format": "utf-8-lf",
-        "poster": {"creation_tool": "built-in image_gen", "image_generation_calls": 1,
+        "poster": {"creation_tool": "built-in image_gen", "image_generation_calls": 2,
                    "prompt": PROMPT.relative_to(ROOT).as_posix(), "prompt_sha256": digest(PROMPT),
                    "svg_type": "embedded-raster", "size": [poster_width, poster_height]},
         "architecture": {"svg_type": "outlined-vector", "size": [2880, 2208],

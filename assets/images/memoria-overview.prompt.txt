@@ -9,7 +9,7 @@ Main headline, LARGE, left aligned, exactly two lines:
 "Memory that stays"
 "in context."
 Below the headline, subdued readable supporting copy, exactly:
-"Built for small-model,"
+"Source-backed memory for"
 "long-term companionship."
 Bottom band separated by a subtle rule, three evenly spaced benefit statements:
 "Traceable sources"     "Reviewed memories"     "Context-aware access"
@@ -17,3 +17,5 @@ Tiny lower left footer: "Chat / Memory Studio / HTTP API"
 Tiny lower right footer: "Research prototype"
 Typography: modern refined sans-serif, bold clean headline, immaculate kerning, luminous white headline, lavender accent for "in context.", muted ice-blue secondary copy. Brand name spelled M E M O R I A. Text must be perfectly readable, no invented words, no extra copy.
 Constraints: This poster advertises the design and implemented capabilities only. No numeric performance claims, no guarantees, no commercial-readiness claims, no made-up customers, no logos from other brands, no call-to-action buttons, no Chinese text, no watermark. Rich and sophisticated, not a crowded infographic, not generic cyberpunk, no brain illustration, no stock robots.
+
+2026-10-15 edit: preserve the existing poster composition and replace only the two supporting lines with "Source-backed memory for" / "long-term companionship." Built-in image_gen edit, one call; original generation one call. No research model calls or score changes.

@@ -2,6 +2,8 @@
 
 [项目首页](../README.md) · [展示与图表](../assets/README.md) · [来源清单](../assets/data-sources/README.md)
 
+当前后台为 DeepSeek 大模型，项目聚焦长期陪伴的记忆管理，保留可配置模型接口。
+
 文档仅分为两个目录：**implemented记录已经实现和验证的行为；plans记录研究路线、目标和待验收事项。** 图片、公开实验聚合和来源清单统一放在根assets。
 
 ## 已实现
