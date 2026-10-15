@@ -225,8 +225,8 @@ class MemoryAccessOrchestrator:
                         if not any(i["valid_at"] <= fact and (i["invalid_at"] is None or fact < i["invalid_at"]) for i in intervals):
                             rejected.append({"id": item["id"], "reason": "inactive_at_requested_time"})
                             continue
-                        ref = current.get("source_ref")
-                        source = self.claims.store.message_source(ref) if ref else None
+                        source = self.claims.store.memory_source(item["id"])
+                        ref = source["message_id"] if source else None
                         try:
                             if not source or not source["content"]:
                                 raise ClaimError(422, "no source")

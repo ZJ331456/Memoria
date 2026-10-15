@@ -24,7 +24,7 @@ SLOTS = {"residence": False, "occupation": True, "school": True,
          "response_language": False, "response_detail": False, "diet": True,
          "work_habit": True, "hobby": True, "learning_goal": True,
          "project_goal": True, "time_preference": True, "budget": False}
-COMPILER = "deterministic-claims-v5"
+COMPILER = "deterministic-claims-v6"
 SESSION_CUE = re.compile(r"(?:本次|这次|当前)(?:会话|对话)|\bthis\s+(?:session|chat|conversation)\b", re.I)
 
 
@@ -338,7 +338,7 @@ class ClaimMemory:
         mid = data.get("memory_id")
         if mid:
             parent = self.store.memory(mid)
-            if not parent or parent["status"] != "active":
+            if not parent or parent["status"] != "active" or not self.store.memory_support_available(mid):
                 raise ClaimError(422, "关联记忆必须是本账号活动版本")
             fingerprint = sha(parent["content"])
             if data.get("memory_sha256") and data["memory_sha256"] != fingerprint:
@@ -404,7 +404,7 @@ class ClaimMemory:
                 return False
             if data.get("memory_id"):
                 parent = self.store.memory(data["memory_id"])
-                if not parent or sha(parent["content"]) != data.get("memory_sha256"):
+                if not parent or sha(parent["content"]) != data.get("memory_sha256") or not self.store.memory_support_available(parent["id"]):
                     return False
                 if not historical:
                     moment = now()

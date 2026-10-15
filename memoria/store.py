@@ -264,6 +264,8 @@ class Store:
             self._init_fts()
             from .memory.experience import install as install_experiences
             install_experiences(self)
+            from .memory.source_support import install as install_source_support
+            install_source_support(self)
             self.vector_index = SQLiteVecIndex(self.db, vector_backend)
             self._bootstrap_vector_index()
             self.chunk_index = SQLiteVecIndex(self.db, vector_backend, self.embedding_namespace + ":source-chunks-v1")
@@ -784,9 +786,21 @@ class Store:
         active = "" if as_of else f"{alias}.status='active' AND "
         return (active + f"EXISTS (SELECT 1 FROM memory_validity_intervals vi WHERE vi.memory_id={alias}.id "
                 "AND vi.valid_at<=? AND (vi.invalid_at IS NULL OR vi.invalid_at>?)) "
-                f"AND NOT EXISTS (SELECT 1 FROM memory_source_dependencies sd LEFT JOIN messages u ON u.id=sd.message_id "
-                f"WHERE sd.memory_id={alias}.id AND (sd.state!='active' OR u.id IS NULL OR u.role!='user')) "
-                f"AND NOT EXISTS (SELECT 1 FROM memory_source_revocations sr WHERE sr.message_id={alias}.source_ref)", (moment, moment))
+                "AND " + self.memory_support_sql(alias), (moment, moment))
+
+    @staticmethod
+    def memory_support_sql(alias="m"):
+        from .memory.source_support import availability_sql
+        return availability_sql(alias)
+
+    def memory_support_available(self, memory_id):
+        with self.lock:
+            return bool(self.db.execute("SELECT 1 FROM memories m WHERE m.id=? AND "+self.memory_support_sql(), (memory_id,)).fetchone())
+
+    def memory_source(self, memory_id):
+        from .memory.source_support import source_for
+        with self.lock:
+            return source_for(self,memory_id)
 
     def retrieval_memories(self, limit: int = 2000, *, as_of: str | None = None) -> list[dict]:
         scope, params = self.retrieval_scope(as_of=as_of)
@@ -891,7 +905,7 @@ class Store:
             if row:
                 if ref and self.has_memory_operation(ref,row['id']):
                     return 'skipped', self.memory(row['id'])
-                return 'reinforced', self.reinforce_memory(row['id'],ref,require_source=kwargs.get('require_source',False))
+                return 'reinforced', self.reinforce_memory(row['id'],ref,require_source=kwargs.get('require_source',False), support_content=content)
             saved = self.add_memory(content,kind,importance,source,embedding,**kwargs)
             return ('superseded' if kwargs.get('supersedes_id') else 'created'), saved
 
@@ -928,6 +942,8 @@ class Store:
             self.db.execute('UPDATE memories SET content_key=? WHERE id=?',(self.memory_content_key(item['content']),item['id']))
             if source_ref and (require_source or source == 'reviewed_conversation' or self.message_source(source_ref)):
                 self.db.execute("INSERT INTO memory_source_dependencies(memory_id,message_id) VALUES(?,?)", (item['id'], source_ref))
+                from .memory.source_support import add_group
+                add_group(self,item['id'],source_ref,origin='created_source')
             self._open_interval(item["id"], timestamp)
             self.db.execute("INSERT INTO memories_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
             self._index_lexical(item['id'],item['content'])
@@ -947,7 +963,7 @@ class Store:
                     (uuid.uuid4().hex, source_ref, item["id"], "supersede" if previous is not None else "create", supersedes_id if previous is not None else None, timestamp))
         return self.memory(item["id"])
 
-    def reinforce_memory(self, memory_id: str, source_ref: str | None = None, *, require_source: bool = False) -> dict[str, Any] | None:
+    def reinforce_memory(self, memory_id: str, source_ref: str | None = None, *, require_source: bool = False, support_content: str | None = None) -> dict[str, Any] | None:
         timestamp = now()
         with self.lock:
             owns_transaction = not self.db.in_transaction
@@ -963,6 +979,10 @@ class Store:
                     return self.memory(memory_id)
                 if self.source_revoked(source_ref):
                     raise MemorySourceUnavailable("来源已撤销，不能强化记忆")
+                target = self.db.execute("SELECT content FROM memories WHERE id=? AND status='active'", (memory_id,)).fetchone()
+                if target and support_content is not None and self.memory_content_key(support_content)==self.memory_content_key(target[0]):
+                    from .memory.source_support import add_group
+                    add_group(self,memory_id,source_ref,origin='exact_reinforcement')
                 cur = self.db.execute("""UPDATE memories SET reinforcement=reinforcement+1,
                     last_reinforced_at=?,updated_at=? WHERE id=? AND status='active'""", (timestamp, timestamp, memory_id))
                 if cur.rowcount and source_ref:
@@ -1585,12 +1605,18 @@ class Store:
         marks = ",".join("?" for _ in refs)
         with self._memory_transaction():
             operations = self.db.execute(f"SELECT * FROM memory_operations WHERE source_ref IN ({marks}) AND undone_at IS NULL", refs).fetchall()
-            withdrawn = {row[0] for row in self.db.execute(
-                f"SELECT memory_id FROM memory_operations WHERE action IN ('create','supersede') AND (undone_at IS NOT NULL OR source_ref IN ({marks}))", refs)}
+            from .memory.source_support import live_groups
+            # The origin may have been revoked earlier while a replacement support
+            # survived. Losing the last support must still undo that origin now.
+            origins = self.db.execute(f"""SELECT * FROM memory_operations o WHERE action IN ('create','supersede')
+                AND (undone_at IS NOT NULL OR source_ref IN ({marks}) OR
+                    (memory_id IN (SELECT memory_id FROM memory_operations WHERE source_ref IN ({marks}))
+                     AND EXISTS(SELECT 1 FROM memory_support_groups g WHERE g.memory_id=o.memory_id)))""", (*refs,*refs)).fetchall()
+            withdrawn = {row['memory_id'] for row in origins if not live_groups(self,row['memory_id'],excluded=refs)}
             state_affected, restored = [], []
-            for row in operations:
+            for row in origins:
                 current = self.db.execute("SELECT status FROM memories WHERE id=?", (row["memory_id"],)).fetchone()
-                if row["action"] not in {"create", "supersede"} or not current or current[0] != "active":
+                if row['memory_id'] not in withdrawn or not current or current[0] != "active":
                     continue
                 state_affected.append(row["memory_id"])
                 previous_id, seen = row["previous_id"], set()
@@ -1599,14 +1625,14 @@ class Store:
                     previous = self.db.execute("SELECT id,status,supersedes_id FROM memories WHERE id=?", (previous_id,)).fetchone()
                     if previous is None:
                         break
-                    if previous_id not in withdrawn:
+                    if previous_id not in withdrawn and self.memory_support_available(previous_id):
                         if previous["status"] != "active":
                             restored.append(previous_id)
                         break
                     previous_id = previous["supersedes_id"]
             state_affected, restored = list(dict.fromkeys(state_affected)), list(dict.fromkeys(restored))
             reinforced = [row["memory_id"] for row in operations if row["action"] == "reinforce"]
-            affected = list(dict.fromkeys([*state_affected, *reinforced]))
+            affected = list(dict.fromkeys([*state_affected, *reinforced, *(r["memory_id"] for r in operations)]))
             if not dry_run:
                 timestamp = now()
                 self.db.executemany('INSERT OR IGNORE INTO memory_source_revocations VALUES(?,?)', [(ref,timestamp) for ref in refs])

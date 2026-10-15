@@ -100,3 +100,5 @@ Pop-Location
 TLS新增CA优先级/缓存轮换/目录变化/冷载不阻塞/缺失失败测试；LoCoMo补停止检查点继承、来源篡改拒绝和0重复reader调用。工程验收见[运行期修复](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
 
 检查点追加嵌套调用继承与仅失败恢复故障回归；断点/恢复多次仍完整计入旧调用，临时故障标签不当真实研究失败。
+
+[test_production_replay.py](test_production_replay.py)验证冻结副本、水位、固定候选和标签隔离；[test_ordinary_source_support.py](test_ordinary_source_support.py)验证两后端的来源替代/撤回、保守迁移、Reader/父Claim与事务，不作为研究成绩。
