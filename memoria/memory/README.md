@@ -99,3 +99,5 @@ Query-only风险不再把月份/人名May当作推测授权；只有有限明确
 [source_support.py](source_support.py)管理普通完整来源组、保守迁移、来源失效和存活引用；[生产重放与支持契约](../../docs/implemented/生产重放与普通来源支持.md)记录实际边界。
 
 经历补检新增opt-in experience_mode=dense/rrf；独立版本化向量、来源/截止过滤、后台限批/退避与查询后复核已实现，默认bm25。Dense为合格向量精确扫描，RRF为经历BM25+Dense两路；[真实本机检查与边界](../../docs/implemented/生产重放与普通来源支持.md#3-可选经历denserrf与小规模真实检查)。
+
+[ordinary_update_policy.py](ordinary_update_policy.py)约束普通非精确关系，有限绑定筛选先于Top-3；值/极性、并存/替代和事务版本复核防止明显不兼容更新。未知主体/条件不自动覆盖；精确正文去重、完整语义与12槽位扩展边界见[实施说明](../../docs/implemented/生产重放与普通来源支持.md#4-普通非精确关系的受约束更新)。

@@ -28,12 +28,14 @@ class MemoryWriteResult:
     reason: str = ""
     valid_at: str | None = None
     invalid_at: str | None = None
+    write_diagnostics: dict | None = None
 
     def public_dict(self) -> dict[str, Any]:
         memory = dict(self.memory) if self.memory else None
         if memory:
             memory.pop("embedding", None)
-        return {"action": self.action, "memory": memory, "previous_id": self.previous_id, "reason": self.reason}
+        return {"action": self.action, "memory": memory, "previous_id": self.previous_id, "reason": self.reason,
+                "write_diagnostics":self.write_diagnostics}
 
 
 class MemoryEngine:
@@ -273,6 +275,8 @@ class MemoryEngine:
 
         normalized = self._normalize(content)
         related: list[dict[str, Any]] = []
+        from .ordinary_update_policy import compatibility, decision as constrain_decision
+        rejected_relations=[]
         for item in items:
             if item["kind"] != kind:
                 continue
@@ -283,12 +287,20 @@ class MemoryEngine:
                 semantic_similarity = self._cosine(vector, existing)
             relation_similarity = max(lexical_similarity, semantic_similarity)
             if relation_similarity >= 0.55:
+                compatible,reason,_,_=compatibility(content,item["content"])
+                if not compatible or not self.store.memory_dependency_valid(self.store.memory_dependency(item)):
+                    rejected_relations.append({"id":item["id"],"reason":reason if not compatible else "target_not_current"})
+                    continue
                 candidate = dict(item)
                 candidate.pop("embedding", None)
                 candidate["relation_similarity"] = round(relation_similarity, 4)
                 related.append(candidate)
         related.sort(key=lambda item: float(item["relation_similarity"]), reverse=True)
+        eligible_relation_count=len(related)
         related = related[:3]
+        write_diagnostics={"policy":"closed_slot_context_veto_v1", "semantic_support_verified":False,
+            "rejected_candidate_count":len(rejected_relations), "rejected":rejected_relations[:24],
+            "eligible_top3":[c["id"] for c in related]}
 
         if related and self.decider:
             decision = await self.decider(content, kind, related)
@@ -297,17 +309,28 @@ class MemoryEngine:
             action = decision.get("action", "create")
             if target and target.get("source") == "user_correction" and source not in {"manual", "reviewed_conversation"} and action == "supersede":
                 return MemoryWriteResult("skipped", target, target_id, "user correction requires explicit review")
+            if target and action in {"reinforce","supersede"}:
+                gate=constrain_decision(content,target["content"],action,source,candidate_count=eligible_relation_count)
+                write_diagnostics["proposed_action"]=action
+                write_diagnostics["action_gate"]=gate
+                if not gate["allowed"]:
+                    action="create"
             if target and action == "reinforce" and float(target["relation_similarity"]) >= 0.78:
                 if source_ref and self.store.has_memory_operation(source_ref, target_id):
                     return MemoryWriteResult("skipped", target, target_id, "source already applied")
-                reinforced = self.store.reinforce_memory(target_id, source_ref, require_source=require_source)
+                with self.store._memory_transaction():
+                    self._require_write_target(target)
+                    reinforced = self.store.reinforce_memory(target_id, source_ref, require_source=require_source)
                 if reinforced is None:
                     raise MemoryVersionConflict('强化目标已删除或被替代，请重新核对候选')
-                return MemoryWriteResult("reinforced", reinforced, target_id, decision.get("reason", ""))
+                return MemoryWriteResult("reinforced", reinforced, target_id, decision.get("reason", ""),write_diagnostics=write_diagnostics)
             mutable_kinds = {"preference", "profile", "goal", "procedure"}
             if target and action == "supersede" and kind in mutable_kinds and float(target["relation_similarity"]) >= 0.55:
                 reason = decision.get("reason", "")
-                committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=target_id,reason=reason,source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+                with self.store._memory_transaction():
+                    self._require_write_target(target)
+                    committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=target_id,reason=reason,source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+                committed.write_diagnostics=write_diagnostics
                 saved = committed.memory
                 try:
                     organized = self.organize(content, kind)
@@ -327,8 +350,11 @@ class MemoryEngine:
                 full = self.store.memory(item["id"])
                 if full and full.get("source") == "user_correction" and source not in {"manual", "reviewed_conversation"}:
                     continue
-                if full and full.get("status") == "active" and kind in {"preference", "profile", "goal", "procedure"} and self._contradicts(content, full["content"]):
-                    committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=item['id'],reason='contradiction auto-supersede',source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+                if full and full.get("status") == "active" and kind in {"preference", "profile", "goal", "procedure"} and self._contradicts(content, full["content"]) and constrain_decision(content,full["content"],"supersede",source)["allowed"]:
+                    with self.store._memory_transaction():
+                        self._require_write_target(item)
+                        committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=item['id'],reason='contradiction auto-supersede',source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+                    committed.write_diagnostics=write_diagnostics
                     saved = committed.memory
                     try:
                         self.store.record_evolution(saved["id"], f"矛盾替代 {item['id']}: {content[:120]}")
@@ -336,6 +362,7 @@ class MemoryEngine:
                         logger.warning("记忆已替代，演化记录补充失败: %s", type(exc).__name__)
                     return committed
         committed = self._commit_write(content,kind,importance,source,vector,source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
+        committed.write_diagnostics=write_diagnostics
         saved = committed.memory
         try:
             organized = self.organize(content, kind)
@@ -349,6 +376,10 @@ class MemoryEngine:
             logger.warning("记忆已保存，属性或关联补充失败: %s", type(exc).__name__)
         committed.memory = saved
         return committed
+
+    def _require_write_target(self,target):
+        if not self.store.memory_dependency_valid(self.store.memory_dependency(target)):
+            raise MemoryVersionConflict("更新目标版本、来源或有效区间已变化，请重新审核")
 
     def _commit_write(self, content, kind, importance, source, vector=None, **kwargs):
         action, saved = self.store.add_memory_if_absent(content,kind,importance,source,vector,**kwargs)
