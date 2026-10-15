@@ -131,3 +131,22 @@ def test_only_process_or_admin_loopback_bge_is_accepted_for_maintenance():
     assert local_encoder(EmbeddingClient(ModelConfig('bge-small-zh-v1.5','','http://127.0.0.1:8080/v1')))
     assert not local_encoder(EmbeddingClient(ModelConfig('bge-small-zh-v1.5','placeholder','https://example.test/v1')))
     assert not local_encoder(EmbeddingClient(ModelConfig('other-model','','http://127.0.0.1:8080/v1')))
+
+
+def test_mixed_dimension_batch_is_atomic_and_remains_backfillable(core):
+    add(core,'Engineering first source.');add(core,'Engineering second source.')
+    class Mixed(Encoder):
+        async def embed_documents(self,texts):return [DocumentEmbedding([1.,0.]),DocumentEmbedding([1.,0.,0.])]
+    with pytest.raises(ValueError,match='mixed dimensions'):asyncio.run(reindex_dense(core[0],Mixed()))
+    assert not core[0].db.execute('SELECT 1 FROM experience_vectors').fetchone()
+    assert asyncio.run(reindex_dense(core[0],core[3]))['indexed_chunks']==2
+
+
+def test_same_namespace_dimension_drift_does_not_poison_remaining_cache(core):
+    add(core,'Engineering first source.');asyncio.run(reindex_dense(core[0],core[3]))
+    add(core,'Engineering new source.')
+    class Drift(Encoder):
+        async def embed_documents(self,texts):return [DocumentEmbedding([1.,0.,0.]) for text in texts]
+    with pytest.raises(ValueError,match='new model namespace'):asyncio.run(reindex_dense(core[0],Drift()))
+    assert core[0].db.execute('SELECT COUNT(*) FROM experience_vectors').fetchone()[0]==1
+    assert asyncio.run(reindex_dense(core[0],core[3]))['indexed_chunks']==1

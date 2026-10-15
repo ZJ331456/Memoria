@@ -17,8 +17,8 @@ CHARS, OVERLAP = 640, 96
 
 
 def local_encoder(embedder):
-    if not embedder or not embedder.enabled:return False
-    if embedder.is_local:return True
+    if not embedder or not getattr(embedder,"enabled",False):return False
+    if getattr(embedder,"is_local",False):return True
     # The admin-configured Memoria loopback BGE service is also supported.
     # Loopback is a deployment assumption, not remote-model identity proof.
     from .embedding import EmbeddingClient
@@ -221,9 +221,14 @@ async def reindex_dense(store,embedder,limit=16):
     documents=await embedder.embed_documents([r['content'][r['start_char']:r['end_char']] for r in rows])
     if len(documents)!=len(rows):raise ValueError('Incomplete experience embedding batch')
     for doc in documents:store._validate_vector(doc.vector)
+    dimensions={len(doc.vector) for doc in documents}
+    if len(dimensions)!=1:raise ValueError('Experience embedding batch has mixed dimensions')
+    dimension=next(iter(dimensions))
     indexed=0
     with store._memory_transaction():
         if store.embedding_namespace!=namespace:return {'indexed_chunks':0,'skipped':'embedding namespace changed','embedding_calls':1}
+        if store.db.execute('SELECT 1 FROM experience_vectors WHERE namespace=? AND dimension!=? LIMIT 1',(namespace,dimension)).fetchone():
+            raise ValueError('Experience embedding namespace changed dimension; use a new model namespace')
         for row,doc in zip(rows,documents,strict=True):
             current=store.db.execute('SELECT c.id FROM experience_chunks c JOIN messages m ON m.id=c.message_id WHERE c.id=? AND '+
                 scope+' AND m.session_id=? AND m.created_at=?', (row['id'],*params,row['session_id'],row['created_at'])).fetchone()
