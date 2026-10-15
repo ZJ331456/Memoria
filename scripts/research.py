@@ -72,6 +72,8 @@ def main():
     sub = subs.add_parser("capture-production", help="Freeze account DB and replay access; no LLM calls")
     sub.add_argument("--request", required=True, help="Private QueryRequest JSON; no gold")
     sub.add_argument("--local-embeddings", action="store_true", help="Opt into configured offline BGE; otherwise lexical-only")
+    sub.add_argument("--index-local-chunks", type=int, default=0, help="Build at most 32 offline experience chunks on the copy only")
+    sub.add_argument("--embedding-backend", choices=["configured","process"],default="configured",help="Run-local process BGE override; private configuration is unchanged")
     sub = subs.add_parser("replay-production", help="Compare four selectors on a private production capture; zero model calls")
     sub.add_argument("--input", required=True)
     sub.add_argument("--budgets", type=int, nargs="+")
@@ -165,7 +167,7 @@ def main():
         import json
         from memoria.experiments.production_replay import capture_production
         request = json.loads(private_input(args.request, directory).read_text(encoding="utf-8-sig"))
-        result = asyncio.run(capture_production(workspace,Settings.load(args.config),request,local_embeddings=args.local_embeddings))
+        result = asyncio.run(capture_production(workspace,Settings.load(args.config),request,local_embeddings=args.local_embeddings,index_local_chunks=args.index_local_chunks,embedding_backend=args.embedding_backend))
     elif args.command == "replay-production":
         from memoria.experiments.production_replay import replay_file
         result = replay_file(workspace,Settings.load(args.config),private_input(args.input,directory),budgets=args.budgets)

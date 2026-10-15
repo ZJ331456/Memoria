@@ -158,7 +158,8 @@ def test_supplement_filters_public_source_and_revalidates_after_await(state):
         store.db.execute('INSERT INTO dataset_imports VALUES(?,?,?,?,?)', ('public', 'sha', '{}',
             json.dumps({'source_mapping':[{'message_ids':[msg['id']]}]}), '2026-01-01'))
     result = asyncio.run(MemoryAccessOrchestrator(claims, MemoryEngine(store)).access(QueryRequest(query='徒步')))
-    assert not result['candidates'] and result['rejected'][0]['reason']=='source_unavailable_revoked_or_public'
+    assert not result['candidates']
+    assert not store.keyword_memory_candidates('徒步')  # Public source now excluded before candidate LIMIT.
     class Changed:
         async def retrieve(self, *args, **kwargs):
             candidate = {**item, 'retrieval': {'score':1}}

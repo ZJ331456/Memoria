@@ -15,12 +15,16 @@ from .history import write_json
 from .records import RunRecorder
 
 
-async def capture_production(workspace, settings, request, *, local_embeddings=False):
+async def capture_production(workspace, settings, request, *, local_embeddings=False, index_local_chunks=0, embedding_backend="configured"):
     request = QueryRequest.model_validate(request)
     if request.use_query_model or request.budget_unit == "reader_tokens":
         raise ValueError("Capture uses no LLM; use chars/utf8_bytes and disable query model")
     if not local_embeddings and request.mode == "dense":
         raise ValueError("Dense capture requires explicit --local-embeddings")
+    if type(index_local_chunks) is not int or not 0<=index_local_chunks<=32 or (index_local_chunks and not local_embeddings):
+        raise ValueError("Index only 0..32 chunks with explicit offline local embeddings")
+    if embedding_backend not in {"configured","process"} or (embedding_backend=="process" and not local_embeddings):
+        raise ValueError("Process override requires explicit local embeddings")
     source = workspace.path("memory", "memoria.db")
     if not source.is_file():
         raise ValueError("Account memory database missing")
@@ -31,13 +35,21 @@ async def capture_production(workspace, settings, request, *, local_embeddings=F
         settings = copy.deepcopy(settings)
         settings.model_override_file = workspace.path("config", "models.override.toml")
         apply_overrides(settings)
-        embedder = EmbeddingClient(settings.embedding)
-        if not embedder.enabled or not embedder.is_local:
+        if embedding_backend=="process":
+            from ..config import ModelConfig
+            name=settings.embedding.model.replace('\\','/').split('/')[-1]
+            if name not in {"bge-small-zh-v1.5","bge-small-en-v1.5"} or not (settings.root/"model"/name).is_dir():
+                raise ValueError("Process override requires an existing supported local BGE directory")
+            settings.embedding=ModelConfig(model=str(settings.root/"model"/name),api_key="",base_url="local://auto")
+        embedder = EmbeddingClient(settings.embedding,timeout_seconds=30,max_retries=0)
+        from ..memory.experience import local_encoder
+        if not local_encoder(embedder):
             raise ValueError("Only configured offline local embeddings are permitted")
     recorder = RunRecorder(workspace.path("experiments"), settings.root, datasets=[],
         models={"embedding_namespace":embedder.namespace if embedder else None, "reader":None},
         protocol={"owner_user_id":workspace.owner, "mode":"production_snapshot_replay",
             "request":request.model_dump(mode="json"), "retrieval_variant":"local_embedding" if embedder else "lexical_only",
+            "embedding_backend":embedding_backend,"index_local_chunks":index_local_chunks,
             "reader_called":False, "production_writes":0, "gold_read":False,
             "scope":"same production access code on a frozen account copy; not extraction/QA quality"}, seed=None)
     metrics = {"errors":1, "llm_calls":0, "production_writes":0, "quality":"unscored"}
@@ -59,6 +71,9 @@ async def capture_production(workspace, settings, request, *, local_embeddings=F
             try:
                 claims = ClaimMemory(store, workspace.owner)
                 engine = MemoryEngine(store,embedder)
+                if index_local_chunks:
+                    from ..memory.experience import reindex_dense
+                    metrics["experience_index"] = await reindex_dense(store,embedder,index_local_chunks)
                 packet = await MemoryAccessOrchestrator(claims,engine).access(request)
                 write_json(recorder.path/"production-capture.json",packet)
                 write_json(recorder.path/"selection-replay.json",replay(packet,workspace.owner))
@@ -67,6 +82,7 @@ async def capture_production(workspace, settings, request, *, local_embeddings=F
                 metrics.update(errors=0,candidate_count=len(packet["candidates"]),
                     presented_count=len(packet["selection"]["payload"]["evidence"]),
                     changed_stages=packet["production_trace"]["changed_stages"],
+                    experience_diagnostics=packet["retrieval"].get("experiences"),
                     integrity=store.db.execute("PRAGMA integrity_check").fetchone()[0])
             finally:
                 store.close()

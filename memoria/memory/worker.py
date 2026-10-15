@@ -47,12 +47,23 @@ class MemoryJobWorker:
 
     async def run(self) -> None:
         next_index = 0.0
+        next_experience_dense, dense_failures = 0.0, 0
         while True:
             processed = await self.process_once()
             if time.monotonic() >= next_index:
                 await self.memory.reindex(limit=16)
                 from .experience import reindex
                 await asyncio.to_thread(reindex, self.store, 16)
+                from .experience import reindex_dense
+                if time.monotonic()>=next_experience_dense:
+                    try:
+                        await reindex_dense(self.store, getattr(self.memory,"embedder",None), 16)
+                        dense_failures=0
+                        next_experience_dense=time.monotonic()+15
+                    except Exception as exc:
+                        dense_failures+=1
+                        next_experience_dense=time.monotonic()+min(300,5*2**min(dense_failures,6))
+                        logger.warning("经历向量维护失败 type=%s",type(exc).__name__)
                 next_index = time.monotonic()+15
             if not processed:
                 await asyncio.sleep(self.poll_seconds)

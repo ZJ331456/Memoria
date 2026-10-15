@@ -10,7 +10,7 @@ STAGES = {
     "review": ("memory_reviews",),
     "memory": ("memories", "memory_operations", "memory_validity_intervals", "memory_source_dependencies",
                "memory_support_groups", "memory_support_evidence"),
-    "index": ("memory_embeddings", "memory_embedding_chunks", "experience_versions", "experience_chunks"),
+    "index": ("memory_embeddings", "memory_embedding_chunks", "experience_versions", "experience_chunks", "experience_vectors"),
     "claim": ("claim_roots", "claim_revisions", "claim_generations"),
     "view": ("claim_views",),
 }

@@ -102,3 +102,5 @@ TLS新增CA优先级/缓存轮换/目录变化/冷载不阻塞/缺失失败测�
 检查点追加嵌套调用继承与仅失败恢复故障回归；断点/恢复多次仍完整计入旧调用，临时故障标签不当真实研究失败。
 
 [test_production_replay.py](test_production_replay.py)验证冻结副本、水位、固定候选和标签隔离；[test_ordinary_source_support.py](test_ordinary_source_support.py)验证两后端的来源替代/撤回、保守迁移、Reader/父Claim与事务，不作为研究成绩。
+
+[test_experience_dense.py](test_experience_dense.py)验证经历Dense/RRF的版本/模型/维度、前缀/公开/撤回过滤、在途变化、失败批及不冒充降级；encoder替身只验证工程。

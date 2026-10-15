@@ -424,3 +424,5 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 ## 临时会话访问（2026-10-15）
 
 memory-access、claim-views、memory-query、memory-answer接受可选session_id（1–64字符），服务器验证本账号会话存在；非法上下文422。Chat自动传实际会话。temporary=true仅在明确会话原话可定位时产生服务器lifecycle；普通“暂时/这次面试”不自动绑定或批准。View v5按会话隔离。事件实例/自动活动终止尚未支持。
+
+2026-10-15：QueryRequest新增experience_mode=bm25|dense|rrf，默认bm25，仅unified原话补检使用；局部来源/知识截止和审批边界保持。返回production_trace及实际经历lane/积压/向量诊断，不把缺失Dense伪装为成功。[重放、预算与本机条件](生产重放与普通来源支持.md)。

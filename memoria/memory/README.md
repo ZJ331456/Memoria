@@ -97,3 +97,5 @@ Claim视图v3跟踪未选中条件Claim关联普通记忆的未来区间边界�
 Query-only风险不再把月份/人名May当作推测授权；只有有限明确情态语法和其他显式推测表达可放宽，歧义保持保守。[修复证据](../../docs/implemented/算法逻辑审查逐项修复.md)。
 
 [source_support.py](source_support.py)管理普通完整来源组、保守迁移、来源失效和存活引用；[生产重放与支持契约](../../docs/implemented/生产重放与普通来源支持.md)记录实际边界。
+
+经历补检新增opt-in experience_mode=dense/rrf；独立版本化向量、来源/截止过滤、后台限批/退避与查询后复核已实现，默认bm25。Dense为合格向量精确扫描，RRF为经历BM25+Dense两路；[真实本机检查与边界](../../docs/implemented/生产重放与普通来源支持.md#3-可选经历denserrf与小规模真实检查)。

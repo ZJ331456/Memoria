@@ -49,6 +49,7 @@ class QueryRequest(Strict):
     use_query_model: bool = Field(default=False, strict=True)
     use_answer_risk: bool = Field(default=False, strict=True)
     include_experiences: bool = Field(default=True, strict=True)
+    experience_mode: Literal["bm25", "dense", "rrf"] = "bm25"
 
     _conditions = field_validator("context")(conditions)
     _times = field_validator("fact_as_of", "recorded_as_of")(timestamp)
@@ -239,6 +240,7 @@ class MemoryAccessOrchestrator:
                         candidates.append({"id": item["id"], "kind": "source", "score": item["retrieval"]["score"],
                                            "covers": [], "source_ids": [ref], "data": {
                                                "memory_id": item["id"], "text": text,
+                                               "memory_dependency": self.claims.store.memory_dependency(current),
                                                "unverified_retrieval_hint": item.get("retrieval_excerpt", item["content"]),
                                                "evidence": {**evidence, "quote": text}, "retrieval": item["retrieval"],
                                                "approved_personal_state": False, "semantic_support_verified": False}})
@@ -247,20 +249,44 @@ class MemoryAccessOrchestrator:
                 diag = {"skipped": "recorded_time_unavailable_for_semantic_memories" if request.recorded_as_of else "complete_view_or_claim_only"}
             if (supplement and request.mode == "unified" and request.include_experiences
                     and not request.fact_as_of):
-                from .experience import retrieve as retrieve_experiences
+                from .experience import query as query_experiences
                 with timings.measure("access.experiences"):
-                    experiences, experience_diag = retrieve_experiences(self.claims, request.query,
+                    experiences, experience_diag = await query_experiences(self.claims, request.query, getattr(self.engine,"embedder",None), mode=request.experience_mode,
                         limit=request.candidate_limit, recorded_as_of=request.recorded_as_of)
                 candidates.extend(experiences)
                 diag["experiences"] = experience_diag
                 reason += "; original experiences are not approved current state"
             if state:
+                # Experience query encoding can await after ordinary retrieval.
+                refreshed = self.claims.access(args)
+                if canonical(refreshed["payload"]) != canonical(state["payload"]):
+                    state = refreshed
+                    path = state["path"]
+                    reason = state["reason"] + "; source supplements remain unapproved"
                 # Put every condition/polarity of a slot in one indivisible unit.
                 for predicate in parsed["predicates"]:
                     group = [c for c in state["payload"]["claims"] if c["predicate"] == predicate]
                     if group:
                         candidates.insert(0, {"id": "claim:" + predicate, "kind": "claim", "score": 2,
                                               "covers": [predicate], "source_ids": sorted({e["message_id"] for c in group for e in c["evidence"]+c.get("condition_evidence", [])}), "data": group})
+        valid_candidates = []
+        with self.claims.store._memory_transaction():
+            for candidate in candidates:
+                if candidate["kind"] == "source":
+                    source = candidate["data"]
+                    e = source["evidence"]
+                    try:
+                        self.claims._evidence({"evidence":[e]})
+                        mid = source.get("memory_id")
+                        if mid and not self.claims.store.memory_dependency_valid(source["memory_dependency"],as_of=request.fact_as_of):
+                            raise ClaimError(409,"parent source unavailable")
+                        if source.get("source_dependency") and not self.claims.store.memory_dependency_valid(source["source_dependency"]):
+                            raise ClaimError(409,"source snapshot changed")
+                    except ClaimError:
+                        rejected.append({"id":candidate["id"], "reason":"source_changed_before_selection"})
+                        continue
+                valid_candidates.append(candidate)
+        candidates = valid_candidates
         requirements = requirements_for(request.query, parsed)
         enriched = [{**c, "covers":coverage(c, requirements, parsed)} for c in candidates]
         comparison = {}
