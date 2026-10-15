@@ -142,3 +142,37 @@ def test_invalid_chunk_dimensions_are_atomic_and_metadata_edit_retains_index(set
     updated = store.update_memory(saved["id"], {"importance": 5})
     assert updated["embedding_chunk_count"] == saved["embedding_chunk_count"] > 1
     assert asyncio.run(engine.retrieve("Ω", expand_graph=False))[0]["id"] == updated["id"]
+
+
+def test_complementary_matched_chunks_reach_prompt_without_extra_parent_votes(setup_memory):
+    store, engine, _ = setup_memory
+    parts = ["Engineering alpha. ", "Engineering beta. ", "Engineering gamma. ", "Engineering delta. "]
+    parts[-1] = parts[-1].rstrip()
+    text, start, chunks = "".join(parts), 0, []
+    for part in parts:
+        end = start+len(part)
+        chunks.append(dict(start=start,end=end,tokens=len(part)+2,embedding=[0.,1.,0.]))
+        start = end
+    parent = store.add_memory(text, embedding=[0.,1.,0.],embedding_chunks=chunks)
+    hits = asyncio.run(engine.retrieve("Ω", limit=1, expand_graph=False))
+    assert [h["id"] for h in hits] == [parent["id"]]
+    assert len(hits[0]["retrieval_excerpts"]) == 3
+    assert hits[0]["retrieval"]["vector_rank"] == 1
+    for part in hits[0]["retrieval_excerpts"]:
+        assert part["text"] == text[part["start"]:part["end"]]
+    frame = PromptAssembler(max_frame_chars=6000).assemble("system",memories=hits).context_frame["content"]
+    assert all(word in frame for word in ("alpha","beta","gamma"))
+    assert "delta" not in frame and frame.count(parent["id"]) == 3
+    from memoria.tools import build_registry
+    result = asyncio.run(build_registry(store, engine).execute("recall_memory", {"query":"Ω", "limit":1}))
+    assert result.ok and all(word in result.content for word in ("alpha","beta","gamma"))
+    assert len(result.memory_dependencies) == 1
+
+
+def test_changed_parent_never_reuses_old_chunk_coordinates(setup_memory):
+    store, _, _ = setup_memory
+    parent = store.add_memory("Engineering original",embedding=[0.,1.,0.],
+        embedding_chunks=[dict(start=0,end=20,tokens=22,embedding=[0.,1.,0.])])
+    with store.db:
+        store.db.execute("UPDATE memories SET content='Engineering changed!' WHERE id=?",(parent["id"],))
+    assert not store.chunk_memory_candidates([0.,1.,0.])

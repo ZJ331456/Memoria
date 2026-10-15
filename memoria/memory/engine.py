@@ -217,10 +217,15 @@ class MemoryEngine:
                 "vector_similarity": round(vector_scores[memory_id], 4) if memory_id in vector_scores else None,
             }
             if memory_id in chunk_matches:
-                chunk = chunk_matches[memory_id]
+                matched = chunk_matches[memory_id]
+                chunk = {k:v for k,v in matched.items() if k != "matches"}
                 item["retrieval"]["chunk"] = chunk
+                item["retrieval"]["chunks"] = matched.get("matches", [chunk])
                 if item.get("embedding_chunk_count", 0) > 1:
                     item["retrieval_excerpt"] = item["content"][chunk["start"]:chunk["end"]]
+                    item["retrieval_excerpts"] = [
+                        {**part,"text":item["content"][part["start"]:part["end"]]}
+                        for part in item["retrieval"]["chunks"]]
             result.append(item)
         timers.since("memory.fusion_and_graph", fusion_started)
         return result

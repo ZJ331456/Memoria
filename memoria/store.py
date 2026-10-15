@@ -1104,7 +1104,7 @@ class Store:
         with self.lock:
             if namespace and namespace != self.embedding_namespace:
                 return []
-            clauses = ["c.namespace=?", "c.dimension=?"]
+            clauses = ["c.namespace=?", "c.dimension=?", "c.content_sha256=memoria_sha256(m.content)"]
             params: list[Any] = [self.embedding_namespace, len(vector)]
             timestamp = normalize_time(as_of) if as_of else None
             scope, scope_params = self.retrieval_scope(as_of=as_of)
@@ -1145,16 +1145,28 @@ class Store:
                     score = sum(a * b for a, b in zip(vector, values, strict=True)) / denom if denom else -1
                     scores.append((row, score))
             best: dict[str, tuple[Any, float]] = {}
+            by_parent: dict[str, list] = {}
             for row, score in scores:
+                by_parent.setdefault(row["memory_id"], []).append((row,score))
                 if row["memory_id"] not in best or score > best[row["memory_id"]][1]:
                     best[row["memory_id"]] = (row, score)
             result = []
             for memory_id, (row, score) in sorted(best.items(), key=lambda entry: entry[1][1], reverse=True)[:limit]:
                 item = self.memory(memory_id)
+                if not item or hashlib.sha256(item["content"].encode()).hexdigest() != row["content_sha256"]:
+                    continue
                 if as_of:
                     item = self._memory_at(item, timestamp)
-                result.append((item, score, {"part": row["part"], "start": row["start_char"],
-                    "end": row["end_char"], "tokens": row["tokens"], "source_sha256": row["content_sha256"]}))
+                def span(hit, similarity):
+                    return {"part":hit["part"], "start":hit["start_char"], "end":hit["end_char"],
+                            "tokens":hit["tokens"], "source_sha256":hit["content_sha256"],
+                            "similarity":round(similarity,6)}
+                # Parent ranking stays max-cosine: many chunks are not extra votes.
+                related = sorted(((hit,similarity) for hit,similarity in by_parent[memory_id]
+                                  if similarity >= max(.45,score-.18)),
+                                 key=lambda pair:(-pair[1],pair[0]["part"]))[:3]
+                matched = [span(hit,similarity) for hit,similarity in related] or [span(row,score)]
+                result.append((item, score, {**span(row,score), "matches":matched}))
             return result
 
     @property
