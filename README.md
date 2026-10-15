@@ -74,7 +74,9 @@ Windows 入口集中在 [scripts/cmd](scripts/cmd/README.md)，可直接双击�
 | Memory Studio | http://127.0.0.1:2237/studio/ |
 | API 文档 | http://127.0.0.1:2237/docs |
 
-Chat 和 Studio 共用正式登录/注册，项目不提供默认密码。登录后可在右上角[修改自己的密码](docs/implemented/用户登录与数据隔离.md#当前账号自助修改密码2026-10-15)，成功后重新登录。Chat采用用户右侧、助手左侧布局，支持Markdown阅读、复制与原文切换。首次账号、开发模式、端口和日志见[启动指南](docs/implemented/安装配置与启动.md)与[后台管理](docs/implemented/本机后台启动与停止.md)。
+Chat 和 Studio 共用正式登录/注册，项目不提供默认密码。登录后点击用户名账号菜单（Chat左下角、Studio右上角），可切换账号、退出、连接飞书或[修改自己的密码](docs/implemented/用户登录与数据隔离.md#当前账号自助修改密码2026-10-15)，成功后重新登录。Chat采用用户右侧、助手左侧布局，支持Markdown阅读、复制与原文切换。首次账号、开发模式、端口和日志见[启动指南](docs/implemented/安装配置与启动.md)与[后台管理](docs/implemented/本机后台启动与停止.md)。
+
+Studio按日常管理与高级诊断分组。“记忆处理与服务”解释历史为何没有变成长期记忆；可从有效本人原话提出候选，明确审核后入库，再纠正、回查版本或导出Markdown。公开导入资料不自动成为本人事实；结构化Claim、双时间、检索与评测账本的用途和资料前提见首页功能地图及[实现说明](docs/implemented/Chat与Studio前端架构.md#账号菜单与记忆处理可见性2026-10-15)。
 
 MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均为可选接入；飞书需正式账号绑定，MCP 文档授权与机器人消息接收分别配置。
 

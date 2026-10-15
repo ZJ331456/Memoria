@@ -4,8 +4,8 @@ import { ElAlert, ElButton, ElCheckbox, ElCollapse, ElCollapseItem, ElDialog, El
 import { sourceParts } from '../../shared/api'
 import { useAccount } from '../../shared/auth'
 import AuthPanel from '../../shared/AuthPanel.vue'
-import FeishuPanel from '../../shared/FeishuPanel.vue'
-import PasswordPanel from '../../shared/PasswordPanel.vue'
+import AccountMenu from '../../shared/AccountMenu.vue'
+import MemoryPipeline from './components/MemoryPipeline.vue'
 import ConsoleHome from './components/ConsoleHome.vue'
 import HistoryBrowser from './components/HistoryBrowser.vue'
 import MemoryInventory from './components/MemoryInventory.vue'
@@ -13,16 +13,20 @@ import AccountsPanel from './components/AccountsPanel.vue'
 import PendingReviews from './components/PendingReviews.vue'
 const account=useAccount({ready:refresh,clear:clearData})
 const {api,user,busy,error,run,logout}=account
-const headings:Record<string,string>={overview:'数据总览',conversations:'历史对话',memories:'长期记忆库',reviews:'候选审核',explorer:'结构化记忆与审核',temporal:'双时间与变化',retrieval:'检索实验室',evaluation:'评测运行记录',accounts:'账号管理'}
+const headings:Record<string,string>={overview:'数据总览',conversations:'历史对话',memories:'长期记忆库',reviews:'候选审核',explorer:'结构化记忆与审核',temporal:'双时间与变化',retrieval:'检索实验室',evaluation:'评测运行记录',pipeline:'记忆处理与服务',accounts:'账号管理'}
 const initialPage=window.location.hash.slice(1)
 const page=ref(headings[initialPage]?initialPage:'overview')
 const summary=ref<any>(null)
 const historySession=ref(''),historyAnchor=ref('')
-const navigation=computed(()=>[{id:'overview',label:'数据总览',icon:'▦'},{id:'conversations',label:'历史对话',icon:'▤',count:summary.value?.sessions},{id:'memories',label:'长期记忆库',icon:'◈',count:summary.value?.memories},{id:'reviews',label:'候选审核',icon:'◎',count:summary.value?.pending_reviews},{id:'explorer',label:'结构化记忆',icon:'◇'},{id:'temporal',label:'双时间与变化',icon:'◷'},{id:'retrieval',label:'检索实验室',icon:'⌕'},{id:'evaluation',label:'评测运行记录',icon:'▥'},...(user.value?.role==='superadmin'?[{id:'accounts',label:'账号管理',icon:'⚙'}]:[])])
+const primaryNavigation=computed(()=>[{id:'overview',label:'数据总览',icon:'▦'},{id:'conversations',label:'历史对话',icon:'▤',count:summary.value?.sessions},{id:'memories',label:'长期记忆库',icon:'◈',count:summary.value?.memories},{id:'reviews',label:'候选审核',icon:'◎',count:summary.value?.pending_reviews},{id:'pipeline',label:'记忆处理与服务',icon:'↻'}])
+const advancedNavigation=[{id:'explorer',label:'结构化记忆',icon:'◇'},{id:'temporal',label:'双时间与变化',icon:'◷'},{id:'retrieval',label:'检索实验室',icon:'⌕'},{id:'evaluation',label:'评测运行记录',icon:'▥'}]
+const advancedOpen=ref(advancedNavigation.some(item=>item.id===page.value))
+const pageDescriptions:Record<string,string>={overview:'从对话到长期记忆，查看当前账号的数据与下一步。',conversations:'阅读原始历史；从有效本人原话提出记忆候选。',memories:'查看已批准的长期事实、来源和版本，支持纠正与导出。',reviews:'核对原话后批准或拒绝；候选不会自动变成有效记忆。',pipeline:'区分未提取、明确空结果、等待审核与已入库，并检查模型和索引。',explorer:'管理主体、属性和适用条件，适合回答当前偏好与状态；需先有经核对的来源。',temporal:'区分事实成立时间与系统获知时间；未标注的时间保持未知。',retrieval:'诊断实际召回、过滤、来源和证据预算；不生成聊天答复。',evaluation:'只读已有实验的配置、费用与失败记录，不自动运行全量评测。',accounts:'管理账号元数据；不会因此取得其他用户的私人记忆。'}
+
 function navigate(id:string){if(id==='conversations'){historySession.value='';historyAnchor.value=''};page.value=id}
 function openConversation(id:string){historySession.value=id;historyAnchor.value='';page.value='conversations'}
 async function openSource(id:string){await run(async()=>{page.value='explorer';await loadSource(id);await nextTick();document.querySelector('.source-panel')?.scrollIntoView({block:'start',behavior:'smooth'})})}
-watch(page,value=>{window.location.hash=value;window.scrollTo({top:0})})
+watch(page,value=>{window.location.hash=value;window.scrollTo({top:0});if(advancedNavigation.some(item=>item.id===value))advancedOpen.value=true})
 const claims = ref<any[]>([]), slots = ref<any[]>([]), selected = ref<any>(null), history = ref<any[]>([])
 const sessions = ref<any[]>([]), messages = ref<any[]>([]), source = ref<any>(null), sourceID = ref('')
 const filter = ref(''), status = ref('all'), analysis = ref<any>(null), result = ref<any>(null)
@@ -31,7 +35,7 @@ const predicate = ref(''), context = ref('{}'), fact = ref(''), recorded = ref('
 const draftValue = ref(''), draftPredicate = ref('response_language'), draftScope = ref('{}'), draftPolarity = ref('positive')
 const revisionAction = ref('correct'), factStart = ref(''), precision = ref('unknown')
 const decision = ref(''), reason = ref(''), confirmOpen = ref(false), inferConditions = ref(false)
-const runs = ref<any[]>([]), runDetail = ref<any>(null), unavailableRuns = ref(0)
+const runs = ref<any[]>([]), runDetail = ref<any>(null), unavailableRuns = ref(0), runsLoaded=ref(false)
 const pretty = (v: any) => JSON.stringify(v, null, 2)
 const labels: Record<string, string> = {residence:'居住地', occupation:'职业', school:'学校', response_language:'回答语言', response_detail:'回答详细度', diet:'饮食', work_habit:'工作习惯', hobby:'爱好', learning_goal:'学习目标', project_goal:'项目目标', time_preference:'时间偏好', budget:'预算'}
 const visible = computed(() => claims.value.filter(c => (status.value === 'all' || c.status === status.value) && `${c.predicate} ${c.value ?? ''} ${c.id}`.includes(filter.value)))
@@ -40,7 +44,7 @@ function clearData() {
   sessions.value = []; messages.value = []; source.value = null; sourceID.value = ''; analysis.value = null; result.value = null
   query.value = ''; context.value = '{}'; fact.value = ''; recorded.value = ''; subject.value = 'self';
   draftValue.value = ''; draftScope.value = '{}'; reason.value = ''; confirmOpen.value = false
-  runs.value = []; runDetail.value = null; unavailableRuns.value = 0
+  runs.value = []; runDetail.value = null; unavailableRuns.value = 0; runsLoaded.value=false
   factStart.value = ''; precision.value = 'unknown'; filter.value = ''; status.value = 'all'
 }
 async function refresh() {
@@ -92,7 +96,7 @@ async function access() { await run(async () => {
 }) }
 watch([query,mode,selector,budget,topK,predicate,context,fact,recorded,subject,page], () => { result.value = null })
 watch(sourceID, () => { if (source.value?.message_id !== sourceID.value) source.value = null })
-async function loadRuns() { await run(async () => { const records = await api.request('/research-runs'); runs.value = records.runs; unavailableRuns.value = records.unavailable }) }
+async function loadRuns() { await run(async () => { const records = await api.request('/research-runs'); runs.value = records.runs; unavailableRuns.value = records.unavailable;runsLoaded.value=true }) }
 async function inspectRun(id: string) { await run(async () => { runDetail.value = null; runDetail.value = await api.request('/research-runs/' + id) }) }
 function hashChanged(){const value=window.location.hash.slice(1);if(headings[value]&&(value!=='accounts'||user.value?.role==='superadmin'))page.value=value}
 watch(user,value=>{if(value&&page.value==='accounts'&&value.role!=='superadmin')page.value='overview'})
@@ -106,20 +110,22 @@ onUnmounted(()=>window.removeEventListener('hashchange',hashChanged))
       <a class="brand" href="/studio/"><span class="brand-icon">m</span><span>memoria<small>MEMORY WORKSPACE</small></span></a>
       <div class="workspace-label">MEMORIA CONSOLE</div>
       <div class="portal-switch"><a href="/">返回 Chat ↗</a><a href="/studio/" class="selected">管理后台</a></div>
-      <nav aria-label="模块"><button v-for="item in navigation" :key="item.id" :class="{active:page===item.id}" @click="navigate(item.id)"><span class="nav-icon">{{ item.icon }}</span><span class="nav-label">{{ item.label }}</span><span v-if="item.count!==undefined" class="nav-count">{{ item.count }}</span></button></nav>
+      <nav aria-label="日常记忆管理"><button v-for="item in primaryNavigation" :key="item.id" :class="{active:page===item.id}" @click="navigate(item.id)"><span class="nav-icon">{{ item.icon }}</span><span class="nav-label">{{ item.label }}</span><span v-if="item.count!==undefined" class="nav-count">{{ item.count }}</span></button></nav><button class="advanced-toggle" :aria-expanded="advancedOpen" @click="advancedOpen=!advancedOpen">研究与高级诊断 <span>{{ advancedOpen?'⌃':'⌄' }}</span></button><nav v-if="advancedOpen" aria-label="研究与高级诊断"><button v-for="item in advancedNavigation" :key="item.id" :class="{active:page===item.id}" @click="navigate(item.id)"><span class="nav-icon">{{ item.icon }}</span><span class="nav-label">{{ item.label }}</span></button></nav>
       <div class="sidebar-note"><span class="dot"></span> 来源优先，审核后生效<p>原话、候选与已批准状态分别展示。未知时间保持未知。</p></div>
       <a href="/docs" target="_blank" rel="noopener noreferrer" class="docs-link">API 文档 ↗</a>
     </aside>
     <main>
       <header class="console-header"><div><div class="breadcrumb">Memoria <span>/</span> 管理后台 <span>/</span> {{ headings[page] }}</div><h1>{{ headings[page] }}</h1></div>
-        <div v-if="user" class="account"><div class="user-avatar">{{ user.username.slice(0,1).toUpperCase() }}</div><div class="account-label"><strong>{{ user.username }}</strong><span>{{ user.role==='superadmin'?'超级管理员':'个人工作空间' }}</span></div><PasswordPanel :key="'password-'+user.id" :api="api" :disabled="busy" @changed="account.passwordChanged"/><FeishuPanel :key="user.id" :api="api"/><el-button @click="logout" :disabled="busy">退出 / 切换账号</el-button></div>
+        <AccountMenu v-if="user" :key="user.id" :account="account" manage-accounts @manage="navigate('accounts')"/>
       </header>
+      <p v-if="user" class="page-description">{{ pageDescriptions[page] }}</p>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="notice" />
       <AuthPanel v-if="!user" :account="account" />
       <template v-else>
         <ConsoleHome v-if="page==='overview'" :summary="summary" :username="user.username" @open="navigate" @conversation="openConversation" />
-        <HistoryBrowser v-else-if="page==='conversations'" :key="user.id+historySession" :api="api" :initial-session="historySession" :initial-anchor="historyAnchor" @source="openSource" @changed="refresh" />
-        <PendingReviews v-else-if="page==='reviews'" :key="user.id" :api="api" @changed="refresh" />
+        <MemoryPipeline v-else-if="page==='pipeline'" :key="user.id" :api="api" @open="navigate" @source="inspectEvidence"/>
+        <HistoryBrowser v-else-if="page==='conversations'" :key="user.id+historySession" :api="api" :initial-session="historySession" :initial-anchor="historyAnchor" @source="openSource" @changed="refresh" @review="navigate('reviews')" />
+        <PendingReviews v-else-if="page==='reviews'" :key="user.id" :api="api" @changed="refresh" @open="navigate" />
         <MemoryInventory v-else-if="page==='memories'" :key="user.id" :api="api" @open="navigate" @source="openSource" />
         <AccountsPanel v-else-if="page==='accounts'&&user.role==='superadmin'" :key="user.id" :api="api" />
         <template v-else-if="page==='explorer'">
@@ -149,7 +155,7 @@ onUnmounted(()=>window.removeEventListener('hashchange',hashChanged))
         </template>
         <template v-else-if="page==='evaluation'">
           <section class="card"><div class="section-title"><h2>本账号的真实实验账本</h2><el-button :loading="busy" @click="loadRuns">读取运行记录</el-button></div><p>仅展示执行记录和指纹校验后的 metrics。没有启动实验、自动发布、原始 prompt 或 gold 下载入口；字面评分、人工语义和长期效果分别验收。</p><el-alert v-if="unavailableRuns" :title="unavailableRuns+' 条记录不完整、归属不符或不可读取，未作为成功结果展示'" type="warning" :closable="false" />
-            <div class="explorer-grid"><div><button v-for="r in runs" :key="r.run_id" class="claim-row" :disabled="busy" @click="inspectRun(r.run_id)"><div><span>{{ r.protocol.baseline ?? r.protocol.mode }}</span><el-tag size="small">{{ r.status }}</el-tag></div><strong>{{ r.run_id }}</strong><small>{{ r.code.commit?.slice(0,12) }} · {{ r.code.dirty?'dirty':'clean' }}</small></button><div v-if="!runs.length" class="empty"><h3>尚未载入可展示的运行记录</h3><p>点击读取，显示本账号已有记录；没有记录时保留空白。</p></div></div><div><template v-if="runDetail"><el-tag type="success">metrics SHA / 大小已核验</el-tag><h3>{{ runDetail.run_id }}</h3><pre>{{ pretty(runDetail) }}</pre></template><div v-else class="empty"><h3>选择一次运行</h3><p>查看数据 SHA、代码、角色参数、失败分母与执行耗时。自动诊断不是长期陪伴质量证明。</p></div></div></div>
+            <div class="explorer-grid"><div><button v-for="r in runs" :key="r.run_id" class="claim-row" :disabled="busy" @click="inspectRun(r.run_id)"><div><span>{{ r.protocol.baseline ?? r.protocol.mode }}</span><el-tag size="small">{{ r.status }}</el-tag></div><strong>{{ r.run_id }}</strong><small>{{ r.code.commit?.slice(0,12) }} · {{ r.code.dirty?'dirty':'clean' }}</small></button><div v-if="!runs.length" class="empty"><h3>{{ runsLoaded?'本账号没有可展示的运行记录':'尚未载入运行记录' }}</h3><p>点击读取本账号已有账本；只有通过归属和完整性核验的运行才会展示。不会自动启动评测，也不会读取其他账号的报告。</p></div></div><div><template v-if="runDetail"><el-tag type="success">metrics SHA / 大小已核验</el-tag><h3>{{ runDetail.run_id }}</h3><pre>{{ pretty(runDetail) }}</pre></template><div v-else class="empty"><h3>选择一次运行</h3><p>查看数据 SHA、代码、角色参数、失败分母与执行耗时。自动诊断不是长期陪伴质量证明。</p></div></div></div>
           </section>
         </template>
         <template v-else>

@@ -39,3 +39,5 @@ Chat只列本账号原生聊天，导入公共语料在Studio查看。两端共�
 [Chat模块](chat/README.md) · [Studio模块](studio/README.md) · [共享层](shared/README.md)
 
 Chat/Studio共用当前账号改密弹窗及安全Markdown组件；消息排版、外链/图片边界与临时浏览器验收见[前端说明](../docs/implemented/Chat与Studio前端架构.md#账号改密与聊天阅读2026-10-15)。依赖仅安装frontend目录，jsdom仅供工程DOM/XSS验证，不进入生产模型或实验语料。
+
+账号操作统一收进用户名菜单（Chat左下、Studio右上）；登录/注册表单共用。Studio的日常管理与研究诊断分组、来源→候选→明确批准、记忆版本/导出及只读处理状态见[当前交付](../docs/implemented/Chat与Studio前端架构.md#账号菜单与记忆处理可见性2026-10-15)。

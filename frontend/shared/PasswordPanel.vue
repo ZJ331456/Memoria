@@ -3,8 +3,8 @@ import { nextTick, onUnmounted, ref } from 'vue'
 import type { API } from './api'
 import { isCancelled } from './console'
 
-const props = defineProps<{api: API; disabled?: boolean}>()
-const emit = defineEmits<{changed: []}>()
+const props = defineProps<{api: API; disabled?: boolean; hideTrigger?: boolean}>()
+const emit = defineEmits<{changed: []; closed: []}>()
 const dialog = ref<HTMLDialogElement | null>(null), currentInput = ref<HTMLInputElement | null>(null)
 const current = ref(''), password = ref(''), repeat = ref(''), error = ref(''), busy = ref(false)
 let alive = true
@@ -12,6 +12,8 @@ function clear() { current.value = ''; password.value = ''; repeat.value = ''; e
 async function show() { clear(); dialog.value?.showModal(); await nextTick(); currentInput.value?.focus() }
 function close() { if (!busy.value) { dialog.value?.close(); clear() } }
 function cancel(event: Event) { if (busy.value) event.preventDefault() }
+function closed() { clear(); emit('closed') }
+defineExpose({open: show})
 async function submit() {
   if (busy.value) return
   error.value = ''
@@ -29,8 +31,8 @@ onUnmounted(() => { alive = false; clear() })
 </script>
 
 <template>
-  <button class="password-trigger" :disabled="disabled" @click="show">修改密码</button>
-  <Teleport to="body"><dialog ref="dialog" class="password-dialog" aria-labelledby="password-title" aria-describedby="password-description" @cancel="cancel" @close="clear">
+  <button v-if="!hideTrigger" class="password-trigger" :disabled="disabled" @click="show">修改密码</button>
+  <Teleport to="body"><dialog ref="dialog" class="password-dialog" aria-labelledby="password-title" aria-describedby="password-description" @cancel="cancel" @close="closed">
     <header><div><small>ACCOUNT SECURITY</small><h2 id="password-title">修改当前账号密码</h2></div><button type="button" aria-label="关闭修改密码" :disabled="busy" @click="close">×</button></header>
     <p id="password-description">修改后，当前账号的原有登录均会失效，需要使用新密码重新登录。对话与记忆仍保留在原账号下。</p>
     <p v-if="error" class="password-error" role="alert">{{ error }}</p>

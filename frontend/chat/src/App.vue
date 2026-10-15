@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import AuthPanel from '../../shared/AuthPanel.vue'
-import FeishuPanel from '../../shared/FeishuPanel.vue'
-import PasswordPanel from '../../shared/PasswordPanel.vue'
+import AccountMenu from '../../shared/AccountMenu.vue'
 import MarkdownContent from '../../shared/MarkdownContent.vue'
 import { useAccount } from '../../shared/auth'
 import { dateLabel, isCancelled } from '../../shared/console'
@@ -107,10 +106,10 @@ onUnmounted(()=>{alive=false;clearTimeout(timer);clearTimeout(copyTimer)})
         <div v-if="total>20" class="chat-list-pager"><button :disabled="listPage===1||sending" @click="listPage--;loadConversations()">上一页</button><span>{{ listPage }} / {{ Math.ceil(total/20) }}</span><button :disabled="listPage*20>=total||sending" @click="listPage++;loadConversations()">下一页</button></div>
       </template>
       <div v-else class="chat-sidebar-intro">每一段对话，<br>都从认识你开始。</div>
-      <footer class="chat-sidebar-footer"><a href="/studio/">◇ <span>Memory Studio<small>查看资料与管理记忆</small></span> ↗</a><div v-if="user" class="chat-account"><span class="account-avatar">{{ user.username[0].toUpperCase() }}</span><strong>{{ user.username }}</strong><button :disabled="busy" @click="logout">退出 / 换号</button></div><div v-else class="chat-login-note">登录后保存自己的聊天记录</div></footer>
+      <footer class="chat-sidebar-footer"><a href="/studio/">◇ <span>Memory Studio<small>查看资料与管理记忆</small></span> ↗</a><AccountMenu v-if="user" :key="user.id" :account="account" placement="up" :disabled="sending"/><div v-else class="chat-login-note">登录后保存自己的聊天记录</div></footer>
     </aside>
     <main class="chat-main">
-      <header class="chat-header"><div><button class="mobile-menu" aria-label="打开会话列表" @click="mobileOpen=!mobileOpen">☰</button><span>Memoria <span class="header-slash">/</span> {{ selected?'对话':'Chat' }}</span><span class="chat-status"><i/> {{ sending?phase:'在这里，慢慢聊' }}</span></div><div><PasswordPanel v-if="user" :key="'password-'+user.id" :api="api" :disabled="busy||sending" @changed="account.passwordChanged"/><FeishuPanel v-if="user" :key="user.id" :api="api"/><a href="/studio/">Studio ↗</a></div></header>
+      <header class="chat-header"><div><button class="mobile-menu" aria-label="打开会话列表" @click="mobileOpen=!mobileOpen">☰</button><span>Memoria <span class="header-slash">/</span> {{ selected?'对话':'Chat' }}</span><span class="chat-status"><i/> {{ sending?phase:'在这里，慢慢聊' }}</span></div><div><a href="/studio/">Studio ↗</a></div></header>
       <div v-if="error" class="chat-error" role="alert">{{ error }}<button aria-label="关闭提示" @click="error=''">×</button></div>
       <div v-if="!user" class="chat-login"><div class="login-heading"><span class="welcome-symbol">✳</span><h1>让每次对话，都有延续。</h1><p>与 Memoria 聊聊今天，也聊聊更长远的事。</p></div><AuthPanel :account="account" /></div>
       <template v-else>

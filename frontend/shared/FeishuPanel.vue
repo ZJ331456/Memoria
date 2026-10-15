@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
+import { nextTick, onUnmounted, ref } from 'vue'
 import type { API } from './api'
 import { isCancelled } from './console'
-const props=defineProps<{api:API}>()
+const props=defineProps<{api:API;hideTrigger?:boolean}>()
 const open=ref(false),state=ref<any>(null),pair=ref<any>(null),error=ref(''),busy=ref(false),confirmUnbind=ref(false)
+const panel=ref<HTMLElement|null>(null)
 let alive=true,timer:ReturnType<typeof setTimeout>|undefined,version=0
 async function refresh(){
   const current=version
@@ -11,15 +12,16 @@ async function refresh(){
   catch(e){if(!isCancelled(e)&&alive&&current===version)error.value=(e as Error).message}
   finally{if(alive&&open.value&&current===version)timer=setTimeout(()=>void refresh(),3000)}
 }
-function show(){version++;open.value=true;state.value=null;error.value='';void refresh()}
+async function show(){version++;open.value=true;state.value=null;error.value='';void refresh();await nextTick();panel.value?.focus()}
 function close(){version++;open.value=false;pair.value=null;confirmUnbind.value=false;clearTimeout(timer)}
 async function issue(){const current=version;busy.value=true;error.value='';try{const result=await props.api.request('/channels/feishu/pairing',{});if(alive&&open.value&&current===version)pair.value=result}catch(e){if(alive&&current===version&&!isCancelled(e))error.value=(e as Error).message}finally{busy.value=false}}
 async function unbind(){busy.value=true;try{await props.api.request('/channels/feishu/binding',undefined,'DELETE');confirmUnbind.value=false;pair.value=null;state.value={...state.value,bound:false}}catch(e){if(!isCancelled(e))error.value=(e as Error).message}finally{busy.value=false}}
 onUnmounted(()=>{alive=false;close()})
+defineExpose({open:show})
 </script>
 <template>
-  <button class="feishu-trigger" @click="show">连接飞书</button>
-  <Teleport to="body"><div v-if="open" class="feishu-backdrop" @click.self="close" @keydown.esc="close"><section class="feishu-panel" role="dialog" aria-modal="true" aria-labelledby="feishu-title">
+  <button v-if="!hideTrigger" class="feishu-trigger" @click="show">连接飞书</button>
+  <Teleport to="body"><div v-if="open" class="feishu-backdrop" @click.self="close" @keydown.esc="close"><section ref="panel" class="feishu-panel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="feishu-title">
     <header><div><small>FEISHU · PRIVATE CONNECTION</small><h2 id="feishu-title">把飞书连接到你的账号</h2></div><button aria-label="关闭飞书连接" @click="close">×</button></header>
     <p>绑定后，私聊机器人会使用当前Memoria账号的记忆；聊天记录也保存到这个账号。群聊暂不接入。</p>
     <div v-if="error" class="feishu-error" role="alert">{{ error }}</div>

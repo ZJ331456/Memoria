@@ -190,6 +190,8 @@ class MemoryJobResponse(BaseModel):
     lease_expires_at: str | None = None
     created_at: str
     updated_at: str
+    extracted_count: int | None = None
+    staged_count: int | None = None
 
 
 class MemoryReviewResponse(BaseModel):
@@ -220,6 +222,13 @@ class MemoryReviewApproval(StrictModel):
         if (self.claim is not None) != self.approve_claim:
             raise ValueError('结构化状态须同时提交完整Claim和approve_claim=true明确批准')
         return self
+
+
+class MemoryReviewProposal(StrictModel):
+    message_id: str = Field(min_length=1, max_length=64)
+    content: str = Field(min_length=1, max_length=4000)
+    kind: MemoryKind = 'fact'
+    importance: int = Field(default=3, ge=1, le=5)
 
 
 class EpisodePatch(StrictModel):
@@ -331,6 +340,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             raise RuntimeError("Schema-only application cannot serve requests")
         service.start_background_integrations()
         memory_task = asyncio.create_task(service.memory_worker.run(), name="memoria-memory-worker")
+        app.state.memory_worker_task = memory_task
         drift_task = asyncio.create_task(service.drift.run_loop(), name="memoria-drift-worker")
         forgetting_task = (
             asyncio.create_task(service.forgetting_worker.run_loop(), name="memoria-forgetting-worker")
@@ -363,7 +373,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     app.state.governance = governance
     app.include_router(claims_router(service.claims if service else None,service.llm if service else None,
                                      service.runtime.memory if service else None))
-    app.include_router(studio_router(store,service.claims if service else None))
+    app.include_router(studio_router(store,service.claims if service else None,service))
     experiment_owner = settings.database.parent.parent
     app.include_router(research_runs_router(experiment_owner / "experiments" if experiment_owner.name == tenant_user_id else None,
                                             tenant_user_id))
@@ -815,6 +825,23 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     def memory_reviews(status: Literal["pending", "approved", "rejected", "all"] = "pending", limit: int = Query(default=100, ge=1, le=500)):
         return store.memory_reviews(status, limit)
 
+    def personal_review_source(message_id: str):
+        source = store.message_source(message_id)
+        if not source:
+            raise HTTPException(409, '来源消息不可用，请重新核对原话')
+        from ..claims import sha
+        service.claims._evidence({'evidence': [{'message_id': message_id, 'start': 0, 'end': len(source['content']),
+                                              'quote': source['content'], 'content_sha256': sha(source['content'])}]})
+
+    @app.post('/api/memory-reviews/propose', response_model=MemoryReviewResponse, status_code=201, tags=['memories'])
+    def propose_memory_review(body: MemoryReviewProposal):
+        with store._memory_transaction():
+            personal_review_source(body.message_id)
+            try:
+                return store.propose_memory_review(body.message_id, body.content, body.kind, body.importance)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from exc
+
     @app.post("/api/memory-reviews/{review_id}/approve", response_model=MemoryReviewResponse, tags=["memories"], summary="批准并写入候选记忆")
     async def approve_memory_review(review_id: str, body: MemoryReviewApproval):
         if not body.content.strip(): raise HTTPException(422, "记忆内容不能为空")
@@ -828,6 +855,8 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             store.reset_memory_review(review_id)
             raise HTTPException(409, "来源消息已删除，不能批准悬空记忆")
         try:
+            with store._memory_transaction():
+                personal_review_source(review['source_ref'])
             if body.claim is not None:
                 from ..memory.review import approve_review_with_claim
                 return await approve_review_with_claim(service, review, body)

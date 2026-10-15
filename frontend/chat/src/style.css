@@ -21,3 +21,13 @@
 .jump-latest{display:block;margin:0 auto 10px;padding:8px 15px;border:1px solid #dce7d6;border-radius:20px;background:#fff;color:#50734f;font-size:11px;box-shadow:0 3px 14px #284d3210}
 .chat-empty-list a{color:#547653;text-decoration:underline;text-underline-offset:3px}
 @media(max-width:640px){.chat-message-text{font-size:14px}.chat-message.user{margin-left:15px}.chat-message.user .chat-message-body{max-width:84%}.chat-header{padding:0 12px}.chat-header>div{gap:8px}.chat-header>div>a{padding:8px}.chat-message{gap:9px}.chat-message-meta time{display:block;font-size:8px}.chat-message-meta{gap:8px}.message-column{width:100%}}
+/* Keep authentication readable without stacking two full hero sections. */
+.chat-sidebar-footer .account-control{margin-top:17px}
+.chat-login{display:flex;align-items:center;justify-content:center;gap:clamp(28px,5vw,90px);padding:35px;min-height:0}
+.chat-login .login-heading{max-width:290px;text-align:left;flex-shrink:1}
+.chat-login .login-heading h1{line-height:1.6;font-size:29px}
+.chat-login .login-heading .welcome-symbol{font-size:54px}
+.chat-login .login-heading p{line-height:2}
+.chat-login .auth-panel{margin:0;flex-shrink:0}
+@media(max-width:1150px){.chat-login .login-heading{display:none}.chat-login{display:block;padding:25px}.chat-login .auth-panel{margin:0 auto}}
+@media(max-width:640px){.chat-login{padding:15px}.chat-login .auth-panel{margin:5px auto}.chat-sidebar-footer .account-control{margin-top:15px}}

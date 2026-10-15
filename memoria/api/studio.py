@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from typing import Literal
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 
 def literal_pattern(value: str) -> str:
@@ -23,7 +23,7 @@ def excerpt(text: str, query: str = '', limit: int = 160) -> str:
     return ('…' if start else '') + text[start:start+limit] + ('…' if len(text)>start+limit else '')
 
 
-def studio_router(store, claims):
+def studio_router(store, claims, service=None):
     router=APIRouter(prefix='/api/studio',tags=['studio'])
     if store is not None:store.db.create_function('studio_readable',1,readable_text,deterministic=True)
     def ready():
@@ -88,6 +88,53 @@ def studio_router(store, claims):
                       page_size:int=Query(default=20,ge=1,le=100)):
         ready()
         with store.lock:return browse(q.strip(),origin,sort,page,page_size)
+
+    @router.get('/pipeline')
+    def pipeline(request: Request):
+        """Explain persisted stages without invoking an extractor or opening secrets."""
+        ready()
+        from ..memory.experience import personal_source_sql
+        with store.lock:
+            counts = store.overview()
+            imported = {r['id'] for r in store.db.execute('SELECT id FROM sessions WHERE id IN (SELECT value FROM json_each(?))',
+                                                       (json.dumps(list(origins())),))}
+            eligible = store.db.execute('SELECT COUNT(*) FROM messages m WHERE '+personal_source_sql('m')).fetchone()[0]
+            job_counts = {r['status']:r['n'] for r in store.db.execute('SELECT status,COUNT(*) n FROM memory_jobs GROUP BY status')}
+            review_counts = {r['status']:r['n'] for r in store.db.execute('SELECT status,COUNT(*) n FROM memory_reviews GROUP BY status')}
+            recent = [dict(r) for r in store.db.execute('''SELECT j.id,j.source_ref,j.status,j.attempts,j.created_at,j.updated_at,
+                j.extracted_count,j.staged_count,m.session_id,
+                (SELECT COUNT(*) FROM memory_reviews r WHERE r.job_id=j.id) review_count,
+                CASE WHEN j.error IS NULL THEN 0 ELSE 1 END has_error
+                FROM memory_jobs j LEFT JOIN messages m ON m.id=j.source_ref ORDER BY j.created_at DESC LIMIT 50''')]
+            legacy = store.db.execute("SELECT COUNT(*) FROM memory_jobs WHERE status='completed' AND extracted_count IS NULL").fetchone()[0]
+            known_empty = store.db.execute("SELECT COUNT(*) FROM memory_jobs WHERE status='completed' AND extracted_count=0").fetchone()[0]
+            claim_statuses = {r['status']:r['n'] for r in store.db.execute('''SELECT r.status,COUNT(*) n FROM claim_roots c JOIN claim_revisions r
+                ON r.claim_id=c.id WHERE c.user_id=? AND r.revision=(SELECT MAX(x.revision) FROM claim_revisions x WHERE x.claim_id=c.id) GROUP BY r.status''', (claims.user_id,))}
+            namespace = store.embedding_namespace
+            indexes = {'memory_vectors':store.db.execute('SELECT COUNT(*) FROM memory_embeddings WHERE namespace=?',(namespace,)).fetchone()[0],
+                       'memory_chunks':store.db.execute('SELECT COUNT(*) FROM memory_embedding_chunks WHERE namespace=?',(namespace,)).fetchone()[0],
+                       'experience_chunks':store.db.execute('SELECT COUNT(*) FROM experience_chunks c JOIN messages m ON m.id=c.message_id WHERE '+personal_source_sql('m')).fetchone()[0],
+                       'experience_vectors':store.db.execute('SELECT COUNT(*) FROM experience_vectors WHERE namespace=?',(namespace,)).fetchone()[0]}
+        task = getattr(request.app.state,'memory_worker_task',None)
+        worker_state = 'unavailable' if task is None else 'stopped' if task.cancelled() else 'failed' if task.done() and task.exception() else 'stopped' if task.done() else 'running'
+        reasons = []
+        if imported: reasons.append({'code':'public_history','text':'导入的公开资料保留为实验来源，不自动变成本人的长期事实。'})
+        if legacy: reasons.append({'code':'legacy_outcome_unknown','text':'部分旧任务只有完成状态，没有详细抽取计数；未见候选不能直接判定模型返回了空数组。'})
+        if known_empty: reasons.append({'code':'empty_extraction','text':'已有任务明确返回0条长期记忆候选；普通提问不一定包含值得长期保存的事实。'})
+        if not review_counts.get('pending',0): reasons.append({'code':'no_pending_review','text':'当前没有待审候选。可从自己的有效原话提出候选，再核对后批准。'})
+        if counts['memories']==0: reasons.append({'code':'no_active_memory','text':'尚无有效长期记忆。对话保存、候选提取和审核入库是不同步骤。'})
+        models, integrations = {}, []
+        if service is not None:
+            for role, config in [('main',service.settings.main),('fast',service.settings.fast),('embedding',service.settings.embedding)]:
+                models[role]={'model':config.model,'ready':config.is_ready(role='embedding' if role=='embedding' else 'llm')}
+            integrations=[{'name':s['name'],'enabled':s['enabled'],'connected':s['connected'],'tool_count':len(s['tools']),
+                           'has_error':bool(s['error'])} for s in service.mcp.status()['servers']]
+        return {'counts':{**counts,'imported_conversations':len(imported),'native_conversations':counts['sessions']-len(imported),
+                          'eligible_personal_messages':eligible,'reviews':review_counts,'claims':claim_statuses},
+                'extraction':{'statuses':job_counts,'known_empty':known_empty,'legacy_outcome_unknown':legacy,'recent':recent,
+                              'worker':worker_state,'recent_limit':50},'indexes':indexes,'models':models,'integrations':integrations,
+                'integration_startup':service.integration_status() if service is not None else {'state':'unknown'},
+                'reasons':reasons,'scope':'current_authenticated_user','model_called':False}
 
     @router.get('/conversations/{session_id}/messages')
     def messages(session_id:str,page:int=Query(default=1,ge=1),page_size:int=Query(default=50,ge=1,le=100),

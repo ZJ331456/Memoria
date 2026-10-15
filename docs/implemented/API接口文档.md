@@ -197,7 +197,7 @@ embedding 没有完整配置时不会报错，返回 `enabled=false` 和剩余�
 
 ### `GET /api/memory-jobs?limit=50`
 
-查询后台抽取任务，返回来源消息、状态、尝试次数、下次可用时间和租约信息。`completed` 表示提取已完成，候选仍需审核。
+查询后台抽取任务，返回来源消息、状态、尝试次数、下次可用时间和租约信息，以及可空extracted_count/staged_count。新任务随候选暂存原子记录；旧NULL表示未记录，不当作0。`completed` 表示提取已完成，候选仍需审核。
 
 ### `GET /api/memory-reviews?status=pending&limit=100`
 
@@ -426,3 +426,10 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 memory-access、claim-views、memory-query、memory-answer接受可选session_id（1–64字符），服务器验证本账号会话存在；非法上下文422。Chat自动传实际会话。temporary=true仅在明确会话原话可定位时产生服务器lifecycle；普通“暂时/这次面试”不自动绑定或批准。View v5按会话隔离。事件实例/自动活动终止尚未支持。
 
 2026-10-15：QueryRequest新增experience_mode=bm25|dense|rrf，默认bm25，仅unified原话补检使用；局部来源/知识截止和审批边界保持。返回production_trace及实际经历lane/积压/向量诊断，不把缺失Dense伪装为成功。[重放、预算与本机条件](生产重放与普通来源支持.md)。
+
+## Studio处理状态与手动候选（2026-10-15）
+
+- `GET /api/studio/pipeline`：当前账号历史/导入/原话计数、任务状态与最近50条、候选/Claim状态、当前命名空间索引库存、模型配置就绪和MCP连接摘要。只读、model_called=false，不返回密钥、端点或原始任务文本；旧NULL抽取计数保留未知。
+- `POST /api/memory-reviews/propose`：`{message_id, content, kind="fact", importance=3}`；content为1–4000字符、kind同普通记忆、importance为1–5。201返回pending审核项，相同来源/内容/类型的待审请求幂等；manual:来源ID仅为来源标记，不创建模型任务。只允许当前账号有效本人原话，公开/助手/缺失/撤销来源拒绝。批准仍走既有approve，并再次验证来源；普通批准不自动升格Claim。
+
+界面使用既有`POST /api/memories/{id}/correct`、`GET /api/memories/{id}/timeline`与`GET /api/memories/export.md`补齐纠正、版本来源表和可读层导出；不新增全账号导出或绕过权限的文件下载。

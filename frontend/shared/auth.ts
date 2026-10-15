@@ -47,6 +47,11 @@ export function useAccount(hooks: {ready: () => Promise<void>; clear: () => void
       finally { clear(); events?.postMessage({type: 'identity-change'}) }
     })
   }
+  async function switchAccount() {
+    await logout()
+    authMode.value = 'login'
+    notice.value = error.value ? '本页资料已清空；服务端退出尚未确认，请先检查上方错误。' : '已退出当前账号，请登录你要切换到的账号。'
+  }
   function passwordChanged() {
     clear()
     notice.value = '密码已修改，原有登录已失效。请使用新密码重新登录。'
@@ -63,5 +68,5 @@ export function useAccount(hooks: {ready: () => Promise<void>; clear: () => void
   if (events) events.onmessage = event => { if (event.data?.type === 'identity-change') { clear(); void restore() } }
   onMounted(() => { window.addEventListener('focus', check); document.addEventListener('visibilitychange', check); void run(restore) })
   onUnmounted(() => { clear(); events?.close(); window.removeEventListener('focus', check); document.removeEventListener('visibilitychange', check) })
-  return {api, user, busy, error, notice, username, password, repeatPassword, authMode, login, logout, passwordChanged, run}
+  return {api, user, busy, error, notice, username, password, repeatPassword, authMode, login, logout, switchAccount, passwordChanged, run}
 }

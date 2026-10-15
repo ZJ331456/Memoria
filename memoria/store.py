@@ -200,6 +200,8 @@ class Store:
                 self.db.execute("ALTER TABLE turn_traces ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'")
             job_columns = {row[1] for row in self.db.execute("PRAGMA table_info(memory_jobs)").fetchall()}
             job_migrations = {
+                "extracted_count": "ALTER TABLE memory_jobs ADD COLUMN extracted_count INTEGER",
+                "staged_count": "ALTER TABLE memory_jobs ADD COLUMN staged_count INTEGER",
                 "available_at": "ALTER TABLE memory_jobs ADD COLUMN available_at TEXT",
                 "lease_owner": "ALTER TABLE memory_jobs ADD COLUMN lease_owner TEXT",
                 "lease_expires_at": "ALTER TABLE memory_jobs ADD COLUMN lease_expires_at TEXT",
@@ -1523,13 +1525,13 @@ class Store:
     def memory_jobs(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.lock:
             rows = self.db.execute("""SELECT id,source_ref,status,attempts,error,available_at,
-                lease_owner,lease_expires_at,created_at,updated_at FROM memory_jobs ORDER BY created_at DESC LIMIT ?""", (limit,)).fetchall()
+                lease_owner,lease_expires_at,created_at,updated_at,extracted_count,staged_count FROM memory_jobs ORDER BY created_at DESC LIMIT ?""", (limit,)).fetchall()
         return [dict(row) for row in rows]
 
     def memory_job(self, job_id: str) -> dict[str, Any] | None:
         with self.lock:
             row = self.db.execute("""SELECT id,source_ref,status,attempts,error,available_at,
-                lease_owner,lease_expires_at,created_at,updated_at FROM memory_jobs WHERE id=?""", (job_id,)).fetchone()
+                lease_owner,lease_expires_at,created_at,updated_at,extracted_count,staged_count FROM memory_jobs WHERE id=?""", (job_id,)).fetchone()
         return dict(row) if row else None
 
     def stage_memory_reviews(self, job_id: str, owner: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1553,12 +1555,32 @@ class Store:
                         (id,job_id,source_ref,ordinal,content,kind,importance,status,created_at,updated_at)
                         VALUES (?,?,?,?,?,?,?,'pending',?,?)""",
                         (uuid.uuid4().hex, job_id, job["source_ref"], ordinal, content, kind, importance, timestamp, timestamp))
+                staged = self.db.execute('SELECT COUNT(*) FROM memory_reviews WHERE job_id=?', (job_id,)).fetchone()[0]
+                self.db.execute('UPDATE memory_jobs SET extracted_count=?,staged_count=?,updated_at=? WHERE id=?',
+                                (len(candidates), staged, timestamp, job_id))
                 self.db.execute("COMMIT")
             except Exception:
                 self.db.execute("ROLLBACK")
                 raise
             rows = self.db.execute("SELECT * FROM memory_reviews WHERE job_id=? ORDER BY ordinal", (job_id,)).fetchall()
         return [dict(row) for row in rows]
+
+    def propose_memory_review(self, source_ref: str, content: str, kind: str, importance: int) -> dict[str, Any]:
+        """A user's manual proposal is pending; it never fabricates a model job."""
+        content = content.strip()
+        if not content or len(content) > 4000 or kind not in {'fact','preference','profile','goal','procedure'} or type(importance) is not int or not 1 <= importance <= 5:
+            raise ValueError('候选内容、类型或重要度不合法')
+        with self._memory_transaction():
+            self._require_memory_source(source_ref)
+            existing = self.db.execute("SELECT * FROM memory_reviews WHERE source_ref=? AND content=? AND kind=? AND status='pending'", (source_ref, content, kind)).fetchone()
+            if existing:
+                return dict(existing)
+            job_id = 'manual:' + source_ref
+            ordinal = self.db.execute('SELECT COALESCE(MAX(ordinal),-1)+1 FROM memory_reviews WHERE job_id=?', (job_id,)).fetchone()[0]
+            review_id, timestamp = uuid.uuid4().hex, now()
+            self.db.execute('''INSERT INTO memory_reviews(id,job_id,source_ref,ordinal,content,kind,importance,status,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,'pending',?,?)''', (review_id, job_id, source_ref, ordinal, content, kind, importance, timestamp, timestamp))
+            return dict(self.db.execute('SELECT * FROM memory_reviews WHERE id=?', (review_id,)).fetchone())
 
     def memory_reviews(self, status: str = "pending", limit: int = 100) -> list[dict[str, Any]]:
         with self.lock:

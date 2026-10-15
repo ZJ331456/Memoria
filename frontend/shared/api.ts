@@ -24,7 +24,7 @@ export class API {
       await readEvents(response,guard,onEvent)
     } finally {this.requests.delete(controller)}
   }
-  async request<T = any>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', channel?: string): Promise<T> {
+  async request<T = any>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', channel?: string, format: 'json'|'text' = 'json'): Promise<T> {
     const epoch = this.epoch, controller = new AbortController()
     let timedOut = false
     const timer = setTimeout(() => { timedOut = true; controller.abort() }, method === 'GET' ? this.readTimeoutMs : 120_000)
@@ -38,7 +38,7 @@ export class API {
       const owner=response.headers.get('X-Memoria-User')
       if (this.owner && owner && owner !== this.owner) { this.onUnauthorized(); throw new SessionChanged() }
       if (response.status === 401 && path !== '/auth/login') { this.onUnauthorized(); throw new SessionChanged() }
-      const result = response.status === 204 ? undefined : await response.json()
+      const result = response.status === 204 ? undefined : response.ok && format === 'text' ? await response.text() : await response.json()
       if (changed()) throw new SessionChanged()
       if (!response.ok) throw new Error(typeof result?.message === 'string' ? result.message : typeof result?.detail === 'string' ? result.detail : '请求失败，请刷新数据后重试（' + response.status + '）')
       return result as T

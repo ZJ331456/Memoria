@@ -90,3 +90,23 @@ test('a wrong current password remains an actionable error and keeps the account
     assert.equal(cleared,false)
   } finally {globalThis.fetch=previous}
 })
+
+test('Markdown export follows owner checks and never releases a response after account reset',async()=>{
+  const previous=globalThis.fetch
+  try {
+    const api=new API();api.bindUser('export-owner')
+    globalThis.fetch=async()=>new Response('# My memories\n',{status:200,headers:{'X-Memoria-User':'export-owner'}})
+    assert.equal(await api.request('/memories/export.md',undefined,'GET','export','text'),'# My memories\n')
+    let release!:(value:string)=>void
+    globalThis.fetch=async()=>({ok:true,status:200,headers:new Headers({'X-Memoria-User':'export-owner'}),text:()=>new Promise<string>(resolve=>{release=resolve})}) as Response
+    const pending=api.request('/memories/export.md',undefined,'GET','export','text')
+    await new Promise(resolve=>setImmediate(resolve))
+    api.reset();release('private old account')
+    await assert.rejects(pending,SessionChanged)
+    api.bindUser('new-owner');let cleared=false
+    api.onUnauthorized=()=>{cleared=true;api.reset()}
+    globalThis.fetch=async()=>new Response('private other account',{status:200,headers:{'X-Memoria-User':'export-owner'}})
+    await assert.rejects(api.request('/memories/export.md',undefined,'GET','export','text'),SessionChanged)
+    assert.equal(cleared,true)
+  } finally {globalThis.fetch=previous}
+})

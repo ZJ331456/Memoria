@@ -11,3 +11,8 @@
 - `console.ts`：日期、字面高亮、有限中文阅读投影；source指纹和Unicode范围始终使用原文。
 
 各端只维护自己的业务状态，通过账号clear钩子全部释放。新增网络接口沿用API类，不能绕过服务端租户网关；SSE每次读取/派发事件都检查账号epoch，UTF-8与CRLF跨块可正确处理。共享层不引入Element Plus或页面全局样式，Chat不加载Studio的组件库包。
+
+- `AccountMenu.vue`：把当前用户名、改密、切换账号、飞书与退出集中展示；超管元数据入口可由Studio启用。
+- `MemoryCandidateDialog.vue`：从当前账号的有效本人原话提出待审候选；不调用模型，不绕过公开语料/角色/撤销检查。
+
+AuthPanel提供登录/注册切换、确认密码、可见性与大写锁定提示。手动候选、Markdown导出与其他请求沿用相同的epoch及响应归属校验。
