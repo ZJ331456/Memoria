@@ -37,6 +37,10 @@ Pop-Location
 | [test_optimizations.py](test_optimizations.py) | 持久任务/租约、FTS、查询门控、工具授权、SSE、内部安全和可选向量 |
 | [test_user_privacy.py](test_user_privacy.py) | 注册/登录/重设失效、每账号路由/工具、CSRF、HTTPS、流式体积与私密文件 |
 | [test_claims.py](test_claims.py) | 来源/公开拒绝、审批OCC、不可变修订、双时间/条件/冲突、依赖缓存及事务/竞态 |
+| [test_claim_support_groups.py](test_claim_support_groups.py) | 组内AND/组间OR、旧格式、待审隔离、精确复制、撤回与历史/视图 |
+| [test_claim_session_lifecycle.py](test_claim_session_lifecycle.py) | 会话原话锚点、未知绑定、跨会话例外隔离/并存及来源迁移 |
+| [test_evidence_span_selection.py](test_evidence_span_selection.py) | 四策略同版本区间去重、互补片段、完整预算与版本混用拒绝 |
+| [test_experience_retrieval.py](test_experience_retrieval.py) | 原话BM25/邻块、截止/公开来源隔离、回填、事务和在途Reader失效 |
 | [test_claims_api.py](test_claims_api.py) | 两账号网关、Claim 契约、有限个人问题和原子读取预算 |
 | [test_memory_studio.py](test_memory_studio.py) | 时间/主体歧义、统一补检来源/版本、固定池预算、只读建议、账本owner/SHA和HTTP隔离 |
 | [test_memory_review.py](test_memory_review.py) | 自动提取待审、批准后召回、来源定位、重启恢复 |

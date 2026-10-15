@@ -12,7 +12,7 @@ from memoria.mcp.host import McpHost, local_tool_name
 from memoria.tools.registry import ToolRegistry
 
 
-def test_tool_names_fit_small_model_protocol_and_do_not_collide():
+def test_tool_names_fit_api_protocol_and_do_not_collide():
     assert len(local_tool_name("github", "a" * 150)) <= 64
     assert local_tool_name("wiki", "file.list") != local_tool_name("wiki", "file-list")
     assert local_tool_name("github", "a" * 150) != local_tool_name("github", "a" * 149 + "b")

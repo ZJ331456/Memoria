@@ -11,6 +11,7 @@
 | [engine.py](engine.py) | 普通记忆写入、强化/替代/纠正、有效区间、词面/BM25/Dense/RRF 和图扩展 |
 | [planner.py](planner.py) | 问候门控及可选 fast 模型查询/类型/数量规划 |
 | [access.py](access.py) | QueryRequest/MemoryAccessOrchestrator：Claim、时间、来源复核、候选和选择解释 |
+| [experience.py](experience.py) | 账号原话版本化BM25块索引、有界同消息邻块、recorded截止与回填诊断；不是批准状态 |
 | [reader.py](reader.py) | memory-answer、服务端展示引用目录、严格回答schema、来源/版本新鲜度与缓冲输出 |
 | [evidence_sufficiency.py](evidence_sufficiency.py)、[answer_risk.py](answer_risk.py)、[adaptive_fallback.py](adaptive_fallback.py) | 必要事实与原文引用核验、Query-only风险/回答支持、有限分级补检；生产前后检查显式开启，完整补检先做独立benchmark消融 |
 | [temporal_query.py](temporal_query.py) | 有限中文年月日/相对日期解析，区间、身份和获知截止歧义处理 |
@@ -23,7 +24,7 @@
 | [evidence_verifier.py](evidence_verifier.py) | 来源硬校验、词面风险、事件边界与可选支持度模型 |
 | [embedding.py](embedding.py) | HTTP/本地 BGE、查询指令、文档分块、批次和向量校验 |
 | [local_bge.py](local_bge.py)、[token_chunks.py](token_chunks.py) | 离线 CUDA/CPU、模型指纹、tokenizer 分块、连续原文 span 和完整覆盖 |
-| [worker.py](worker.py) | 持久租约抽取任务及普通记忆审核队列 |
+| [worker.py](worker.py) | 持久租约抽取、普通记忆审核队列及非空闲也执行的有界索引维护 |
 | [episodic.py](episodic.py)、[forgetting.py](forgetting.py) | 来源任务情景、相关性召回、固定、TTL/容量归档 |
 | [layer_settings.py](layer_settings.py)、[budget.py](budget.py) | 分层配置、读取次数和累计字符配额 |
 | [layer.py](layer.py)、[markdown.py](markdown.py) | MEMORY.md 投影、SELF.md 和历史 PENDING.md 容器 |
@@ -40,13 +41,17 @@ Claim显式抽取附带shadow_updates，额外模型调用0；analyze升级独�
 
 ## 统一读取
 
-`/api/memory-query` 支持 unified/claim/keyword/bm25/dense/rrf。统一模式优先已批准 Claim；不完整时补检普通记忆，只把仍有效、属于合法用户原话的来源列作未批准证据，不能消除 Claim 的缺项或冲突。公开导入、丢失和撤销来源被排除；模型 await 后重验来源/版本。
+`/api/memory-query` 支持 unified/claim/keyword/bm25/dense/rrf。统一模式优先已批准 Claim；不完整时补检普通记忆及原始经历，只把仍有效、属于合法用户原话的来源列作未批准证据，不能消除 Claim 的缺项或冲突。公开导入、丢失和撤销来源被排除；模型 await 后重验来源/版本。
 
-recorded_as_of 时跳过只有事实时间的普通记忆通道。中文年份/月/日保留日历区间，以修订时间线展示，不编造某日期或把整个区间当已证明的状态。规则未覆盖、主体不明或获知区间需精确截止时返回 clarify。
+recorded_as_of 时跳过只有事实时间的普通记忆通道；原始经历支持记录截止，但不伪造事实发生时间。中文年份/月/日保留日历区间，以修订时间线展示，不编造某日期或把整个区间当已证明的状态。规则未覆盖、主体不明或获知区间需精确截止时返回 clarify。
 
-明确平时/默认用scope_mode=default只读无条件状态，面试场景匹配activity；未给条件仍澄清。模式进缓存键，编译v2不复用旧视图，精确时间不覆盖条件冲突。
+明确平时/默认用scope_mode=default只读无条件状态，面试场景匹配activity；未给条件仍澄清。临时条件仅在原话明确“本次会话/this session”且同会话证据完整时绑定session_id；Chat传实际会话，其他会话忽略例外，未知绑定待审/澄清，不猜事件到期。当前编译v5，模式和会话进缓存键，精确时间不覆盖条件冲突。
 
 Claim同槽位条件/否定保持完整组。四选择器同池/同预算，不用gold；费用单位明确，远程reader tokenizer不可核验时422而不冒用BGE。Dense专用诊断不伪装词面结果。API默认0模型调用；opt-in查询模型仅读query，API仍不调用reader。有限条件/事件精度与知识区间已经接入，通用条件与真实QA/长期收益仍未知，详见[本轮说明](../../docs/implemented/条件时序抽取与预算证据选择.md)。
+
+2026-10-15新增[来源支持与渐进访问](../../docs/implemented/来源支持与渐进访问修复.md)：Claim组内AND/组间OR与保守旧格式；四选择器按同版本原文区间去重；unified缺项时补账号原始经历BM25（include_experiences=false可消融），最多16锚点、4锚点展开同消息邻块、总邻块不超过8。recorded截止在排名前过滤，fact_as_of不使用缺少事实时间的原始经历。公开/assistant来源不能作为本人经历，补检不自动填平Claim缺项/冲突。经历Dense/RRF、跨消息事件仍待实现。
+
+普通父记忆以最佳块排名、最多3个近最佳块进入提示词/recall，父级RRF只占一票，旧正文SHA不复用。父正文不自动等同用户原话；普通记忆来源强化仍未统一为Claim支持组，语义独立性、同预算覆盖和真实质量收益未知。
 
 ## 分层与来源生命周期
 
