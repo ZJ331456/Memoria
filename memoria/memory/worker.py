@@ -48,10 +48,13 @@ class MemoryJobWorker:
     async def run(self) -> None:
         next_index = 0.0
         while True:
-            if not await self.process_once():
-                if time.monotonic() >= next_index:
-                    await self.memory.reindex(limit=16)
-                    next_index = time.monotonic()+15
+            processed = await self.process_once()
+            if time.monotonic() >= next_index:
+                await self.memory.reindex(limit=16)
+                from .experience import reindex
+                await asyncio.to_thread(reindex, self.store, 16)
+                next_index = time.monotonic()+15
+            if not processed:
                 await asyncio.sleep(self.poll_seconds)
 
     async def _heartbeat(self, job_id: str) -> None:

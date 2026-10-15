@@ -416,3 +416,7 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 2026-10-13新增POST /api/memory-answer，匿名401、客户端user_id等未知字段422、跨账号来源不可访问、Origin规则与登录网关一致。memory-query保持诊断；memory-answer的status为answer/clarify/abstain，citations只含实际展示且仍有效的来源，validation明确semantic_entailment_verified=false。严格JSON、完整条件Claim、来源SHA/版本复核失败时拒绝原始模型结论。详见[请求示例、预算与适用范围](完整Reader预算与生产引用校验.md)。
 
 本地模型服务独立增加POST /v1/reader-token-count，使用ChatRequest返回完整模板输入Token/部署窗口/tokenizer SHA，不生成；它不属于账号业务网关，也不作为远程通用标准。main服务的严格回答应在升级后重启；现有Studio查询不会自动变成收费回答调用。
+
+## 原始经历入口（2026-10-15）
+
+`POST /api/memory-query`与`/api/memory-answer`新增严格布尔`include_experiences`，默认true，仅unified且无完整Claim View时启用词面经历补检；false保留旧路径用于消融。recorded_as_of过滤来源前缀，fact_as_of不使用无事实有效时间的经历。候选source_type=experience、memory_id=null，包含真实源坐标与unknown事件时间；不提升为已批准状态。Reader引用仍以前后有效的实际展示片段为准。详见[来源支持与渐进访问](来源支持与渐进访问修复.md#3-原始经历的有界词面入口)。

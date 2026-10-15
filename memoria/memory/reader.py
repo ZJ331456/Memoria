@@ -41,7 +41,7 @@ def strict_json(value):
 class CitationGuard:
     def __init__(self,claims,access,request):
         self.claims,self.access,self.request=claims,access,request
-        self.catalog,self.source_snapshots={},{}
+        self.catalog,self.source_snapshots,self.experience_snapshots={},{},{}
         evidence=[]
         with claims.store._memory_transaction():
             for candidate in access['selection']['payload']['evidence']:
@@ -55,9 +55,13 @@ class CitationGuard:
                         self.catalog[eid]={'kind':candidate['kind'],'eligible':allowed,'data':item,'spans':spans}
                     else:
                         mid=item['memory_id']; source=item['evidence']
-                        eid='source:'+mid+':'+source['content_sha256']
-                        memory=claims.store.memory(mid)
-                        self.source_snapshots[mid]=self._memory_snapshot(memory)
+                        if item.get('source_type')=='experience':
+                            eid=f"source:{source['message_id']}:{source['content_sha256']}:{source['start']}:{source['end']}"
+                            self.experience_snapshots[source['message_id']]=item['source_dependency']
+                        else:
+                            eid='source:'+mid+':'+source['content_sha256']
+                            memory=claims.store.memory(mid)
+                            self.source_snapshots[mid]=self._memory_snapshot(memory)
                         self.catalog[eid]={'kind':'source','eligible':True,'data':item,'spans':[source]}
                     ids.append(eid)
                 evidence.append({'id':candidate['id'],'kind':candidate['kind'],'data':candidate['data'],'citation_ids':ids})
@@ -109,6 +113,9 @@ class CitationGuard:
             instant=normalize_time(at or now())
             if not any(i['valid_at']<=instant and (not i['invalid_at'] or instant<i['invalid_at']) for i in self.claims.store.memory_validity(mid)):
                 return 'memory_inactive'
+        for snapshot in self.experience_snapshots.values():
+            if not self.claims.store.memory_dependency_valid(snapshot):
+                return 'experience_source_changed'
         return None
 
     def validate(self,result,messages):

@@ -47,6 +47,7 @@ class QueryRequest(Strict):
     candidate_limit: int = Field(default=32, ge=1, le=64, strict=True)
     use_query_model: bool = Field(default=False, strict=True)
     use_answer_risk: bool = Field(default=False, strict=True)
+    include_experiences: bool = Field(default=True, strict=True)
 
     _conditions = field_validator("context")(conditions)
     _times = field_validator("fact_as_of", "recorded_as_of")(timestamp)
@@ -231,6 +232,15 @@ class MemoryAccessOrchestrator:
                 reason += ("; source supplement does not resolve missing/conflicting Claim state" if state else "; source candidates remain unapproved")
             else:
                 diag = {"skipped": "recorded_time_unavailable_for_semantic_memories" if request.recorded_as_of else "complete_view_or_claim_only"}
+            if (supplement and request.mode == "unified" and request.include_experiences
+                    and not request.fact_as_of):
+                from .experience import retrieve as retrieve_experiences
+                with timings.measure("access.experiences"):
+                    experiences, experience_diag = retrieve_experiences(self.claims, request.query,
+                        limit=request.candidate_limit, recorded_as_of=request.recorded_as_of)
+                candidates.extend(experiences)
+                diag["experiences"] = experience_diag
+                reason += "; original experiences are not approved current state"
             if state:
                 # Put every condition/polarity of a slot in one indivisible unit.
                 for predicate in parsed["predicates"]:

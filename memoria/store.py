@@ -262,6 +262,8 @@ class Store:
                     (memory_id,namespace,dimension,embedding,updated_at) VALUES (?,?,?,?,?)""",
                     (row["id"], row["embedding_model"], len(vector), row["embedding"], row["updated_at"]))
             self._init_fts()
+            from .memory.experience import install as install_experiences
+            install_experiences(self)
             self.vector_index = SQLiteVecIndex(self.db, vector_backend)
             self._bootstrap_vector_index()
             self.chunk_index = SQLiteVecIndex(self.db, vector_backend, self.embedding_namespace + ":source-chunks-v1")
@@ -517,6 +519,8 @@ class Store:
         with self._memory_transaction():
             self.db.execute("INSERT INTO messages VALUES (:id,:session_id,:role,:content,:created_at)", item)
             self.db.execute("INSERT INTO messages_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
+            from .memory.experience import index_message
+            index_message(self, item)
             self.db.execute("UPDATE sessions SET updated_at=? WHERE id=?", (item["created_at"], session_id))
         return item
 
