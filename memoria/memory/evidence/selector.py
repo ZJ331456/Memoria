@@ -21,13 +21,69 @@ def similarity(a, b):
     return len(a & b) / len(a | b) if a | b else 0.0
 
 
+def source_spans(item):
+    """Coordinates are comparable only inside the same original source version."""
+    data = item.get("data", {})
+    entries = data if isinstance(data, list) else [data]
+    spans = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        for field in ("evidence", "condition_evidence"):
+            evidence = entry.get(field, [])
+            for e in evidence if isinstance(evidence, list) else [evidence]:
+                if not isinstance(e, dict):
+                    continue
+                mid, start, end, fingerprint = (e.get(k) for k in ("message_id", "start", "end", "content_sha256"))
+                if (mid in item.get("source_ids", []) and type(start) is int and type(end) is int
+                        and 0 <= start < end and isinstance(fingerprint, str)
+                        and re.fullmatch(r"[a-f0-9]{64}", fingerprint)):
+                    spans.setdefault((mid, fingerprint), []).append((start, end))
+    return spans
+
+
+def covered_span(interval, selected):
+    cursor, end = interval
+    for left, right in sorted(selected):
+        if left > cursor:
+            break
+        cursor = max(cursor, right)
+        if cursor >= end:
+            return True
+    return False
+
+
+def source_rejection(item, chosen):
+    if item["kind"] != "source":
+        return None
+    prior_ids = {sid for c in chosen for sid in c["source_ids"]}
+    shared = set(item["source_ids"]) & prior_ids
+    if not shared:
+        return None
+    current, prior = source_spans(item), {}
+    for candidate in chosen:
+        for key, ranges in source_spans(candidate).items():
+            prior.setdefault(key, []).extend(ranges)
+    for sid in shared:
+        versions = {version for mid, version in current if mid == sid}
+        old_versions = {version for mid, version in prior if mid == sid}
+        if not versions or not old_versions:
+            return "duplicate_source"  # Missing coordinates cannot establish novelty.
+        if len(versions | old_versions) != 1:
+            return "source_version_conflict"
+    if set(item["source_ids"]) <= prior_ids and all(
+            covered_span(span, prior.get(key, [])) for key, spans in current.items() for span in spans):
+        return "duplicate_source"
+    return None  # Partial overlap or a disjoint span can contain complementary evidence.
+
+
 def select(candidates, requirements, budget: EvidenceBudget, strategy="evidence_coverage", limit=8,
            alpha=1.0, beta=1.0, gamma=0.35):
     if strategy not in {"topk", "coverage", "mmr", "evidence_coverage"}:
         raise ValueError("unsupported selector")
     if len({c["id"] for c in candidates}) != len(candidates):
         raise ValueError("candidate IDs must be unique")
-    required, covered, sources = set(requirements), set(), set()
+    required, covered = set(requirements), set()
     chosen, trace, remaining = [], [], list(enumerate(candidates))
     scores = [float(c.get("score", 0)) for c in candidates]
     if not all(math.isfinite(s) for s in scores):
@@ -58,16 +114,18 @@ def select(candidates, requirements, budget: EvidenceBudget, strategy="evidence_
             evaluated.append((rank, -index, index, item, new, redundancy, marginal, utility))
         rank, _, index, item, new, redundancy, marginal, utility = max(evaluated, key=lambda e:(e[0],e[1]))
         remaining = [(i,c) for i,c in remaining if i != index]
-        reason = ("duplicate_source" if item["kind"] == "source" and set(item["source_ids"]) & sources else
+        reason = source_rejection(item, chosen) or (
                   "budget" if budget.cost(envelope(chosen+[item])) > budget.limit else "selected")
         trace.append(decision(item, reason, len(chosen)+1 if reason == "selected" else None,
                               gain=round(utility,6), ranking_value=[round(v,6) for v in rank], marginal_cost=marginal,
                               newly_covered=sorted(new), redundancy=round(redundancy,6)))
         if reason == "selected":
-            chosen.append(item); covered.update(new); sources.update(item["source_ids"])
+            chosen.append(item); covered.update(new)
     trace += [decision(item, "top_k") for _, item in remaining]
     payload = envelope(chosen)
     return {"payload": payload, "strategy": strategy, "cost": budget.cost(payload), "budget": budget.public(),
             "covered": sorted(covered), "uncovered": sorted(required-covered), "trace": trace,
             "candidate_ids": [c["id"] for c in candidates], "semantic_sufficiency_verified": False,
-            "objective": {"alpha":alpha,"beta":beta,"gamma":gamma,"mmr_lambda":0.5,"redundancy":"lexical_bigram_jaccard; not dense MMR"}}
+            "objective": {"alpha":alpha,"beta":beta,"gamma":gamma,"mmr_lambda":0.5,
+                          "source_dedup":"versioned_span_coverage; unknown_span_conservative",
+                          "redundancy":"lexical_bigram_jaccard; not dense MMR"}}

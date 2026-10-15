@@ -237,7 +237,7 @@ class MemoryAccessOrchestrator:
                     group = [c for c in state["payload"]["claims"] if c["predicate"] == predicate]
                     if group:
                         candidates.insert(0, {"id": "claim:" + predicate, "kind": "claim", "score": 2,
-                                              "covers": [predicate], "source_ids": sorted({e["message_id"] for c in group for e in c["evidence"]}), "data": group})
+                                              "covers": [predicate], "source_ids": sorted({e["message_id"] for c in group for e in c["evidence"]+c.get("condition_evidence", [])}), "data": group})
         requirements = requirements_for(request.query, parsed)
         enriched = [{**c, "covers":coverage(c, requirements, parsed)} for c in candidates]
         comparison = {}
