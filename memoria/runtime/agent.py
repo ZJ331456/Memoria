@@ -131,6 +131,8 @@ class AgentRuntime:
 
                 interrupt_note = (session or {}).get("interrupt_note") or ""
                 claim_request = infer_query(user_text) if self.claims else None
+                if claim_request:
+                    claim_request.session_id = session_id
                 with tracer.timings.measure("compaction"):
                     compaction = None if claim_request else await self.compactor.ensure(session_id, self.settings.memory_window)
                 if compaction:

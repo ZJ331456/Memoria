@@ -87,9 +87,12 @@ class CitationGuard:
         return any(s.name=='Structured State' and self.rendered_packet in s.content for s in sections)
 
     def freshness(self):
+        if self.request.session_id and not self.claims.store.session(self.request.session_id):
+            return 'query_session_unavailable'
         parsed=self.access['parsed']
         if self.access['state']:
             args=AccessRequest(subject_id=self.request.subject_id,predicates=parsed['predicates'],context=parsed['context'],
+                session_id=self.request.session_id,
                 scope_mode=parsed['scope_mode'],fact_as_of=self.request.fact_as_of,recorded_as_of=self.request.recorded_as_of,
                 intent='history' if self.request.fact_as_of or self.request.recorded_as_of else 'current',
                 budget_chars=self.request.budget_chars if self.request.budget_unit=='chars' else 16000)

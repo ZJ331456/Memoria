@@ -52,6 +52,12 @@ class ClaimRelationResolver:
                 "root_scan_limit": 256}
 
     def pair(self, memory, item: dict, peer: dict, verification: dict) -> str:
+        left, right = item.get("lifecycle"), peer.get("lifecycle")
+        if not same(left, right):
+            if left and right and left["kind"] == right["kind"] == "session":
+                return "disjoint_scope"
+            if same(item["scope"], peer["scope"]):
+                return "unknown"
         if not same(item["scope"], peer["scope"]):
             if any(k in peer["scope"] and not same(v, peer["scope"][k]) for k, v in item["scope"].items()):
                 return "disjoint_scope"

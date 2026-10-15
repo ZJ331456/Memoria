@@ -420,3 +420,7 @@ curl -s "$BASE/api/traces?session_id=$SESSION"
 ## 原始经历入口（2026-10-15）
 
 `POST /api/memory-query`与`/api/memory-answer`新增严格布尔`include_experiences`，默认true，仅unified且无完整Claim View时启用词面经历补检；false保留旧路径用于消融。recorded_as_of过滤来源前缀，fact_as_of不使用无事实有效时间的经历。候选source_type=experience、memory_id=null，包含真实源坐标与unknown事件时间；不提升为已批准状态。Reader引用仍以前后有效的实际展示片段为准。详见[来源支持与渐进访问](来源支持与渐进访问修复.md#3-原始经历的有界词面入口)。
+
+## 临时会话访问（2026-10-15）
+
+memory-access、claim-views、memory-query、memory-answer接受可选session_id（1–64字符），服务器验证本账号会话存在；非法上下文422。Chat自动传实际会话。temporary=true仅在明确会话原话可定位时产生服务器lifecycle；普通“暂时/这次面试”不自动绑定或批准。View v5按会话隔离。事件实例/自动活动终止尚未支持。

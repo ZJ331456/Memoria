@@ -24,7 +24,8 @@ SLOTS = {"residence": False, "occupation": True, "school": True,
          "response_language": False, "response_detail": False, "diet": True,
          "work_habit": True, "hobby": True, "learning_goal": True,
          "project_goal": True, "time_preference": True, "budget": False}
-COMPILER = "deterministic-claims-v4"
+COMPILER = "deterministic-claims-v5"
+SESSION_CUE = re.compile(r"(?:本次|这次|当前)(?:会话|对话)|\bthis\s+(?:session|chat|conversation)\b", re.I)
 
 
 def canonical(value) -> str:
@@ -48,6 +49,8 @@ def conditions(value: dict) -> dict:
     if len(value) > 8:
         raise ValueError("最多8个条件")
     for key, item in value.items():
+        if key == "temporary" and type(item) is not bool:
+            raise ValueError("temporary 必须为布尔标志")
         if not re.fullmatch(r"[a-z][a-z0-9_]{0,39}", key):
             raise ValueError("条件名须为小写英文标识")
         if type(item) not in (str, bool, int) or (isinstance(item, str) and len(item) > 160):
@@ -147,6 +150,7 @@ class ExtractionOutput(Strict):
 
 
 class AccessRequest(Strict):
+    session_id: str | None = Field(default=None, min_length=1, max_length=64)
     subject_id: str = Field(default="self", pattern=r"^(self|entity:[a-zA-Z0-9_-]{1,64})$")
     predicates: list[str] = Field(min_length=1, max_length=12)
     context: dict = Field(default_factory=dict)
@@ -287,7 +291,7 @@ class ClaimMemory:
 
     def _validate_evidence_group(self, assertion: dict) -> dict:
         data = dict(assertion)
-        evidence, observed = [], []
+        evidence, observed, quotes = [], [], []
         imported_ids = set()
         for receipt in self.db.execute("SELECT receipt_json FROM dataset_imports"):
             for group in json.loads(receipt[0]).get("source_mapping", []):
@@ -296,6 +300,9 @@ class ClaimMemory:
             row = self.db.execute("SELECT * FROM messages WHERE id=?", (e["message_id"],)).fetchone()
             if not row or row["role"] != "user":
                 raise ClaimError(422, "证据须来自本账号仍存在的用户原话")
+            lifecycle = data.get("lifecycle")
+            if lifecycle and row["session_id"] != lifecycle["session_id"]:
+                raise ClaimError(422, "临时条件证据已离开绑定会话")
             if e["message_id"] in imported_ids:
                 raise ClaimError(422, "公开语料的来源分组不能作为个人Claim证据")
             if self.store.source_revoked(e['message_id']) or self.db.execute("SELECT 1 FROM claim_source_revocations WHERE message_id=?", (e["message_id"],)).fetchone():
@@ -304,6 +311,7 @@ class ClaimMemory:
             if sha(text) != e["content_sha256"] or not 0 <= e["start"] < e["end"] <= len(text):
                 raise ClaimError(422, "证据hash或字符范围不匹配")
             quote = text[e["start"]:e["end"]]
+            quotes.append(quote)
             if e.get("quote", quote) != quote:
                 raise ClaimError(422, "引用不是原文切片")
             evidence.append({k:e[k] for k in ("message_id", "start", "end", "content_sha256")})
@@ -312,6 +320,8 @@ class ClaimMemory:
         primary = evidence[:-condition_count] if condition_count else evidence
         data["evidence"] = list({canonical(e):e for e in primary}.values())
         data["condition_evidence"] = list({canonical(e):e for e in evidence[-condition_count:]}.values()) if condition_count else []
+        if data.get("lifecycle") and not any(SESSION_CUE.search(quote) for quote in quotes):
+            raise ClaimError(422, "临时会话绑定缺少本次会话的原文证据")
         if data.get("event_time"):
             event = EventTime.model_validate(data["event_time"])
             texts = [self.db.execute("SELECT content FROM messages WHERE id=?", (e["message_id"],)).fetchone()[0][e["start"]:e["end"]] for e in primary]
@@ -404,6 +414,28 @@ class ClaimMemory:
         except ClaimError:
             return False
 
+    def _bind_lifecycle(self, data: dict, scope: dict, previous=None) -> dict:
+        if scope.get("temporary") is not True:
+            return data
+        groups = self._usable_groups(data)
+        mids = sorted({e["message_id"] for group in groups for e in group["evidence"]+group["condition_evidence"]})
+        marks = ",".join("?" for _ in mids)
+        sources = {row["id"]:dict(row) for row in self.db.execute(
+            f"SELECT id,session_id,content FROM messages WHERE id IN ({marks})", mids)}
+        if not all(any(SESSION_CUE.search(sources[e["message_id"]]["content"][e["start"]:e["end"]])
+                       for e in group["evidence"]+group["condition_evidence"]) for group in groups):
+            if data.get("lifecycle") or (previous or {}).get("lifecycle"):
+                raise ClaimError(422, "强化支持组缺少本次会话的原文证据")
+            return data  # "Temporarily/this interview" alone does not identify a session.
+        sessions = {source["session_id"] for source in sources.values()}
+        if len(sessions) != 1:
+            raise ClaimError(422, "临时条件须绑定同一来源会话，跨会话事件请先澄清")
+        lifecycle = {"kind":"session", "session_id":next(iter(sessions)), "origin":"source_session"}
+        expected = data.get("lifecycle") or (previous or {}).get("lifecycle")
+        if expected and canonical(expected) != canonical(lifecycle):
+            raise ClaimError(422, "临时条件不能移到另一会话，请新建候选")
+        return {**data, "lifecycle":lifecycle}
+
     def _append(self, root: dict, data: dict, status: str, reason: str, *, recorded_at=None) -> dict:
         if status == "approved" and data.get("support_groups"):
             data = {**data, "support_groups":[{**g, "approved":True} for g in data["support_groups"]]}
@@ -446,6 +478,7 @@ class ClaimMemory:
             fields = draft.model_dump()
             subject, predicate, scope = (fields.pop(k) for k in ("subject_id","predicate","scope"))
             data = self._evidence(fields)
+            data = self._bind_lifecycle(data, scope)
             cid = uuid.uuid4().hex
             self.db.execute("INSERT INTO claim_roots VALUES(?,?,?,?,?,?,NULL,NULL)",
                             (cid,self.user_id,subject,predicate,canonical(scope),now()))
@@ -581,6 +614,7 @@ class ClaimMemory:
                 if len(data["support_groups"]) > 16:
                     raise ClaimError(422,"支持组超过16组，请先审核整理")
                 data = self._evidence(data)
+            data = self._bind_lifecycle(data, json.loads(root["scope_json"]), previous)
             if request.action == "transition":
                 start = data["fact_start"]
                 if not start or (previous["fact_start"] and start<=previous["fact_start"]) or (previous["fact_end"] and start>=previous["fact_end"]):
@@ -593,6 +627,9 @@ class ClaimMemory:
 
     @staticmethod
     def _overlap(a: dict,b: dict) -> bool:
+        left, right = a.get("lifecycle"), b.get("lifecycle")
+        if left and right and left["kind"] == right["kind"] == "session" and left["session_id"] != right["session_id"]:
+            return False
         return (a["fact_end"] is None or b["fact_start"] is None or a["fact_end"]>b["fact_start"]) and (b["fact_end"] is None or a["fact_start"] is None or b["fact_end"]>a["fact_start"])
 
     def approve(self, claim_id: str, decision: ClaimDecision) -> dict:
@@ -601,6 +638,9 @@ class ClaimMemory:
             if head["status"] != "pending":
                 raise ClaimError(409,"仅待审核版本可批准")
             data = self._evidence(json.loads(head["data_json"]))
+            data = self._bind_lifecycle(data, json.loads(root["scope_json"]))
+            if json.loads(root["scope_json"]).get("temporary") is True and not data.get("lifecycle"):
+                raise ClaimError(422, "临时条件缺少可核验会话绑定，请补充本次会话的原话后再批准")
             predecessor = None
             if root["predecessor_id"] and not self.db.execute("SELECT 1 FROM claim_revisions WHERE claim_id=? AND status='approved'",(claim_id,)).fetchone():
                 predecessor, prior = self._expected(root["predecessor_id"],root["predecessor_revision"])
@@ -657,6 +697,8 @@ class ClaimMemory:
             self.db.execute("DELETE FROM claim_roots WHERE id=?", (claim_id,))
 
     def _select(self, request: AccessRequest) -> dict:
+        if request.session_id and not self.store.session(request.session_id):
+            raise ClaimError(422, "请求会话不属于当前账号或不存在")
         current_time = now()
         known = request.recorded_as_of or current_time
         fact = request.fact_as_of or current_time
@@ -683,8 +725,16 @@ class ClaimMemory:
                 scope = json.loads(root["scope_json"])
                 if request.scope_mode == "default" and scope:
                     continue  # Explicit default question; conditional assertions remain stored.
-                if any(k in request.context and (type(request.context[k])!=type(v) or request.context[k]!=v) for k,v in scope.items()):
+                context_scope = {k:v for k,v in scope.items() if not (k == "temporary" and v is True)}
+                if any(k in request.context and (type(request.context[k])!=type(v) or request.context[k]!=v) for k,v in context_scope.items()):
                     continue
+                if scope.get("temporary") is True:
+                    lifecycle = data.get("lifecycle")
+                    if not lifecycle or not request.session_id:
+                        unresolved = True
+                        continue
+                    if lifecycle["session_id"] != request.session_id:
+                        continue  # Local exceptions never become preferences in another session.
                 if data["modality"]=="inference" or (data["modality"]=="plan" and predicate not in {"learning_goal","project_goal"}):
                     continue
                 if request.fact_as_of and not data["fact_start"]:
@@ -696,7 +746,7 @@ class ClaimMemory:
                     continue
                 if data["fact_end"]:
                     boundaries.append(data["fact_end"])
-                if any(k not in request.context for k in scope):
+                if any(k not in request.context for k in context_scope):
                     unresolved = True
                     continue
                 candidates.append((len(scope),self._public(root,revision)))

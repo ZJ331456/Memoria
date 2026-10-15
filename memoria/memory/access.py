@@ -31,6 +31,7 @@ def infer_query(text: str) -> QueryRequest | None:
 
 
 class QueryRequest(Strict):
+    session_id: str | None = Field(default=None, min_length=1, max_length=64)
     query: str = Field(min_length=1, max_length=1000)
     subject_id: str = Field(default="self", pattern=r"^(self|entity:[a-zA-Z0-9_-]{1,64})$")
     predicates: list[str] = Field(default_factory=list, max_length=12)
@@ -119,6 +120,8 @@ class MemoryAccessOrchestrator:
         return items
 
     async def access(self, request: QueryRequest) -> dict:
+        if request.session_id and not self.claims.store.session(request.session_id):
+            raise ClaimError(422, "请求会话不属于当前账号或不存在")
         started, timings = time.perf_counter(), StageTimings()
         try:
             tokenizer = self.reader_tokenizer
@@ -179,6 +182,7 @@ class MemoryAccessOrchestrator:
         else:
             if parsed["predicates"] and state_mode:
                 args = AccessRequest(subject_id=request.subject_id, predicates=parsed["predicates"], context=parsed["context"],
+                                     session_id=request.session_id,
                                      scope_mode=parsed["scope_mode"],
                                      fact_as_of=request.fact_as_of, recorded_as_of=request.recorded_as_of,
                                      intent="history" if explicit_time else "current",
