@@ -125,6 +125,8 @@ def attribute(packet, *, required_source_ids=None, source_inventory=None, reader
         stage = "candidate_not_presented"
     elif reader is None:
         stage = "presented_reader_not_run"
+    elif reader.get("status") == "error":
+        stage = "reader_execution_failure"
     elif not reader.get("validation", {}).get("valid", True):
         stage = "reader_contract_or_support_failure"
     elif answer_correct is False:
@@ -136,3 +138,18 @@ def attribute(packet, *, required_source_ids=None, source_inventory=None, reader
     return {"stage":stage, "required_source_count":len(required),
             "missing_retrieved":sorted(required-retrieved), "missing_presented":sorted(required-presented),
             "semantic_sufficiency":None, "interpretation":"source-ID coverage diagnostic, not semantic gold"}
+
+
+def execution_failure(exc,phase):
+    """Safe operational class: never serialize provider response bodies or keys."""
+    chain=[];current=exc
+    while current is not None and len(chain)<5:
+        chain.append(type(current).__name__)
+        current=current.__cause__
+    transport={"ConnectError","ConnectTimeout","ReadTimeout","ReadError","WriteError","RemoteProtocolError","PoolTimeout"}
+    stage=("reader_transport_failure" if transport.intersection(chain) else
+           "reader_provider_failure" if "ProviderError" in chain else
+           "reader_incomplete_output" if "IncompleteResponseError" in chain else
+           "reader_budget_failure" if phase=="budget" else
+           "reader_contract_failure" if phase=="parse" else "reader_execution_failure")
+    return {"failure_stage":stage,"error_type":type(exc).__name__,"cause_types":chain}

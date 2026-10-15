@@ -77,6 +77,11 @@ def main():
     sub = subs.add_parser("replay-production", help="Compare four selectors on a private production capture; zero model calls")
     sub.add_argument("--input", required=True)
     sub.add_argument("--budgets", type=int, nargs="+")
+    sub = subs.add_parser("budget-micro", help="Two public questions; zero inference by default, at most four Reader calls")
+    sub.add_argument("--input", required=True)
+    sub.add_argument("--with-reader", action="store_true")
+    sub.add_argument("--allow-remote", action="store_true")
+    sub.add_argument("--profile")
     sub = subs.add_parser("locomo-smoke", help="Fixed ten-question official LoCoMo execution test; no production writes")
     sub.add_argument("--input", required=True, help="Verified official locomo10.json")
     sub.add_argument("--profile")
@@ -171,6 +176,10 @@ def main():
     elif args.command == "replay-production":
         from memoria.experiments.production_replay import replay_file
         result = replay_file(workspace,Settings.load(args.config),private_input(args.input,directory),budgets=args.budgets)
+    elif args.command == "budget-micro":
+        from memoria.experiments.micro_budget import run_micro
+        result = asyncio.run(run_micro(workspace,Settings.load(args.config),private_input(args.input,directory),
+            with_reader=args.with_reader,allow_remote=args.allow_remote,profile=args.profile))
     elif args.command == "locomo-audit":
         from memoria.experiments.locomo_diagnostics import audit
         result,_ = audit(workspace,args.source_run)

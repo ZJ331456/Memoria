@@ -106,3 +106,5 @@ TLS新增CA优先级/缓存轮换/目录变化/冷载不阻塞/缺失失败测�
 [test_experience_dense.py](test_experience_dense.py)验证经历Dense/RRF的版本/模型/维度、前缀/公开/撤回过滤、在途变化、失败批及不冒充降级；encoder替身只验证工程。
 
 [test_ordinary_update_policy.py](test_ordinary_update_policy.py)覆盖不同人物/场景、临时与相对时间、计划/不确定、极性、多值、目标截断顺序与模型等待期间竞态；只验证保守闸门，不是抽取F1。
+
+[test_micro_budget.py](test_micro_budget.py)检查固定两题、四次调用/字节/输出硬上限、gold隔离、失败分母/未知usage及连接错误不算合理拒答；模型替身无费用。

@@ -79,3 +79,5 @@ v3工程协议单独登记[配置](../../configs/research-locomo-risk-v3-2026101
 新smoke v2/全量v7执行统一定稿abstain/clarify为固定未知及空引用，原始供应商输出留账本；官方评分公式和冻结历史不回写，旧检查点不能混入新策略。[修复证据](../../docs/implemented/算法逻辑审查逐项修复.md)。
 
 [production_replay.py](production_replay.py)通过管理员CLI冻结本账号数据库，在临时副本调用生产访问路径；默认纯词面，可显式使用离线BGE，禁止LLM/远程Embedding。候选四策略可多预算0调用重放，标签只用于后验诊断，不能用于选择。[命令与边界](../../docs/implemented/生产重放与普通来源支持.md)。
+
+[micro_budget.py](micro_budget.py)提供budget-micro：固定官方前两题，默认四策略×三字节预算零推理，显式Reader最多4次、输出512/请求12000字节、0重试/回退；失败保留分母和未知usage。[实际诊断与边界](../../docs/implemented/生产重放与普通来源支持.md#5-两题同预算诊断与硬调用上限)。

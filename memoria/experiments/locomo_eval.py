@@ -74,7 +74,7 @@ class EnglishLexicalIndex:
 
 
 def benchmark_cases(records, scope):
-    if scope not in {'smoke', 'full', 'development'}:
+    if scope not in {'smoke', 'full', 'development', 'micro'}:
         raise ValueError('Unknown benchmark scope')
     # Reuse the already validated source projection, without choosing full cases by labels.
     smoke, _ = smoke_cases(records)
@@ -87,6 +87,8 @@ def benchmark_cases(records, scope):
             continue
         ids = {m['dia_id'] for m in histories[cid]}
         for index, qa in enumerate(record['qa']):
+            if scope=='micro' and (record is not records[0] or index>=2):
+                continue
             case_id = cid + '-q' + str(index)
             if scope == 'smoke' and case_id not in smoke_ids:
                 continue
@@ -100,6 +102,8 @@ def benchmark_cases(records, scope):
                          'answer': str(qa['answer']) if qa['category'] != 5 else 'Not mentioned.',
                          'evidence_ids': [cid + '/' + e for e in evidence],
                          'unresolved_evidence_ids': [cid + '/' + e for e in evidence if e not in ids]})
+    if scope=='micro':
+        histories={key:value for key,value in histories.items() if key in {c['conversation_id'] for c in cases}}
     return cases, histories, gold
 
 
@@ -117,6 +121,7 @@ def prepare(workspace, source, scope):
                 'case_ids': [c['id'] for c in cases],
                 'selection': 'all original QA in source order' if scope == 'full' else
                     'all QA in first two source-order conversations; development, not unseen holdout' if scope == 'development'
+                    else 'first two QA in original source order; execution diagnostic, not stratified quality' if scope=='micro'
                     else 'same fixed v1 ten cases',
                 'source_kind': 'official_constructed_benchmark', 'text_only': True,
                 'human_reviewed_by_project': False, 'automatic_memory_writes': 0,

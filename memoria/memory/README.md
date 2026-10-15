@@ -49,7 +49,7 @@ recorded_as_of 时跳过只有事实时间的普通记忆通道；原始经历�
 
 Claim同槽位条件/否定保持完整组。四选择器同池/同预算，不用gold；费用单位明确，远程reader tokenizer不可核验时422而不冒用BGE。Dense专用诊断不伪装词面结果。API默认0模型调用；opt-in查询模型仅读query，API仍不调用reader。有限条件/事件精度与知识区间已经接入，通用条件与真实QA/长期收益仍未知，详见[本轮说明](../../docs/implemented/条件时序抽取与预算证据选择.md)。
 
-2026-10-15新增[来源支持与渐进访问](../../docs/implemented/来源支持与渐进访问修复.md)：Claim组内AND/组间OR与保守旧格式；四选择器按同版本原文区间去重；unified缺项时补账号原始经历BM25（include_experiences=false可消融），最多16锚点、4锚点展开同消息邻块、总邻块不超过8。recorded截止在排名前过滤，fact_as_of不使用缺少事实时间的原始经历。公开/assistant来源不能作为本人经历，补检不自动填平Claim缺项/冲突。经历Dense/RRF、跨消息事件仍待实现。
+2026-10-15新增[来源支持与渐进访问](../../docs/implemented/来源支持与渐进访问修复.md)：Claim组内AND/组间OR与保守旧格式；四选择器按同版本原文区间去重；unified缺项时补账号原始经历BM25（include_experiences=false可消融），最多16锚点、4锚点展开同消息邻块、总邻块不超过8。recorded截止在排名前过滤，fact_as_of不使用缺少事实时间的原始经历。公开/assistant来源不能作为本人经历，补检不自动填平Claim缺项/冲突。经历Dense/RRF现已可选实现；跨消息事件仍待实现。
 
 普通父记忆以最佳块排名、最多3个近最佳块进入提示词/recall，父级RRF只占一票，旧正文SHA不复用。父正文不自动等同用户原话；普通精确完整候选已增加版本化来源组，相似强化不增加替代支持；语义独立性、同预算覆盖和真实质量收益未知。
 
