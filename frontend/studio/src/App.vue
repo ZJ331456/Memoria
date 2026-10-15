@@ -115,14 +115,13 @@ onUnmounted(()=>window.removeEventListener('hashchange',hashChanged))
       <a href="/docs" target="_blank" rel="noopener noreferrer" class="docs-link">API 文档 ↗</a>
     </aside>
     <main>
-      <header class="console-header"><div><div class="breadcrumb">Memoria <span>/</span> 管理后台 <span>/</span> {{ headings[page] }}</div><h1>{{ headings[page] }}</h1></div>
-        <AccountMenu v-if="user" :key="user.id" :account="account" manage-accounts @manage="navigate('accounts')"/>
+      <header class="console-header"><div class="console-header-copy"><div class="breadcrumb">Memoria <span>/</span> 管理后台</div><h1>{{ headings[page] }}</h1><p v-if="user" class="page-description">{{ pageDescriptions[page] }}</p></div>
+        <div v-if="user" class="console-header-tools"><el-button v-if="page==='overview'" class="console-primary-action" type="primary" @click="navigate('conversations')">浏览历史对话 →</el-button><AccountMenu :key="user.id" :account="account" manage-accounts @manage="navigate('accounts')"/></div>
       </header>
-      <p v-if="user" class="page-description">{{ pageDescriptions[page] }}</p>
       <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon class="notice" />
       <AuthPanel v-if="!user" :account="account" />
       <template v-else>
-        <ConsoleHome v-if="page==='overview'" :summary="summary" :username="user.username" @open="navigate" @conversation="openConversation" />
+        <ConsoleHome v-if="page==='overview'" :summary="summary" @open="navigate" @conversation="openConversation" />
         <MemoryPipeline v-else-if="page==='pipeline'" :key="user.id" :api="api" @open="navigate" @source="inspectEvidence"/>
         <HistoryBrowser v-else-if="page==='conversations'" :key="user.id+historySession" :api="api" :initial-session="historySession" :initial-anchor="historyAnchor" @source="openSource" @changed="refresh" @review="navigate('reviews')" />
         <PendingReviews v-else-if="page==='reviews'" :key="user.id" :api="api" @changed="refresh" @open="navigate" />
