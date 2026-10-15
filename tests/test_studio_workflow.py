@@ -118,6 +118,8 @@ def test_pipeline_and_manual_sources_follow_the_signed_in_owner(env):
     state=client.get('/api/studio/pipeline')
     assert state.status_code==200 and state.json()['counts']['sessions']==0
     assert client.post('/api/memory-reviews/propose',json={'message_id':message['id'],'content':'Should not enter another account'}).status_code==409
+    assert client.post('/api/messages/'+message['id']+'/memory-extraction',json={}).status_code==409
+    assert client.post('/api/memory-reviews/nonexistent/auto-review').status_code==404
     assert message['id'] not in state.text
     client.post('/api/auth/logout')
     assert client.get('/api/studio/pipeline').status_code==401

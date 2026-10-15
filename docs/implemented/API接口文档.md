@@ -433,3 +433,12 @@ memory-access、claim-views、memory-query、memory-answer接受可选session_id
 - `POST /api/memory-reviews/propose`：`{message_id, content, kind="fact", importance=3}`；content为1–4000字符、kind同普通记忆、importance为1–5。201返回pending审核项，相同来源/内容/类型的待审请求幂等；manual:来源ID仅为来源标记，不创建模型任务。只允许当前账号有效本人原话，公开/助手/缺失/撤销来源拒绝。批准仍走既有approve，并再次验证来源；普通批准不自动升格Claim。
 
 界面使用既有`POST /api/memories/{id}/correct`、`GET /api/memories/{id}/timeline`与`GET /api/memories/export.md`补齐纠正、版本来源表和可读层导出；不新增全账号导出或绕过权限的文件下载。
+
+## LLM主审与历史记忆提取（2026-10-16）
+
+- `POST /api/messages/{message_id}/memory-extraction`：只处理登录账号有效本人原话，入持久任务。已有候选不重复提取；无候选的completed/failed旧任务可由该明确请求重处理，旧回执存memory_job_reprocessing。不是全历史导入或公开资料晋升。
+- `POST /api/memory-reviews/{id}/auto-review`：明确请求一次LLM审核并尝试低风险发布；可无body，或传content/kind/importance（沿用MemoryReviewApproval，但不能附手工claim）。编辑文本先校验保存，已处理项不重复发布；会产生模型费用。
+- MemoryReviewResponse新增assessment（可空）：追加式审查记录的最新投影，含reviewer/policy/input_sha256/decision/assessment/reason_codes/model_called/model及已知usage。没有凭据、完整模型prompt或置信度真值。
+- `GET /api/studio/pipeline`新增approval_policy，返回llm/manual及实际默认说明；读取不触发推理。
+
+默认llm主审可自动发布普通记忆与简单Claim；人工approve及明确联合批准保留。仅别名/改写障碍可经LLM Supported放行，主体/条件/时间/来源和冲突仍硬校验。原analyze仍是建议，不能用它绕过新写入策略。详见[自动审核机制](LLM自动审核与人工辅助.md)。

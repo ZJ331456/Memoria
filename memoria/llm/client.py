@@ -110,7 +110,9 @@ class LLMClient:
         return result
 
     async def extract_memories(self, user_text: str, assistant_text: str) -> list[dict[str, Any]]:
-        prompt = """从下面一轮对话中提取值得长期记忆、未来确实有帮助的用户事实或偏好。不要记临时问题、敏感凭据或助手说的话。仅返回 JSON 数组，每项格式 {\"content\":\"...\",\"kind\":\"preference|profile|fact|goal\",\"importance\":1到5}；没有则返回 []。"""
+        prompt = """从用户原话中提取明确、值得长期保存的事实、偏好、目标或持续项目约束。用户对项目的长期方向、审核方式和产品要求也可作为goal/preference，但必须保留项目/场景范围，不能泛化为所有生活场景。
+临时问句、一次性执行请求、假设、助手建议、他人事实和敏感凭据不保存。区分‘项目长期以某方向为主’与‘现在帮我做一次任务’；不要为了凑数量补造人物、日期或背景。只依据用户原话，助手内容不能提供个人事实。
+仅返回最多3项的JSON数组，每项格式{\"content\":\"忠实改写且保留主体、条件、否定和计划性质\",\"kind\":\"preference|profile|fact|goal\",\"importance\":1到5}；没有则返回[]。候选仍会经过独立一次LLM证据审核与服务器风险检查。"""
         try:
             raw = await self.complete(
                 [

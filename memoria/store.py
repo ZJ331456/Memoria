@@ -214,6 +214,12 @@ class Store:
             self.db.execute("UPDATE memory_reviews SET status='pending' WHERE status='applying'")
             if 'applied_claim_id' not in {r[1] for r in self.db.execute('PRAGMA table_info(memory_reviews)')}:
                 self.db.execute('ALTER TABLE memory_reviews ADD COLUMN applied_claim_id TEXT')
+            self.db.execute('''CREATE TABLE IF NOT EXISTS memory_review_assessments(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,review_id TEXT NOT NULL REFERENCES memory_reviews(id) ON DELETE CASCADE,
+                input_sha256 TEXT NOT NULL,decision TEXT NOT NULL,data_json TEXT NOT NULL,created_at TEXT NOT NULL)''')
+            self.db.execute('CREATE INDEX IF NOT EXISTS idx_review_assessment ON memory_review_assessments(review_id,id)')
+            self.db.execute('''CREATE TABLE IF NOT EXISTS memory_job_reprocessing(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,job_id TEXT NOT NULL,previous_json TEXT NOT NULL,requested_at TEXT NOT NULL)''')
             self.db.execute("CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status, updated_at DESC)")
             for _column, _statement in {
                 "valid_at": "ALTER TABLE memories ADD COLUMN valid_at TEXT",
@@ -1476,6 +1482,25 @@ class Store:
             row = self.db.execute("SELECT * FROM memory_jobs WHERE source_ref=?", (source_ref,)).fetchone()
         return dict(row)
 
+    def request_memory_extraction(self, source_ref: str) -> dict[str, Any]:
+        """Explicit historical request; retry an empty job without erasing its receipt."""
+        with self._memory_transaction():
+            self._require_memory_source(source_ref)
+            source=self.message_source(source_ref)
+            row=self.db.execute('SELECT * FROM memory_jobs WHERE source_ref=?',(source_ref,)).fetchone()
+            if row:
+                if row['status'] in {'completed','failed'} and not self.db.execute('SELECT 1 FROM memory_reviews WHERE job_id=?',(row['id'],)).fetchone():
+                    self.db.execute('INSERT INTO memory_job_reprocessing(job_id,previous_json,requested_at) VALUES(?,?,?)',
+                        (row['id'],json.dumps(dict(row),ensure_ascii=False),now()))
+                    self.db.execute("""UPDATE memory_jobs SET user_text=?,assistant_text='',status='pending',attempts=0,error=NULL,
+                        available_at=?,lease_owner=NULL,lease_expires_at=NULL,extracted_count=NULL,staged_count=NULL,updated_at=? WHERE id=?""",
+                        (source['content'],now(),now(),row['id']))
+                return self.memory_job(row['id'])
+            jid,timestamp=uuid.uuid4().hex,now()
+            self.db.execute("""INSERT INTO memory_jobs(id,source_ref,user_text,assistant_text,status,attempts,available_at,created_at,updated_at)
+                VALUES(?,?,?,'','pending',0,?,?,?)""",(jid,source_ref,source['content'],timestamp,timestamp,timestamp))
+            return self.memory_job(jid)
+
     def claim_memory_job(self, owner: str = "local-worker", lease_seconds: int = 180, max_retries: int = 3) -> dict[str, Any] | None:
         timestamp = now()
         with self.lock:
@@ -1588,12 +1613,27 @@ class Store:
                 rows = self.db.execute("SELECT * FROM memory_reviews ORDER BY created_at DESC,ordinal LIMIT ?", (limit,)).fetchall()
             else:
                 rows = self.db.execute("SELECT * FROM memory_reviews WHERE status=? ORDER BY created_at,ordinal LIMIT ?", (status, limit)).fetchall()
-        return [dict(row) for row in rows]
+        return self._review_assessments(rows)
 
     def memory_review(self, review_id: str) -> dict[str, Any] | None:
         with self.lock:
             row = self.db.execute("SELECT * FROM memory_reviews WHERE id=?", (review_id,)).fetchone()
-        return dict(row) if row else None
+        return self._review_assessments([row])[0] if row else None
+
+    def _review_assessments(self, rows):
+        items = [dict(row) for row in rows]
+        if not items:return items
+        with self.lock:
+            assessments = self.db.execute('''SELECT review_id,data_json FROM memory_review_assessments
+                WHERE id IN(SELECT MAX(id) FROM memory_review_assessments WHERE review_id IN(SELECT value FROM json_each(?)) GROUP BY review_id)''',
+                (json.dumps([item['id'] for item in items]),)).fetchall()
+        latest = {row['review_id']:json.loads(row['data_json']) for row in assessments}
+        return [{**item,'assessment':latest.get(item['id'])} for item in items]
+
+    def record_review_assessment(self, review_id, input_sha256, data):
+        with self._memory_transaction():
+            self.db.execute('INSERT INTO memory_review_assessments(review_id,input_sha256,decision,data_json,created_at) VALUES(?,?,?,?,?)',
+                (review_id,input_sha256,data['decision'],json.dumps(data,ensure_ascii=False),now()))
 
     def claim_memory_review(self, review_id: str, content: str, kind: str, importance: int) -> dict[str, Any] | None:
         with self.lock:

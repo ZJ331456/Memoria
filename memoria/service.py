@@ -71,9 +71,12 @@ class AgentService:
             episodes=self.episodes,
             claims=self.claims,
         )
+        from .memory.auto_review import AutoMemoryReviewer
+        self.auto_review = AutoMemoryReviewer(store,self.claims,memory,llm,settings.memory_approval_mode)
         self.memory_worker = MemoryJobWorker(
             store, llm, memory, lease_seconds=settings.memory_job_lease_seconds,
             max_retries=settings.memory_job_max_retries, backoff_seconds=settings.memory_job_backoff_seconds,
+            reviewer=self.auto_review,
         )
         self._busy_check: Callable[[], bool] = lambda: False
         self._integration_task: asyncio.Task | None = None

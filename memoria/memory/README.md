@@ -31,9 +31,9 @@
 
 ## 写入和一致性
 
-自动对话抽取由 MemoryJobWorker 写入 memory_reviews，先待审，批准才调用 remember；任务完成只代表抽取完成。手动 API 和明确授权的 memorize 直接写普通记忆，不能等同于 Claim 审批。
+自动对话抽取由MemoryJobWorker写入memory_reviews，再由[auto_review.py](auto_review.py)执行LLM主审与服务器风险检查，低风险原子入库，疑问保留人工辅助；manual可关闭自动发布。完成状态和具体入库决定分别记录。手动 API 和明确授权的 memorize 直接写普通记忆，不能等同于 Claim 审批。
 
-Claim显式抽取附带shadow_updates，额外模型调用0；analyze升级独立核验/关系/策略，支持度和关系模型分别opt-in。建议不提交，普通worker尚未接入Claim。[演化策略](../../docs/implemented/Claim证据核验与演化策略.md)。
+Claim显式抽取附带shadow_updates，额外模型调用0；analyze升级独立核验/关系/策略，支持度和关系模型分别opt-in。原analyze仍只建议；普通worker的低风险自动审核现可附简单Claim，其他演化仍需治理。[演化策略](../../docs/implemented/Claim证据核验与演化策略.md)。
 
 普通记忆的创建、纠正、替代及来源撤销在 Store 事务内维护 `[valid_at, invalid_at)` 区间。恢复旧版本新建区间，保留中间变化；as_of 后词面、BM25、向量与图扩展均受时间过滤。正文相同会强化；其他候选可由同类型预筛后的 fast 决策器保守分类。详见 [一致性](../../docs/implemented/记忆一致性与检索审查.md)。
 
@@ -101,3 +101,5 @@ Query-only风险不再把月份/人名May当作推测授权；只有有限明确
 经历补检新增opt-in experience_mode=dense/rrf；独立版本化向量、来源/截止过滤、后台限批/退避与查询后复核已实现，默认bm25。Dense为合格向量精确扫描，RRF为经历BM25+Dense两路；[真实本机检查与边界](../../docs/implemented/生产重放与普通来源支持.md#3-可选经历denserrf与小规模真实检查)。
 
 [ordinary_update_policy.py](ordinary_update_policy.py)约束普通非精确关系，有限绑定筛选先于Top-3；值/极性、并存/替代和事务版本复核防止明显不兼容更新。未知主体/条件不自动覆盖；精确正文去重、完整语义与12槽位扩展边界见[实施说明](../../docs/implemented/生产重放与普通来源支持.md#4-普通非精确关系的受约束更新)。
+
+2026-10-16[LLM主审机制](../../docs/implemented/LLM自动审核与人工辅助.md)新增审计与有限历史重处理，保留原文归属/撤销/条件和事务检查；模型结果不作为现实核验。

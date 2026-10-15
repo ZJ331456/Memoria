@@ -21,7 +21,7 @@ const historySession=ref(''),historyAnchor=ref('')
 const primaryNavigation=computed(()=>[{id:'overview',label:'数据总览',icon:'▦'},{id:'conversations',label:'历史对话',icon:'▤',count:summary.value?.sessions},{id:'memories',label:'长期记忆库',icon:'◈',count:summary.value?.memories},{id:'reviews',label:'候选审核',icon:'◎',count:summary.value?.pending_reviews},{id:'pipeline',label:'记忆处理与服务',icon:'↻'}])
 const advancedNavigation=[{id:'explorer',label:'结构化记忆',icon:'◇'},{id:'temporal',label:'双时间与变化',icon:'◷'},{id:'retrieval',label:'检索实验室',icon:'⌕'},{id:'evaluation',label:'评测运行记录',icon:'▥'}]
 const advancedOpen=ref(advancedNavigation.some(item=>item.id===page.value))
-const pageDescriptions:Record<string,string>={overview:'从对话到长期记忆，查看当前账号的数据与下一步。',conversations:'阅读原始历史；从有效本人原话提出记忆候选。',memories:'查看已批准的长期事实、来源和版本，支持纠正与导出。',reviews:'核对原话后批准或拒绝；候选不会自动变成有效记忆。',pipeline:'区分未提取、明确空结果、等待审核与已入库，并检查模型和索引。',explorer:'管理主体、属性和适用条件，适合回答当前偏好与状态；需先有经核对的来源。',temporal:'区分事实成立时间与系统获知时间；未标注的时间保持未知。',retrieval:'诊断实际召回、过滤、来源和证据预算；不生成聊天答复。',evaluation:'只读已有实验的配置、费用与失败记录，不自动运行全量评测。',accounts:'管理账号元数据；不会因此取得其他用户的私人记忆。'}
+const pageDescriptions:Record<string,string>={overview:'从对话到长期记忆，查看当前账号的数据与下一步。',conversations:'阅读原始历史；从有效本人原话提出记忆候选。',memories:'查看已批准的长期事实、来源和版本，支持纠正与导出。',reviews:'查看LLM自动决定，人工辅助处理证据、敏感信息与状态冲突。',pipeline:'区分未提取、明确空结果、等待审核与已入库，并检查模型和索引。',explorer:'管理主体、属性和适用条件，适合回答当前偏好与状态；需先有经核对的来源。',temporal:'区分事实成立时间与系统获知时间；未标注的时间保持未知。',retrieval:'诊断实际召回、过滤、来源和证据预算；不生成聊天答复。',evaluation:'只读已有实验的配置、费用与失败记录，不自动运行全量评测。',accounts:'管理账号元数据；不会因此取得其他用户的私人记忆。'}
 
 function navigate(id:string){if(id==='conversations'){historySession.value='';historyAnchor.value=''};page.value=id}
 function openConversation(id:string){historySession.value=id;historyAnchor.value='';page.value='conversations'}

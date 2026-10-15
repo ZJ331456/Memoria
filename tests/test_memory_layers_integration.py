@@ -34,6 +34,8 @@ def _app(
         + f'[memory.layers]\nenabled={str(layers_enabled).lower()}\n{layer_overrides}'
         + f'[storage]\ndatabase="{(tmp_path / "layers.db").as_posix()}"\n'
         + '[memory.markdown]\nenabled=false\n',
+        # These tests exercise explicit human approval and source races; the
+        # automatic admission pipeline has its own model fixtures and tests.
         encoding="utf-8",
     )
     return create_app(config)
@@ -240,6 +242,7 @@ def test_review_cannot_promote_a_missing_source_message(tmp_path: Path):
 
 def test_review_source_deleted_while_embedding_never_creates_fact(tmp_path: Path):
     app = _app(tmp_path)
+    app.state.service.auto_review.mode='manual'
     store = app.state.store
     session = store.create_session("待审核")
     source = store.add_message(session["id"], "user", "请记录甲项目")

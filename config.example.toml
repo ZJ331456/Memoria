@@ -115,6 +115,7 @@ vector_backend = "auto"
 vector_scan_limit = 2000
 
 [memory.worker]
+approval_mode = "llm" # 低风险候选经模型证据审核自动入库；manual保留全部人工审核
 lease_seconds = 180
 max_retries = 3
 backoff_seconds = 5

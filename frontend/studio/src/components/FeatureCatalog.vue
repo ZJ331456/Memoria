@@ -2,8 +2,8 @@
 defineEmits<{open:[page:string]}>()
 const entries=[
 {page:'conversations',name:'历史与来源',use:'查看原话、搜索上下文，明确哪些资料属于公开导入。',need:'有历史即可使用'},
-{page:'memories',name:'长期记忆',use:'浏览有效记忆、纠正旧版本、核对来源和导出可读层。',need:'先提出候选并明确批准'},
-{page:'reviews',name:'候选审核',use:'把模型提取或手动提出的候选与原话核对，避免错误长期保存。',need:'至少一条待审候选'},
+{page:'memories',name:'长期记忆',use:'浏览有效记忆、纠正旧版本、核对来源和导出可读层。',need:'LLM低风险审核通过，或人工明确确认'},
+{page:'reviews',name:'候选审核',use:'查看LLM自动审核记录，人工处理冲突与证据不足。',need:'有候选或自动决定记录'},
 {page:'explorer',name:'结构化记忆',use:'把事实组织为主体、属性、值和适用条件，处理冲突与修订。',need:'经来源核对的结构化候选或事实'},
 {page:'temporal',name:'双时间与变化',use:'分别查询事实何时成立、系统当时知道什么。未知时间不会补造。',need:'有相应事实、历史修订和时间证据'},
 {page:'retrieval',name:'检索实验室',use:'查看实际召回、过滤、证据选择和预算；排查为什么答不出来。',need:'有记忆或可用原话；Dense需Embedding'},

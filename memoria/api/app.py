@@ -23,7 +23,7 @@ from ..memory import export_memories_markdown
 from ..observability import MetricRegistry, RequestContext
 from ..security import RequestGate
 from ..service import AgentService
-from ..store import MemorySourceUnavailable, MemoryVersionConflict, Store, normalize_time
+from ..store import MemorySourceUnavailable, MemoryVersionConflict, Store, normalize_time, now
 from .governance import governance_router
 from .claims import claims_router
 from .research_runs import research_runs_router
@@ -206,6 +206,7 @@ class MemoryReviewResponse(BaseModel):
     applied_memory_id: str | None = None
     applied_action: str | None = None
     applied_claim_id: str | None = None
+    assessment: dict[str, Any] | None = None
     created_at: str
     updated_at: str
 
@@ -879,6 +880,26 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             if isinstance(exc, asyncio.CancelledError): raise
             raise HTTPException(502, "记忆写入失败，候选项已恢复待审核状态") from exc
         return store.memory_review(review_id)
+
+    @app.post('/api/memory-reviews/{review_id}/auto-review',response_model=MemoryReviewResponse,tags=['memories'])
+    async def auto_review_memory(review_id:str,body:MemoryReviewApproval | None=None):
+        if body is not None:
+            if body.claim is not None:raise HTTPException(422,'自动审核从原话判断结构化字段；不要混入手工Claim')
+            if not body.content.strip():raise HTTPException(422,'候选不能为空白')
+            with store._memory_transaction():
+                row=store.memory_review(review_id)
+                if not row:raise HTTPException(404,'候选不存在')
+                personal_review_source(row['source_ref'])
+                cursor=store.db.execute("UPDATE memory_reviews SET content=?,kind=?,importance=?,updated_at=? WHERE id=? AND status='pending'",
+                    (body.content.strip(),body.kind,body.importance,now(),review_id))
+                if not cursor.rowcount:raise HTTPException(409,'候选已处理，请刷新')
+        return await service.auto_review.review(review_id,force=True)
+
+    @app.post('/api/messages/{message_id}/memory-extraction',response_model=MemoryJobResponse,tags=['memories'])
+    def extract_history_memory(message_id:str):
+        with store._memory_transaction():
+            personal_review_source(message_id)
+            return store.request_memory_extraction(message_id)
 
     @app.post("/api/memory-reviews/{review_id}/reject", response_model=MemoryReviewResponse, tags=["memories"], summary="拒绝候选记忆")
     def reject_memory_review(review_id: str):

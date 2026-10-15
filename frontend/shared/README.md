@@ -16,3 +16,5 @@
 - `MemoryCandidateDialog.vue`：从当前账号的有效本人原话提出待审候选；不调用模型，不绕过公开语料/角色/撤销检查。
 
 AuthPanel提供登录/注册切换、确认密码、可见性与大写锁定提示。手动候选、Markdown导出与其他请求沿用相同的epoch及响应归属校验。
+
+MemoryCandidateDialog提交只创建候选，后台按当前llm/manual策略处理；默认低风险可自动入库，文案不再承诺每条必经手工批准。

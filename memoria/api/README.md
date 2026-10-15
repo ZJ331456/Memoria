@@ -60,3 +60,5 @@ analyze新增use_relation_model/peer_limit及核验/关系/4类影子策略；ex
 本机未提交扩展：登录/me返回服务端role；/api/admin/users及/api/admin/users/{username}/password仅superadmin可用，普通用户403，匿名401。角色只由本机CLI授予，账号内数据仍按UUID隔离，密码修改撤销会话并写无凭据审计。[本机角色说明](../../docs/implemented/用户登录与数据隔离.md#本机qin账号与超级管理员2026-10-14仅本地未提交)。
 
 通用前后台的只读投影见[studio.py](studio.py)：summary、conversations、conversations/{id}/messages、memories，均挂在/api/studio且走当前租户网关。标题/全文字面搜索、来源筛选、页面总量和原话锚点不调用模型；正文保留原content，阅读投影独立。根地址独立Chat与后台/studio/共用Cookie；普通API根JSON保留，/app/已移除。源码和构建已迁至frontend，静态资源从/assets/提供。跨账号ID404，最多100条/页；[详见当前Studio说明](../../docs/implemented/MemoryStudio与统一记忆访问.md#通用前后台与历史资料后台2026-10-14)。
+
+2026-10-16新增POST messages/{id}/memory-extraction与memory-reviews/{id}/auto-review；默认模型主审、人工辅助，审核记录含assessment。原只读memory-query/analyze行为不变。[写入政策与接口](../../docs/implemented/LLM自动审核与人工辅助.md)。

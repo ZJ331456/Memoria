@@ -155,6 +155,7 @@ class Settings:
     reader_context_tokens: int | None = None
     reader_safety_tokens: int = 128
     reader_local_count: bool = False
+    memory_approval_mode: str = 'llm'
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Settings":
@@ -170,6 +171,9 @@ class Settings:
         memory = memory_section.get("embedding", {})
         retrieval = memory_section.get("retrieval", {})
         worker = memory_section.get("worker", {})
+        approval_mode = worker.get('approval_mode', 'llm')
+        if approval_mode not in {'llm','manual'}:
+            raise ValueError('memory.worker.approval_mode 必须是 llm 或 manual')
         server = data.get("server", {})
         security = server.get("security", {})
         observability = data.get("observability", {})
@@ -241,6 +245,7 @@ class Settings:
             memory_job_lease_seconds=max(30, int(worker.get("lease_seconds", 180))),
             memory_job_max_retries=max(1, int(worker.get("max_retries", 3))),
             memory_job_backoff_seconds=max(1, int(worker.get("backoff_seconds", 5))),
+            memory_approval_mode=approval_mode,
             api_token=_resolve(str(security.get("api_token", ""))),
             allowed_origins=_string_tuple(security.get("allowed_origins"), default_origins),
             rate_limit_per_minute=max(0, int(security.get("rate_limit_per_minute", 0))),

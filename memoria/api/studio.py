@@ -121,7 +121,7 @@ def studio_router(store, claims, service=None):
         if imported: reasons.append({'code':'public_history','text':'导入的公开资料保留为实验来源，不自动变成本人的长期事实。'})
         if legacy: reasons.append({'code':'legacy_outcome_unknown','text':'部分旧任务只有完成状态，没有详细抽取计数；未见候选不能直接判定模型返回了空数组。'})
         if known_empty: reasons.append({'code':'empty_extraction','text':'已有任务明确返回0条长期记忆候选；普通提问不一定包含值得长期保存的事实。'})
-        if not review_counts.get('pending',0): reasons.append({'code':'no_pending_review','text':'当前没有待审候选。可从自己的有效原话提出候选，再核对后批准。'})
+        if not review_counts.get('pending',0): reasons.append({'code':'no_pending_review','text':'当前没有待处理候选。可从本人原话启动LLM提取与审核；临时提问可能不产生长期记忆。'})
         if counts['memories']==0: reasons.append({'code':'no_active_memory','text':'尚无有效长期记忆。对话保存、候选提取和审核入库是不同步骤。'})
         models, integrations = {}, []
         if service is not None:
@@ -134,6 +134,8 @@ def studio_router(store, claims, service=None):
                 'extraction':{'statuses':job_counts,'known_empty':known_empty,'legacy_outcome_unknown':legacy,'recent':recent,
                               'worker':worker_state,'recent_limit':50},'indexes':indexes,'models':models,'integrations':integrations,
                 'integration_startup':service.integration_status() if service is not None else {'state':'unknown'},
+                'approval_policy':{'mode':service.settings.memory_approval_mode if service else 'manual',
+                    'default':'低风险模型审核后自动入库；敏感、冲突和约束不明转人工辅助' if service and service.settings.memory_approval_mode=='llm' else '已配置为人工审核；可明确请求单次LLM辅助'},
                 'reasons':reasons,'scope':'current_authenticated_user','model_called':False}
 
     @router.get('/conversations/{session_id}/messages')

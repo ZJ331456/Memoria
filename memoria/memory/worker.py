@@ -16,13 +16,14 @@ logger = logging.getLogger(__name__)
 class MemoryJobWorker:
     """Durable, retryable post-turn extraction and consolidation worker."""
 
-    def __init__(self, store: Store, llm: LLMClient, memory: MemoryEngine, poll_seconds: float = 0.5, lease_seconds: int = 180, max_retries: int = 3, backoff_seconds: int = 5):
+    def __init__(self, store: Store, llm: LLMClient, memory: MemoryEngine, poll_seconds: float = 0.5, lease_seconds: int = 180, max_retries: int = 3, backoff_seconds: int = 5, reviewer=None):
         self.store, self.llm, self.memory = store, llm, memory
         self.poll_seconds = poll_seconds
         self.lease_seconds = lease_seconds
         self.max_retries = max_retries
         self.backoff_seconds = backoff_seconds
         self.owner = uuid.uuid4().hex
+        self.reviewer = reviewer
 
     async def process_once(self) -> bool:
         job = self.store.claim_memory_job(self.owner, self.lease_seconds, self.max_retries)
@@ -31,7 +32,10 @@ class MemoryJobWorker:
         heartbeat = asyncio.create_task(self._heartbeat(job["id"]))
         try:
             extracted = await self.llm.extract_memories(job["user_text"], job["assistant_text"])
-            self.store.stage_memory_reviews(job["id"], self.owner, extracted)
+            reviews=self.store.stage_memory_reviews(job["id"], self.owner, extracted)
+            if self.reviewer and self.reviewer.mode=='llm':
+                for review in reviews:
+                    await self.reviewer.review(review['id'])
             self.store.finish_memory_job(job["id"], owner=self.owner, max_retries=self.max_retries, backoff_seconds=self.backoff_seconds)
         except asyncio.CancelledError:
             self.store.finish_memory_job(job["id"], "worker cancelled", self.owner, self.max_retries, self.backoff_seconds)
@@ -50,6 +54,8 @@ class MemoryJobWorker:
         next_experience_dense, dense_failures = 0.0, 0
         while True:
             processed = await self.process_once()
+            if self.reviewer:
+                await self.reviewer.process_next()
             if time.monotonic() >= next_index:
                 await self.memory.reindex(limit=16)
                 from .experience import reindex
