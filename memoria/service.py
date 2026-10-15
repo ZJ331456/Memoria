@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+from contextlib import suppress
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -74,6 +76,9 @@ class AgentService:
             max_retries=settings.memory_job_max_retries, backoff_seconds=settings.memory_job_backoff_seconds,
         )
         self._busy_check: Callable[[], bool] = lambda: False
+        self._integration_task: asyncio.Task | None = None
+        self._integration_state = "not_started"
+        self._integration_error = ""
         self.drift = DriftWorker(
             store=store,
             runtime=self.runtime,
@@ -85,6 +90,38 @@ class AgentService:
 
     def set_busy_check(self, check: Callable[[], bool]) -> None:
         self._busy_check = check
+
+    def start_background_integrations(self) -> None:
+        """Optional model warmup/MCP connections must not gate tenant data reads."""
+        if self._integration_task is not None:
+            return
+        self._integration_state = "starting"
+
+        async def initialize():
+            try:
+                await self.start_integrations()
+                unavailable = any(s["enabled"] and not s["connected"] for s in self.mcp.status()["servers"])
+                self._integration_state = "degraded" if unavailable else "ready"
+            except asyncio.CancelledError:
+                self._integration_state = "stopped"
+                raise
+            except Exception as exc:
+                # Provider errors can contain credentials; expose only the class.
+                self._integration_state = "failed"
+                self._integration_error = type(exc).__name__
+                logger.warning("账号集成初始化失败 type=%s", type(exc).__name__)
+
+        self._integration_task = asyncio.create_task(initialize(), name="memoria-integrations")
+
+    def integration_status(self) -> dict[str, str]:
+        return {"state": self._integration_state, "error": self._integration_error}
+
+    async def reload_mcp(self) -> dict[str, Any]:
+        # Avoid racing startup registration/cleanup with an explicit reload.
+        if self._integration_task is not None:
+            await asyncio.shield(self._integration_task)
+        servers = await self.mcp.reload()
+        return {"servers": [item.public_dict() for item in servers], "status": self.mcp.status()}
 
     async def start_integrations(self) -> None:
         if self.embedder.is_local and self.embedder.enabled:
@@ -119,6 +156,12 @@ class AgentService:
         await self.mcp.start()
 
     async def stop_integrations(self) -> None:
+        if self._integration_task is not None:
+            self._integration_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._integration_task
+            self._integration_task = None
+        self._integration_state = "stopped"
         await self.mcp.stop()
 
     async def chat(self, session_id: str, content: str) -> tuple[dict, list[dict]]:

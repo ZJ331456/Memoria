@@ -1,6 +1,8 @@
 // Credentials stay in the server's HttpOnly cookie. No localStorage/sessionStorage.
 export class SessionChanged extends Error {}
 export class API {
+  private readTimeoutMs: number
+  constructor(readTimeoutMs = 15_000) { this.readTimeoutMs = readTimeoutMs }
   private epoch = 0
   private requests = new Set<AbortController>()
   private channels = new Map<string, AbortController>()
@@ -24,6 +26,8 @@ export class API {
   }
   async request<T = any>(path: string, body?: unknown, method = body === undefined ? 'GET' : 'POST', channel?: string): Promise<T> {
     const epoch = this.epoch, controller = new AbortController()
+    let timedOut = false
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, method === 'GET' ? this.readTimeoutMs : 120_000)
     if (channel) { this.channels.get(channel)?.abort(); this.channels.set(channel, controller) }
     const changed = () => epoch !== this.epoch || (channel && this.channels.get(channel) !== controller)
     this.requests.add(controller)
@@ -38,7 +42,13 @@ export class API {
       if (changed()) throw new SessionChanged()
       if (!response.ok) throw new Error(typeof result?.message === 'string' ? result.message : '请求失败，请刷新数据后重试（' + response.status + '）')
       return result as T
-    } finally { this.requests.delete(controller); if (channel && this.channels.get(channel) === controller) this.channels.delete(channel) }
+    } catch (e) {
+      if (changed()) throw new SessionChanged()
+      if (timedOut) throw new Error(method === 'GET'
+        ? '读取超时，后台可能正在初始化；请稍后刷新。未返回的数据不代表历史为空。'
+        : '请求等待超时，请先刷新核对结果，再决定是否重试。')
+      throw e
+    } finally { clearTimeout(timer); this.requests.delete(controller); if (channel && this.channels.get(channel) === controller) this.channels.delete(channel) }
   }
 }
 

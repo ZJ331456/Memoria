@@ -90,8 +90,10 @@ onUnmounted(()=>{alive=false;clearTimeout(timer)})
       <button class="new-chat" :disabled="!user||sending" @click="newChat"><span>＋</span> 开始新对话 <kbd>↗</kbd></button>
       <template v-if="user">
         <label class="chat-search"><span>⌕</span><input v-model="search" maxlength="200" aria-label="搜索我的对话" placeholder="搜索我的对话" :disabled="sending" /></label>
-        <div class="conversation-label">我的对话 <span>{{ total }}</span><button aria-label="刷新对话列表" :disabled="loading||sending" @click="loadConversations">↻</button></div>
+        <div class="conversation-label">我的对话 <span>{{ loading?'…':total }}</span><button aria-label="刷新对话列表" :disabled="loading||sending" @click="loadConversations">↻</button></div>
+        <p class="chat-empty-list">此处显示日常聊天。<a href="/studio/#conversations">导入资料请到 Studio 的历史对话查看 →</a></p>
         <nav class="chat-list" aria-label="我的聊天记录" :aria-busy="loading">
+          <p v-if="loading" class="chat-empty-list" role="status">正在读取聊天记录…</p>
           <button v-for="item in conversations" :key="item.id" :class="{chosen:selected===item.id}" :disabled="sending" @click="choose(item)"><strong>{{ item.title }}</strong><small>{{ dateLabel(item.updated_at) }}</small></button>
           <p v-if="!loading&&!conversations.length" class="chat-empty-list">{{ search?'没有匹配的对话':'还没有聊天记录，开始聊聊吧。' }}</p>
         </nav>

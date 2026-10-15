@@ -329,7 +329,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     async def lifespan(_: FastAPI):
         if schema_only:
             raise RuntimeError("Schema-only application cannot serve requests")
-        await service.start_integrations()
+        service.start_background_integrations()
         memory_task = asyncio.create_task(service.memory_worker.run(), name="memoria-memory-worker")
         drift_task = asyncio.create_task(service.drift.run_loop(), name="memoria-drift-worker")
         forgetting_task = (
@@ -566,11 +566,11 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
 
     @app.get("/api/mcp", tags=["mcp"], summary="MCP server 连接状态")
     def mcp_status():
-        return service.mcp.status()
+        return {**service.mcp.status(), "startup": service.integration_status()}
 
     @app.post("/api/mcp/reload", tags=["mcp"], summary="重新加载并连接 MCP servers")
     async def mcp_reload():
-        return {"servers": [item.public_dict() for item in await service.mcp.reload()], "status": service.mcp.status()}
+        return await service.reload_mcp()
 
     @app.get("/api/drift", tags=["drift"], summary="Drift 调度状态与最近运行")
     def drift_status(limit: int = Query(default=20, ge=1, le=100)):

@@ -67,3 +67,16 @@ test('another tab changing the cookie cannot render a different owners response 
   globalThis.fetch=async()=>new Response('{"private":"other owner"}',{status:200,headers:{'X-Memoria-User':'other-owner'}})
   try{const api=new API();api.bindUser('current-owner');let cleared=false;api.onUnauthorized=()=>{cleared=true;api.reset()};await assert.rejects(api.request('/studio/summary'),SessionChanged);assert.equal(cleared,true)}finally{globalThis.fetch=previous}
 })
+
+test('a stalled data read times out visibly and the next request can recover',async()=>{
+  const previous=globalThis.fetch
+  globalThis.fetch=async(_input,init)=>new Promise((_resolve,reject)=>{
+    init?.signal?.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true})
+  })
+  try {
+    const api=new API(15)
+    await assert.rejects(api.request('/studio/summary'),/读取超时/)
+    globalThis.fetch=async()=>new Response('{"sessions":53}',{status:200})
+    assert.deepEqual(await api.request('/studio/summary'),{sessions:53})
+  } finally {globalThis.fetch=previous}
+})
