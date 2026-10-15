@@ -268,6 +268,8 @@ class Store:
             self._bootstrap_vector_index()
             self.chunk_index = SQLiteVecIndex(self.db, vector_backend, self.embedding_namespace + ":source-chunks-v1")
             self._bootstrap_chunk_index()
+            from .observability.memory_trace import install as install_memory_trace
+            install_memory_trace(self)
             self.db.commit()
 
     @contextmanager

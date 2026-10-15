@@ -31,3 +31,5 @@ stage_timings 只记录执行过的压缩、规划、编码/检索、融合、pr
 ```
 
 pytest 墙钟不是线上延迟，实际模型阶段见 [实验记录](../../docs/implemented/实验记录与长记忆分块索引.md)。
+
+[memory_trace.py](memory_trace.py)提供账号事务内生命周期水位、访问捕获指纹、固定候选预算重放及后验阶段归因；不读取gold或给出语义评分。[范围与私密边界](../../docs/implemented/生产重放与普通来源支持.md)。

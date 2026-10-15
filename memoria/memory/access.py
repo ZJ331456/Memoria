@@ -120,6 +120,15 @@ class MemoryAccessOrchestrator:
         return items
 
     async def access(self, request: QueryRequest) -> dict:
+        from ..observability.memory_trace import watermark, capture
+        before = watermark(self.claims.store)
+        result = await self._access(request)
+        after = watermark(self.claims.store)
+        result["production_trace"] = capture(request.model_dump(mode="json"), result, self.claims.user_id,
+            before, after, {c["id"]:coverage(c, result["requirements"], result["parsed"]) for c in result["candidates"]})
+        return result
+
+    async def _access(self, request: QueryRequest) -> dict:
         if request.session_id and not self.claims.store.session(request.session_id):
             raise ClaimError(422, "请求会话不属于当前账号或不存在")
         started, timings = time.perf_counter(), StageTimings()

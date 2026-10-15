@@ -253,6 +253,8 @@ class ClaimMemory:
                 if existing and existing[0]!=user_id:
                     raise ClaimError(403,"Claim库不属于此登录用户")
             self.db.executescript(SCHEMA)
+            from .observability.memory_trace import install as install_memory_trace
+            install_memory_trace(store)
             # SQL triggers protect caches even if mutations bypass this service.
             for table, key, events in (("messages", "message_id", ("UPDATE", "DELETE")),
                                        ("memories", "memory_id", ("UPDATE", "DELETE"))):

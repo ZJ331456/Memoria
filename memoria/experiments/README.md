@@ -77,3 +77,5 @@ v3工程协议单独登记[配置](../../configs/research-locomo-risk-v3-2026101
 全历史修复新协议v6将问题/全部来源/修复指令原子保留，逐次核对实际发送内容；修复超限明确失败，不移除证据后声称成功。旧评测结果保持。[修复证据](../../docs/implemented/算法逻辑审查逐项修复.md)。
 
 新smoke v2/全量v7执行统一定稿abstain/clarify为固定未知及空引用，原始供应商输出留账本；官方评分公式和冻结历史不回写，旧检查点不能混入新策略。[修复证据](../../docs/implemented/算法逻辑审查逐项修复.md)。
+
+[production_replay.py](production_replay.py)通过管理员CLI冻结本账号数据库，在临时副本调用生产访问路径；默认纯词面，可显式使用离线BGE，禁止LLM/远程Embedding。候选四策略可多预算0调用重放，标签只用于后验诊断，不能用于选择。[命令与边界](../../docs/implemented/生产重放与普通来源支持.md)。

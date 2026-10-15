@@ -69,6 +69,12 @@ def main():
     sub = subs.add_parser("benchmark-access")
     sub.add_argument("--repeats",type=int,default=3)
     sub.add_argument("--iterations",type=int,default=50)
+    sub = subs.add_parser("capture-production", help="Freeze account DB and replay access; no LLM calls")
+    sub.add_argument("--request", required=True, help="Private QueryRequest JSON; no gold")
+    sub.add_argument("--local-embeddings", action="store_true", help="Opt into configured offline BGE; otherwise lexical-only")
+    sub = subs.add_parser("replay-production", help="Compare four selectors on a private production capture; zero model calls")
+    sub.add_argument("--input", required=True)
+    sub.add_argument("--budgets", type=int, nargs="+")
     sub = subs.add_parser("locomo-smoke", help="Fixed ten-question official LoCoMo execution test; no production writes")
     sub.add_argument("--input", required=True, help="Verified official locomo10.json")
     sub.add_argument("--profile")
@@ -155,6 +161,14 @@ def main():
             roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
     elif args.command == "benchmark-access":
         result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)
+    elif args.command == "capture-production":
+        import json
+        from memoria.experiments.production_replay import capture_production
+        request = json.loads(private_input(args.request, directory).read_text(encoding="utf-8-sig"))
+        result = asyncio.run(capture_production(workspace,Settings.load(args.config),request,local_embeddings=args.local_embeddings))
+    elif args.command == "replay-production":
+        from memoria.experiments.production_replay import replay_file
+        result = replay_file(workspace,Settings.load(args.config),private_input(args.input,directory),budgets=args.budgets)
     elif args.command == "locomo-audit":
         from memoria.experiments.locomo_diagnostics import audit
         result,_ = audit(workspace,args.source_run)

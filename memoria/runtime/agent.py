@@ -172,6 +172,7 @@ class AgentRuntime:
                 if claim_access:
                     citation_guard = CitationGuard(self.claims,claim_access,claim_request)
                     context.metadata["claim_access"] = {
+                        "production_trace": claim_access["production_trace"],
                         "path": claim_access["path"], "reason": claim_access["reason"], "parsed": claim_access["parsed"],
                         "candidate_ids": claim_access["selection"]["candidate_ids"],
                         "selected_ids": [c["id"] for c in claim_access["selection"]["payload"]["evidence"]],
