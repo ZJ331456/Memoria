@@ -225,6 +225,8 @@ def test_new_channels_route_only_bound_owner_and_duplicates_do_not_call_reader_a
         await hub.handle(row)
         assert calls[0][0]=='owner-a' and calls[0][1].startswith(platform+'-')
         assert stores['owner-a'].db.execute('SELECT COUNT(*) FROM messages').fetchone()[0]==2
+        assert all(stores['owner-a'].message_source(m['id'])['origin']['channel']==platform
+                   for session in stores['owner-a'].sessions() for m in stores['owner-a'].messages(session['id']))
         assert stores['owner-b'].db.execute('SELECT COUNT(*) FROM messages').fetchone()[0]==0
         assert not hub.state.ingest(hub.app,source) and len(calls)==1
         assert sent[-1][1]=='engineering answer'

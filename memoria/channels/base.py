@@ -101,7 +101,9 @@ class ChannelHub:
                         current=self.state.binding(self.app,sender)
                         if not current or current['owner']!=owner or current['created']!=binding['created'] or not self.accounts.enabled_user(owner):
                             self.state.update(self.app,message_id,'ignored');return
-                        result=await tenant.state.chat_turn(session,text,request_id=self.channel+'-'+digest(message_id)[:24])
+                        from ..provenance import message_ingress
+                        with message_ingress(self.channel,digest(self.app+':'+message_id)):
+                            result=await tenant.state.chat_turn(session,text,request_id=self.channel+'-'+digest(message_id)[:24])
                     reply=result['message']['content']
             self.state.update(self.app,message_id,'generated',reply=reply,owner=owner,session=session)
             await self.deliver({**row,'reply':reply,'owner':owner},packet)

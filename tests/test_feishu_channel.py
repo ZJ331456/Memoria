@@ -138,6 +138,8 @@ def test_person_binding_routes_to_exactly_its_own_tenant(hub):
     assert hub.calls==['owner-a'] and len(hub.stores['owner-a'].sessions())==1
     assert hub.stores['owner-b'].sessions()==[]
     assert hub.api.sent[-1][1]=='private answer for owner-a'
+    assert all(hub.stores['owner-a'].message_source(m['id'])['origin']['channel']=='feishu'
+               for session in hub.stores['owner-a'].sessions() for m in hub.stores['owner-a'].messages(session['id']))
     assert len(hub.api.sent)==1
     record=hub.state.db.execute('SELECT * FROM inbox').fetchone()
     assert record['status']=='sent' and record['body']=='{}' and record['reply'] is None

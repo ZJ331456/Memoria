@@ -16,7 +16,7 @@
 | [prompting/](prompting/README.md) | 低信任上下文帧、分区字符预算、工具协议与原子状态保护 |
 | [tools/](tools/README.md) | 工具注册、按需发现、参数校验、授权、调用次数和输出限额 |
 | [mcp/](mcp/README.md) | 每账号外部 stdio MCP 生命周期与工具接入 |
-| [channels/](channels/README.md) | 飞书官方长连接、一次性账号绑定、私聊入口与有界回复，复用同一Agent |
+| [channels/](channels/README.md) | 飞书、QQ和Telegram接入、一次性账号绑定、私聊入口与有界回复，复用同一Agent |
 | [skills/](skills/README.md) | 扫描和加载项目 `skills/*/SKILL.md`，不执行技能脚本 |
 | [drift/](drift/README.md) | 默认关闭的限额空闲整理轮次 |
 | [lifecycle/](lifecycle/README.md) | 五个对话扩展阶段及处理器顺序 |
@@ -29,6 +29,7 @@
 | [config.py](config.py)、[models_config.py](models_config.py) | 配置加载、角色选择和管理员模型覆盖；公开返回不包含密钥 |
 | [accounts.py](accounts.py)、[private_files.py](private_files.py) | 密码散列、登录令牌、账号目录和本机私密 JSON 保护 |
 | [service.py](service.py) | 组装账号内 Store、LLM、记忆、Claim、runtime 与后台 worker |
+| [provenance.py](provenance.py) | 服务端指定消息实际渠道的上下文，不按标题、正文或请求ID猜测 |
 | [store.py](store.py)、[vector_index.py](vector_index.py) | SQLite、FTS、来源/有效区间、持久任务及可选 sqlite-vec |
 | [claims.py](claims.py) | 12 槽位 Claim、原话 span/SHA、明确审核、不可变修订、条件视图及双时间访问 |
 | [governance.py](governance.py) | 独立共享空间、Agent key、ACL、提案、审批、CAS 和审计 |

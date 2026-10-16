@@ -28,6 +28,7 @@ from .governance import governance_router
 from .claims import claims_router
 from .research_runs import research_runs_router
 from .studio import studio_router
+from ..provenance import message_ingress
 
 MemoryKind = Literal["fact", "preference", "profile", "goal", "procedure"]
 
@@ -258,6 +259,7 @@ class MessageSourceResponse(BaseModel):
     role: str
     content: str
     created_at: str
+    origin: dict = Field(default_factory=dict)
 
 
 class ToolExecuteBody(StrictModel):
@@ -684,7 +686,8 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
                     raise HTTPException(409, "该会话正在删除")
                 if not store.session(session_id):
                     raise HTTPException(404, "会话不存在")
-                task = asyncio.create_task(service.chat_with_trace(session_id, content.strip(), request_id=request_id))
+                with message_ingress('api',preserve=True):
+                    task = asyncio.create_task(service.chat_with_trace(session_id, content.strip(), request_id=request_id))
                 active_turns[session_id] = task
                 task.add_done_callback(lambda done: release_turn(session_id, done, lock))
                 message, memories, trace = await task
@@ -741,7 +744,8 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
                 queue.put_nowait({'type': 'cancelled', 'session_id': session_id})
                 queue.put_nowait(None)
 
-        task = asyncio.create_task(worker())
+        with message_ingress('chat'):
+            task = asyncio.create_task(worker())
         active_turns[session_id] = task
         task.add_done_callback(finished)
 

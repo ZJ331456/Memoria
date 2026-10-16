@@ -125,6 +125,9 @@ class AgentRuntime:
                     await on_event({"type": "phase", "phase": "before_turn"})
 
                 user_message = self.store.add_message(session_id, "user", user_text)
+                from ..provenance import current_ingress
+                context.metadata['message_origin']=(current_ingress.get() or {'channel':'unknown'}).get('channel')
+                context.metadata['user_message_id']=user_message['id']
                 session = self.store.session(session_id)
                 if session and session["title"] == "新对话":
                     self.store.rename_session(session_id, user_text.replace("\n", " ")[:28])
@@ -498,7 +501,8 @@ class AgentRuntime:
                     tracer.mark_visible_text(context.response)
                     await on_event({'type':'delta','content':context.response})
                 if not skip_memory_enqueue:
-                    self.store.enqueue_memory_job(user_message["id"], user_text, context.response)
+                    memory_job=self.store.enqueue_memory_job(user_message["id"], user_text, context.response)
+                    context.metadata['memory_job']={'id':memory_job['id'],'source_ref':user_message['id'],'status_at_enqueue':memory_job['status']}
                 created: list[dict] = []
                 await self.pipeline.run(Phase.AFTER_TURN, context)
                 await self.event_bus.emit(

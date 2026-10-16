@@ -5,6 +5,8 @@ import AccountMenu from '../../shared/AccountMenu.vue'
 import MarkdownContent from '../../shared/MarkdownContent.vue'
 import { useAccount } from '../../shared/auth'
 import { dateLabel, isCancelled } from '../../shared/console'
+import MessageMemoryStatus from '../../shared/MessageMemoryStatus.vue'
+import { channelLabel } from '../../shared/memoryStatus'
 
 const conversations=ref<any[]>([]),total=ref(0),listPage=ref(1),search=ref(''),loading=ref(false)
 const selected=ref(''),title=ref('新的对话'),messages=ref<any[]>([]),messageTotal=ref(0),oldestPage=ref(1),reading=ref(false)
@@ -14,9 +16,23 @@ const rawMessages=ref(new Set<string>()),copied=ref(''),followTail=ref(true)
 const account=useAccount({ready:loadConversations,clear:clearData})
 const {api,user,busy,error,logout}=account
 let alive=true,timer:ReturnType<typeof setTimeout>,copyTimer:ReturnType<typeof setTimeout>,identity=0
+let statusTimer:ReturnType<typeof setTimeout>,statusVersion=0
+function stopStatuses(){statusVersion++;clearTimeout(statusTimer)}
+async function refreshStatuses(){
+  const id=selected.value,at=identity,version=statusVersion
+  if(!id||!user.value||!messages.value.length)return
+  try{
+    const ids=messages.value.slice(-200).map(item=>item.id).join(',')
+    const packet=await api.request('/studio/conversations/'+encodeURIComponent(id)+'/memory-status?'+new URLSearchParams({ids}),undefined,'GET','chat-memory-status')
+    if(!alive||at!==identity||version!==statusVersion||selected.value!==id)return
+    messages.value=messages.value.map(item=>({...item,...packet.items[item.id]}))
+  }catch(e){if(alive&&at===identity&&version===statusVersion&&!isCancelled(e))error.value='记忆状态读取失败，可刷新消息重试'}
+  finally{if(alive&&at===identity&&version===statusVersion&&selected.value===id)statusTimer=setTimeout(()=>void refreshStatuses(),5000)}
+}
+watch(selected,stopStatuses)
 const selectedConversation=computed(()=>conversations.value.find(item=>item.id===selected.value))
 
-function clearData(){identity++;conversations.value=[];messages.value=[];messageTotal.value=0;total.value=0;selected.value='';title.value='新的对话';draft.value='';pendingUser.value='';answer.value='';phase.value='';sending.value=false;reading.value=false;loading.value=false;search.value='';listPage.value=1;oldestPage.value=1;mobileOpen.value=false;rawMessages.value.clear();copied.value='';followTail.value=true;clearTimeout(copyTimer)}
+function clearData(){stopStatuses();identity++;conversations.value=[];messages.value=[];messageTotal.value=0;total.value=0;selected.value='';title.value='新的对话';draft.value='';pendingUser.value='';answer.value='';phase.value='';sending.value=false;reading.value=false;loading.value=false;search.value='';listPage.value=1;oldestPage.value=1;mobileOpen.value=false;rawMessages.value.clear();copied.value='';followTail.value=true;clearTimeout(copyTimer)}
 function fail(e:unknown){if(alive&&!isCancelled(e))error.value=(e as Error).message}
 async function scrollBottom(force=false){if(!force&&!followTail.value)return;if(force)followTail.value=true;await nextTick();feed.value?.scrollTo({top:feed.value.scrollHeight,behavior:sending.value?'auto':'smooth'})}
 function trackScroll(){const el=feed.value;if(el)followTail.value=el.scrollHeight-el.scrollTop-el.clientHeight<100}
@@ -46,6 +62,7 @@ async function loadMessages(page:number,prepend=false){
     if(packet.session.origin.kind!=='native')throw new Error('导入资料请在Studio中查看')
     const height=feed.value?.scrollHeight??0
     messages.value=prepend?[...packet.items,...messages.value]:packet.items;messageTotal.value=packet.total;oldestPage.value=packet.page;title.value=packet.session.title
+    stopStatuses();void refreshStatuses()
     if(prepend){await nextTick();if(feed.value)feed.value.scrollTop=feed.value.scrollHeight-height}
   }catch(e){fail(e)}finally{if(at===identity&&selected.value===id)reading.value=false}
 }
@@ -85,7 +102,7 @@ async function cancel(){try{await api.request('/sessions/'+encodeURIComponent(se
 function keydown(event:KeyboardEvent){if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();void send()}}
 watch(search,()=>{clearTimeout(timer);timer=setTimeout(()=>{listPage.value=1;void loadConversations()},250)})
 watch(draft,async()=>{await nextTick();const el=composer.value;if(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px'}})
-onUnmounted(()=>{alive=false;clearTimeout(timer);clearTimeout(copyTimer)})
+onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(copyTimer)})
 </script>
 
 <template>
@@ -100,7 +117,7 @@ onUnmounted(()=>{alive=false;clearTimeout(timer);clearTimeout(copyTimer)})
         <p class="chat-empty-list">此处显示日常聊天。<a href="/studio/#conversations">导入资料请到 Studio 的历史对话查看 →</a></p>
         <nav class="chat-list" aria-label="我的聊天记录" :aria-busy="loading">
           <p v-if="loading" class="chat-empty-list" role="status">正在读取聊天记录…</p>
-          <button v-for="item in conversations" :key="item.id" :class="{chosen:selected===item.id}" :disabled="sending" @click="choose(item)"><strong>{{ item.title }}</strong><small>{{ dateLabel(item.updated_at) }}</small></button>
+          <button v-for="item in conversations" :key="item.id" :class="{chosen:selected===item.id}" :disabled="sending" @click="choose(item)"><strong>{{ item.title }}</strong><small>{{ channelLabel(item.origin) }} · {{ dateLabel(item.updated_at) }}</small></button>
           <p v-if="!loading&&!conversations.length" class="chat-empty-list">{{ search?'没有匹配的对话':'还没有聊天记录，开始聊聊吧。' }}</p>
         </nav>
         <div v-if="total>20" class="chat-list-pager"><button :disabled="listPage===1||sending" @click="listPage--;loadConversations()">上一页</button><span>{{ listPage }} / {{ Math.ceil(total/20) }}</span><button :disabled="listPage*20>=total||sending" @click="listPage++;loadConversations()">下一页</button></div>
@@ -119,7 +136,7 @@ onUnmounted(()=>{alive=false;clearTimeout(timer);clearTimeout(copyTimer)})
             <button v-if="oldestPage>1" class="load-earlier" :disabled="reading||sending" @click="loadMessages(oldestPage-1,true)">{{ reading?'正在加载…':'加载更早的消息' }}</button>
             <div class="chat-conversation-title"><h1>{{ title }}</h1><span>仅当前账号可见</span></div>
             <p v-if="reading&&!messages.length" class="chat-loading">正在读取对话…</p>
-            <article v-for="message in messages" :key="message.id" class="chat-message" :class="message.role"><span class="chat-message-avatar" aria-hidden="true">{{ message.role==='assistant'?'✳':'你' }}</span><div class="chat-message-body"><div class="chat-message-meta"><strong>{{ message.role==='assistant'?'Memoria':'你' }}</strong><time>{{ dateLabel(message.created_at,true) }}</time></div><MarkdownContent v-if="message.role==='assistant'&&!rawMessages.has(message.id)" class="chat-message-text" :content="message.content"/><div v-else class="chat-message-text">{{ message.content }}</div><div class="message-actions"><button :aria-label="message.role==='assistant'?'复制助手回复':'复制我的消息'" @click="copyMessage(message)">{{ copied===message.id?'已复制':'复制' }}</button><button v-if="message.role==='assistant'" @click="toggleRaw(message.id)">{{ rawMessages.has(message.id)?'阅读模式':'查看原文' }}</button></div></div></article>
+            <article v-for="message in messages" :key="message.id" class="chat-message" :class="message.role"><span class="chat-message-avatar" aria-hidden="true">{{ message.role==='assistant'?'✳':'你' }}</span><div class="chat-message-body"><div class="chat-message-meta"><strong>{{ message.role==='assistant'?'Memoria':'你' }}</strong><time>{{ dateLabel(message.created_at,true) }}</time></div><MarkdownContent v-if="message.role==='assistant'&&!rawMessages.has(message.id)" class="chat-message-text" :content="message.content"/><div v-else class="chat-message-text">{{ message.content }}</div><MessageMemoryStatus :message="message"/><div class="message-actions"><button :aria-label="message.role==='assistant'?'复制助手回复':'复制我的消息'" @click="copyMessage(message)">{{ copied===message.id?'已复制':'复制' }}</button><button v-if="message.role==='assistant'" @click="toggleRaw(message.id)">{{ rawMessages.has(message.id)?'阅读模式':'查看原文' }}</button></div></div></article>
             <article v-if="pendingUser" class="chat-message user"><span class="chat-message-avatar">你</span><div class="chat-message-body"><div class="chat-message-meta"><strong>你</strong></div><div class="chat-message-text">{{ pendingUser }}</div></div></article>
             <article v-if="sending" class="chat-message assistant"><span class="chat-message-avatar">✳</span><div class="chat-message-body"><div class="chat-message-meta"><strong>Memoria</strong><span>{{ phase }}</span></div><MarkdownContent v-if="answer" class="chat-message-text" :content="answer"/><div v-else class="thinking-dots" role="status" aria-label="正在等待回复"><i/><i/><i/></div></div></article>
           </div>

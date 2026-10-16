@@ -67,6 +67,12 @@ class Store:
                     role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at);
+                CREATE TABLE IF NOT EXISTS message_origins (
+                    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+                    channel TEXT NOT NULL CHECK(channel IN ('chat','api','feishu','qq','telegram','internal')),
+                    event_ref TEXT, recorded_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_message_origins_channel ON message_origins(channel,message_id);
                 CREATE TABLE IF NOT EXISTS dataset_imports (
                     dataset_id TEXT PRIMARY KEY, subset_sha256 TEXT NOT NULL,
                     manifest_json TEXT NOT NULL, receipt_json TEXT NOT NULL, imported_at TEXT NOT NULL
@@ -524,12 +530,19 @@ class Store:
             row = self.db.execute("""SELECT m.id AS message_id,m.session_id,m.role,m.content,m.created_at,
                 s.title AS session_title FROM messages m JOIN sessions s ON s.id=m.session_id
                 WHERE m.id=?""", (message_id,)).fetchone()
-        return dict(row) if row else None
+            if not row:return None
+            from .memory.processing import message_origin
+            return {**dict(row),'origin':message_origin(self,message_id)}
 
     def add_message(self, session_id: str, role: str, content: str) -> dict[str, Any]:
         item = {"id": uuid.uuid4().hex, "session_id": session_id, "role": role, "content": content, "created_at": now()}
         with self._memory_transaction():
             self.db.execute("INSERT INTO messages VALUES (:id,:session_id,:role,:content,:created_at)", item)
+            from .provenance import current_ingress
+            origin=current_ingress.get()
+            if origin:
+                self.db.execute('INSERT INTO message_origins VALUES(?,?,?,?)',
+                    (item['id'],origin['channel'],origin['event_ref'],item['created_at']))
             self.db.execute("INSERT INTO messages_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
             from .memory.experience import index_message
             index_message(self, item)

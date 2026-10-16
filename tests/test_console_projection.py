@@ -133,6 +133,7 @@ def test_authenticated_chat_stream_saves_only_the_current_users_messages(console
     assert client.post(f'/api/sessions/{session}/chat/stream',json={'content':'forbidden'},headers=bob).status_code==404
     packet=client.get(f'/api/studio/conversations/{session}/messages',headers=alice).json()
     assert [item['content'] for item in packet['items']][-2:]==['工程输入','隔离测试🙂']
+    assert all(item['origin']['channel']=='chat' for item in packet['items'][-2:])
 
 
 def test_chat_cancel_closes_active_stream_without_generating_a_reply(console,monkeypatch):

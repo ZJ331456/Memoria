@@ -25,6 +25,7 @@
 | [embedding.py](embedding.py) | HTTP/本地 BGE、查询指令、文档分块、批次和向量校验 |
 | [local_bge.py](local_bge.py)、[token_chunks.py](token_chunks.py) | 离线 CUDA/CPU、模型指纹、tokenizer 分块、连续原文 span 和完整覆盖 |
 | [worker.py](worker.py) | 持久租约抽取、普通记忆审核队列及非空闲也执行的有界索引维护 |
+| [processing.py](processing.py) | 当前账号逐条来源与提取/审核只读状态，区分0候选、辅助、入库和旧未知 |
 | [episodic.py](episodic.py)、[forgetting.py](forgetting.py) | 来源任务情景、相关性召回、固定、TTL/容量归档 |
 | [layer_settings.py](layer_settings.py)、[budget.py](budget.py) | 分层配置、读取次数和累计字符配额 |
 | [layer.py](layer.py)、[markdown.py](markdown.py) | MEMORY.md 投影、SELF.md 和历史 PENDING.md 容器 |

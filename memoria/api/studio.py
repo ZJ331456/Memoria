@@ -38,14 +38,27 @@ def studio_router(store, claims, service=None):
                     result[item['session_id']]={'kind':'imported','dataset_id':row['dataset_id'],'source_id':item.get('source_id')}
         return result
 
+    def origin_for(session_id,sources):
+        if session_id in sources:return sources[session_id]
+        channels=[r[0] for r in store.db.execute('''SELECT DISTINCT COALESCE(o.channel,'unknown')
+            FROM messages m LEFT JOIN message_origins o ON o.message_id=m.id
+            WHERE m.session_id=? AND m.role='user' ORDER BY 1''',(session_id,))]
+        return {'kind':'native','channels':channels or ['unknown']}
+
     def browse(q,origin,sort,page,page_size):
         sources=origins();clauses=[];params=[]
         if q:
             clauses.append("(studio_readable(s.title) LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM messages m WHERE m.session_id=s.id AND studio_readable(m.content) LIKE ? ESCAPE '\\'))")
             params.extend([literal_pattern(readable_text(q))]*2)
-        if origin!='all':
+        if origin in {'imported','native'}:
             clauses.append('s.id '+('IN' if origin=='imported' else 'NOT IN')+' (SELECT value FROM json_each(?))')
             params.append(json.dumps(list(sources)))
+        elif origin!='all':
+            clauses.append('s.id NOT IN (SELECT value FROM json_each(?))')
+            params.append(json.dumps(list(sources)))
+            clauses.append('''EXISTS(SELECT 1 FROM messages m LEFT JOIN message_origins o ON o.message_id=m.id
+                WHERE m.session_id=s.id AND m.role='user' AND COALESCE(o.channel,'unknown')=?)''')
+            params.append(origin)
         where=' WHERE '+' AND '.join(clauses) if clauses else ''
         total=store.db.execute('SELECT COUNT(*) FROM sessions s'+where,params).fetchone()[0]
         pages=max(1,(total+page_size-1)//page_size);page=min(page,pages)
@@ -60,7 +73,7 @@ def studio_router(store, claims, service=None):
         items=[]
         for row in rows:
             item=dict(row);text=store.db.execute('SELECT content FROM messages WHERE id=?',(item['preview_message_id'],)).fetchone()
-            item.update(preview=excerpt(text[0],q) if text else '',origin=sources.get(item['id'],{'kind':'native'}))
+            item.update(preview=excerpt(text[0],q) if text else '',origin=origin_for(item['id'],sources))
             if not q:item['matching_messages']=0
             items.append(item)
         return {'items':items,'total':total,'page':page,'page_size':page_size,'pages':pages,'query':q}
@@ -83,11 +96,24 @@ def studio_router(store, claims, service=None):
                     'scope':'current_authenticated_user','model_called':False}
 
     @router.get('/conversations')
-    def conversations(q:str=Query(default='',max_length=200),origin:Literal['all','imported','native']='all',
+    def conversations(q:str=Query(default='',max_length=200),origin:Literal['all','imported','native','chat','api','feishu','qq','telegram','internal','unknown']='all',
                       sort:Literal['recent','oldest','messages']='recent',page:int=Query(default=1,ge=1),
                       page_size:int=Query(default=20,ge=1,le=100)):
         ready()
         with store.lock:return browse(q.strip(),origin,sort,page,page_size)
+
+    @router.get('/conversations/{session_id}/memory-status')
+    def memory_status(session_id:str,ids:str=Query(default='',max_length=6600)):
+        ready()
+        from ..memory.processing import message_states
+        with store.lock:
+            if not store.session(session_id):raise HTTPException(404,'会话不存在')
+            selected=list(dict.fromkeys(ids.split(','))) if ids else [m['id'] for m in store.messages(session_id,100)]
+            if len(selected)>200:raise HTTPException(422,'一次最多读取200条消息状态')
+            for mid in selected:
+                if not store.db.execute('SELECT 1 FROM messages WHERE id=? AND session_id=?',(mid,session_id)).fetchone():
+                    raise HTTPException(404,'消息不属于当前会话或已删除')
+            return {'items':message_states(store,selected),'model_called':False}
 
     @router.get('/pipeline')
     def pipeline(request: Request):
@@ -106,6 +132,9 @@ def studio_router(store, claims, service=None):
                 (SELECT COUNT(*) FROM memory_reviews r WHERE r.job_id=j.id) review_count,
                 CASE WHEN j.error IS NULL THEN 0 ELSE 1 END has_error
                 FROM memory_jobs j LEFT JOIN messages m ON m.id=j.source_ref ORDER BY j.created_at DESC LIMIT 50''')]
+            from ..memory.processing import message_states
+            recent_states=message_states(store,[r['source_ref'] for r in recent])
+            for job in recent:job.update(recent_states.get(job['source_ref'],{}))
             legacy = store.db.execute("SELECT COUNT(*) FROM memory_jobs WHERE status='completed' AND extracted_count IS NULL").fetchone()[0]
             known_empty = store.db.execute("SELECT COUNT(*) FROM memory_jobs WHERE status='completed' AND extracted_count=0").fetchone()[0]
             claim_statuses = {r['status']:r['n'] for r in store.db.execute('''SELECT r.status,COUNT(*) n FROM claim_roots c JOIN claim_revisions r
@@ -162,8 +191,10 @@ def studio_router(store, claims, service=None):
                 matched=store.db.execute('''WITH ranked AS(SELECT id,content,ROW_NUMBER() OVER(ORDER BY rowid) ordinal FROM messages WHERE session_id=?)
                     SELECT id,ordinal FROM ranked WHERE studio_readable(content) LIKE ? ESCAPE '\\' ORDER BY ordinal LIMIT 200''',(session_id,pattern)).fetchall()
                 matches=[{'id':row['id'],'ordinal':row['ordinal'],'page':(row['ordinal']-1)//page_size+1} for row in matched]
-            return {'session':{**session,'message_count':total,'origin':origins().get(session_id,{'kind':'native'})},
-                    'items':[{**dict(row),'display_content':readable_text(row['content']),'ordinal':offset+i+1} for i,row in enumerate(rows)],
+            from ..memory.processing import message_states
+            states=message_states(store,[row['id'] for row in rows])
+            return {'session':{**session,'message_count':total,'origin':origin_for(session_id,origins())},
+                    'items':[{**dict(row),**states[row['id']],'display_content':readable_text(row['content']),'ordinal':offset+i+1} for i,row in enumerate(rows)],
                     'total':total,'page':page,'page_size':page_size,'pages':pages,'matches':matches,
                     'matched_total':matched_total,'matches_truncated':matched_total>len(matches),
                     'time_basis':'recorded_at; imported messages do not establish event dates'}

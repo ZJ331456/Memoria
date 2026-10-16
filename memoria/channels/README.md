@@ -1,5 +1,7 @@
 # 外部通讯渠道
 
+消息来源由服务端provenance上下文逐条写入message_origins，模型与存储链路统一；同会话网页续聊也记录真实入口，旧未记录保持未知。Chat/Studio显示具体渠道与异步提取/审核状态，任务完成不等于产生候选或入库。
+
 [核心包](../README.md) · [统一配置与接入](../../docs/implemented/飞书QQ与Telegram通讯接入.md) · [飞书详细说明](../../docs/implemented/飞书机器人对话接入.md)
 
 飞书、QQ官方C2C和Telegram私聊复用当前账号TenantPool/chat_turn、Reader和记忆机制。每平台分别凭正式网页登录的一次性码绑定，不按应用、用户名、手机号或消息里自述身份选择账号；新注册用户不会获得他人渠道绑定。机器人收消息与MCP工具授权独立。
