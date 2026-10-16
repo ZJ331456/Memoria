@@ -12,6 +12,8 @@ Python依赖只维护根[requirements.txt](../requirements.txt)，按七类注�
 
 ## 环境与模型
 
+可选的[DBeaver数据库查看](../docs/implemented/DBeaver可选数据库查看.md)：`python scripts/configure_dbeaver.py --user your_username`仅预览；关闭DBeaver后加`--apply`，保存账号库、所选用户库和已有渠道库的只读连接及三份SQL。配置留DBeaver工作区，不加入业务启动或依赖；脚本不创建业务库，不调用模型。
+
 | 文件 | 职责/命令 | 边界 |
 | --- | --- | --- |
 | configure_bot.py | `--channel feishu/qq/telegram` | 隐藏输入并DPAPI保存，统一bot.toml；不打印凭据 |

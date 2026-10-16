@@ -16,7 +16,7 @@
 | 记忆与状态 | [分层配置](implemented/记忆分层与配置.md) · [Claim/条件视图](implemented/Claim条件视图与访问路由.md) · [来源与审核](implemented/自动记忆审核与来源定位.md) |
 | 算法现状与参照 | [本地代码与七个同类项目对照](implemented/算法现状与同类项目对照.md) · [下一阶段算法路线与消融](plans/下一阶段算法路线与对照实验.md) |
 | 检索与回答 | [条件/证据选择](implemented/条件时序抽取与预算证据选择.md) · [完整Reader预算](implemented/完整Reader预算与生产引用校验.md) · [风险核验](implemented/证据充分性与风险感知回答.md) |
-| 数据与权限 | [账号隔离](implemented/用户登录与数据隔离.md) · [真实来源导入](implemented/真实对话数据与实验入口.md) · [本机清理记录](implemented/本机数据目录与残留清理.md) |
+| 数据与权限 | [账号隔离](implemented/用户登录与数据隔离.md) · [DBeaver可选查看](implemented/DBeaver可选数据库查看.md) · [真实来源导入](implemented/真实对话数据与实验入口.md) · [本机清理记录](implemented/本机数据目录与残留清理.md) |
 | 工程修复 | [内部一致性](implemented/内部记忆一致性修复记录.md) · [算法审查](implemented/算法逻辑审查逐项修复.md) · [来源支持与渐进访问](implemented/来源支持与渐进访问修复.md) · [生产重放与普通来源支持](implemented/生产重放与普通来源支持.md) |
 | 实验与复现 | [保留的三组实验](../assets/evaluation/README.md) · [研究工具](implemented/真实历史标注与评测.md) |
 | 文档与资产维护 | [当前布局与精简规则](implemented/文档结构与展示资产.md) · [英文海报与架构图](implemented/文档结构与展示资产.md#英文海报与架构图重设计) |
