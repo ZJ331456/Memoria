@@ -258,6 +258,9 @@ embedding 没有完整配置时不会报错，返回 `enabled=false` 和剩余�
 | 方法 | 路径 | 参数与响应 |
 | --- | --- | --- |
 | GET | `/api/memory-layers` | 返回 `config` 的分层预算/开关和 `episodic` 统计；关闭时统计为 `{"enabled":false}` |
+| GET | `/api/memory-formation` | 当前账号形成策略、观察/模式计数及最近巩固失败记录；禁用时enabled=false |
+| GET | `/api/memory-observations?limit=50` | 当前账号来源仍有效的观察，limit为1–200；观察不是批准事实 |
+| GET | `/api/memory-patterns?limit=50` | 当前账号可核对的模式、演化版本和完整来源ID；失效来源不暴露派生文本 |
 | GET | `/api/episodes?query=&status=active&limit=100` | `status=active/archive/all`、`limit=1..500`；有 query 时仅允许 active 相关性检索，结果还受 `episode_top_k` 限制；archive/all 无 query 时为管理列表，可看过期历史 |
 | GET | `/api/episodes/{id}` | 管理详情，含来源消息与 trace ID，可回放过期/归档；来源已删除时 404 |
 | PATCH | `/api/episodes/{id}` | `{"pin":true}` / `{"pin":false}` 固定或取消固定；或 `{"archive":true,"reason":"不再需要"}` 软归档 |

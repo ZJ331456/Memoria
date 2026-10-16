@@ -79,6 +79,7 @@ def test_all_ingress_use_same_runtime_enqueue_and_automatic_admission(tmp_path,c
     cfg=tmp_path/'fixture.toml'
     cfg.write_text('[storage]\ndatabase="'+(tmp_path/'runtime.db').as_posix()+'"\n[memory.markdown]\nenabled=false\n[llm.main]\nmodel="engineering"\nbase_url="https://engineering.invalid/v1"\napi_key="engineering-only"\n')
     app=_create_tenant_app(cfg);service=app.state.service;store=app.state.store
+    service.memory_worker.formation=None  # Preserve this test's legacy array extractor contract.
     text='我喜欢深蓝色。';calls=[]
     async def extraction(*args):
         calls.append('extract')

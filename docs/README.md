@@ -13,7 +13,7 @@
 | 安装与启动 | [完整配置指南](implemented/安装配置与启动.md) · [统一依赖与平台目录](implemented/安装配置与启动.md#依赖清单与平台脚本) · [后台启动/停止](implemented/本机后台启动与停止.md) |
 | 系统与接口 | [系统架构](implemented/系统架构与实现说明.md) · [API](implemented/API接口文档.md) |
 | Chat、Studio与渠道 | [前端架构](implemented/Chat与Studio前端架构.md) · [资料与记忆后台](implemented/MemoryStudio与统一记忆访问.md) · [三平台通讯接入](implemented/飞书QQ与Telegram通讯接入.md) · [飞书详细](implemented/飞书机器人对话接入.md) |
-| 记忆与状态 | [分层配置](implemented/记忆分层与配置.md) · [Claim/条件视图](implemented/Claim条件视图与访问路由.md) · [来源与审核](implemented/自动记忆审核与来源定位.md) |
+| 记忆与状态 | [形成/巩固/演化](implemented/记忆形成巩固与演化.md) · [分层配置](implemented/记忆分层与配置.md) · [Claim/条件视图](implemented/Claim条件视图与访问路由.md) · [来源与审核](implemented/自动记忆审核与来源定位.md) |
 | 算法现状与参照 | [本地代码与七个同类项目对照](implemented/算法现状与同类项目对照.md) · [下一阶段算法路线与消融](plans/下一阶段算法路线与对照实验.md) |
 | 检索与回答 | [条件/证据选择](implemented/条件时序抽取与预算证据选择.md) · [完整Reader预算](implemented/完整Reader预算与生产引用校验.md) · [风险核验](implemented/证据充分性与风险感知回答.md) |
 | 数据与权限 | [账号隔离](implemented/用户登录与数据隔离.md) · [DBeaver可选查看](implemented/DBeaver可选数据库查看.md) · [真实来源导入](implemented/真实对话数据与实验入口.md) · [本机清理记录](implemented/本机数据目录与残留清理.md) |
@@ -34,6 +34,8 @@
 2026-10-15新增[当前账号自助改密](implemented/用户登录与数据隔离.md#当前账号自助修改密码2026-10-15)，Chat用户右侧/助手左侧，支持安全Markdown、复制和原文切换；Studio共用阅读器。验收及范围见[前端记录](implemented/Chat与Studio前端架构.md#账号改密与聊天阅读2026-10-15)、[计划第38节](plans/长期陪伴记忆研究与实验计划书.md#38-账号自助改密与对话阅读2026-10-15)。
 
 ## 文档维护
+
+2026-10-16新增[观察、巩固与演化](implemented/记忆形成巩固与演化.md)：明确持久自述保留直接主审，单次行为先记录观察；跨会话模式经过完整来源组核验，支持受约束的强化、版本更新和时效退出。Studio“记忆处理与服务”提供观察和模式回查。工程回归、指定真实消息及未验证边界见[计划49](plans/长期陪伴记忆研究与实验计划书.md#49-memory-formationconsolidationevolution2026-10-16)，不将模式推断当永久事实或长期效果成绩。
 
 2026-10-16[Telegram通信与输入状态](implemented/飞书QQ与Telegram通讯接入.md#telegram通信与输入提示2026-10-16)：真实只读RTT与直连探测，独立连接池/复用、入箱唤醒、非阻塞typing和按账号的分段耗时统计。未将长轮询参数当固定延迟，未改全局代理；进度见[计划47](plans/长期陪伴记忆研究与实验计划书.md#47-telegram通信与等待反馈2026-10-16)。
 

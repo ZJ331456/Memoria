@@ -4,6 +4,8 @@
 
 本包实现当前登录账号的普通记忆、情景记忆及其访问链路。结构化 Claim 的写入/审批位于 [claims.py](../claims.py)，共享空间由 [governance.py](../governance.py) 管理；三者不自动互相复制。
 
+2026-10-16新增[形成、巩固与演化](../../docs/implemented/记忆形成巩固与演化.md)：[formation.py](formation.py)负责观察、跨会话归纳和核心投影，[formation_store.py](formation_store.py)保存来源版本与操作，[formation_settings.py](formation_settings.py)验证参数。单次行为不直接成为永久偏好；完整支持组经独立模型审核后进入原普通记忆，只允许同组自动模式受约束演化。
+
 ## 文件映射
 
 | 文件 | 职责 |

@@ -80,6 +80,7 @@ def test_all_personal_routes_and_tools_are_owned_by_login_user(private_api):
     assert qa.state.service.runtime.memory is not aa.state.service.runtime.memory
     assert qa.state.settings.database!=aa.state.settings.database
     assert qa.state.settings.markdown_directory!=aa.state.settings.markdown_directory
+
     source=qa.state.store.add_message(sid,'user','Private source text')
     assert client.get('/api/messages/'+source['id']+'/source',headers=a).status_code==404
     assert client.get('/api/messages/'+source['id']+'/source',headers=q).status_code==200
@@ -98,6 +99,36 @@ def test_all_personal_routes_and_tools_are_owned_by_login_user(private_api):
     assert client.get('/api/datasets',headers=a).json() == []
     assert client.get('/api/datasets/engineering-fixture',headers=a).status_code == 404
 
+
+
+
+def test_formation_read_routes_do_not_cross_accounts_or_call_models(private_api):
+    from memoria.memory.source_support import digest
+    app,client,_=private_api
+    alice,a=signup(client,'alice')
+    bob,b=signup(client,'bob')
+    for headers in (a,b):
+        assert client.get('/api/memory-formation',headers=headers).status_code==200
+    tenant=app.state.tenants.apps[alice['id']]
+    store=tenant.state.store
+    source=store.add_message(store.create_session()['id'],'user','engineering observation private to alice')
+    with store.db:
+        store.db.execute('INSERT INTO memory_formation_runs VALUES(?,?,?,?,?,?,?)',
+            ('engineering-run','engineering-job',digest(source['content']),'engineering-only','no-model',None,source['created_at']))
+        store.db.execute("INSERT INTO memory_observations VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'active')",
+            ('engineering-observation','engineering-run',source['id'],digest(source['content']),source['session_id'],source['created_at'],
+             'interest','engineering-topic','','positive',source['content'],source['content'],0,len(source['content']),0,0,3))
+    calls=[]
+    async def forbidden(*args,**kwargs):calls.append(True);raise AssertionError('Read routes cannot call models')
+    tenant.state.service.llm.chat=forbidden
+    assert len(client.get('/api/memory-observations',headers=a).json())==1
+    assert client.get('/api/memory-observations',headers=b,params={'user_id':alice['id']}).json()==[]
+    assert client.get('/api/memory-patterns',headers=b).json()==[]
+    assert client.get('/api/memory-formation',headers=b).json()['observations']=={}
+    client.cookies.clear()
+    for route in ('memory-formation','memory-observations','memory-patterns'):
+        assert client.get('/api/'+route).status_code==401
+    assert calls==[]
 
 def test_reserved_user_cannot_be_claimed_and_password_reset_revokes_sessions(private_api):
     app,client,root=private_api

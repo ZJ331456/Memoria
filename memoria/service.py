@@ -75,10 +75,15 @@ class AgentService:
         )
         from .memory.auto_review import AutoMemoryReviewer
         self.auto_review = AutoMemoryReviewer(store,self.claims,memory,llm,settings.memory_approval_mode)
+        from .memory.formation import MemoryFormation
+        formation = getattr(settings, 'memory_formation', None)
+        self.formation = MemoryFormation(store, llm, formation, self.auto_review) if formation and formation.enabled else None
+        self.runtime.formation = self.formation
         self.memory_worker = MemoryJobWorker(
             store, llm, memory, lease_seconds=settings.memory_job_lease_seconds,
             max_retries=settings.memory_job_max_retries, backoff_seconds=settings.memory_job_backoff_seconds,
             reviewer=self.auto_review,
+            formation=self.formation,
         )
         self._busy_check: Callable[[], bool] = lambda: False
         self._integration_task: asyncio.Task | None = None

@@ -13,3 +13,9 @@ test('zero candidates and need assistance never look like failed or disabled aut
   assert.match(processingLabel({state:'stored',approved:1}),/已审核入库/)
   assert.equal(processingLabel({state:'legacy_unknown'}),'旧任务结果未完整记录')
 })
+test('an observation waiting for evidence is not labelled as an approved preference',()=>{
+  const label=processingLabel({state:'observing',observation_count:1})
+  assert.match(label,/已记录 1 条观察/)
+  assert.match(label,/尚未形成长期事实/)
+  assert.doesNotMatch(label,/已审核入库/)
+})

@@ -280,6 +280,8 @@ class Store:
             install_experiences(self)
             from .memory.source_support import install as install_source_support
             install_source_support(self)
+            from .memory.formation_store import install as install_formation
+            install_formation(self)
             self.vector_index = SQLiteVecIndex(self.db, vector_backend)
             self._bootstrap_vector_index()
             self.chunk_index = SQLiteVecIndex(self.db, vector_backend, self.embedding_namespace + ":source-chunks-v1")
@@ -1572,13 +1574,13 @@ class Store:
                 lease_owner,lease_expires_at,created_at,updated_at,extracted_count,staged_count FROM memory_jobs WHERE id=?""", (job_id,)).fetchone()
         return dict(row) if row else None
 
-    def stage_memory_reviews(self, job_id: str, owner: str, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def stage_memory_reviews(self, job_id: str, owner: str, candidates: list[dict[str, Any]], *, formation=None) -> list[dict[str, Any]]:
         """Persist extracted candidates once per job and position, without activating them."""
         timestamp = now()
         with self.lock:
             self.db.execute("BEGIN IMMEDIATE")
             try:
-                job = self.db.execute("""SELECT source_ref FROM memory_jobs WHERE id=? AND status='running'
+                job = self.db.execute("""SELECT * FROM memory_jobs WHERE id=? AND status='running'
                     AND lease_owner=? AND lease_expires_at>?""", (job_id, owner, timestamp)).fetchone()
                 if not job:
                     raise RuntimeError("memory job lease lost before staging")
@@ -1596,6 +1598,10 @@ class Store:
                 staged = self.db.execute('SELECT COUNT(*) FROM memory_reviews WHERE job_id=?', (job_id,)).fetchone()[0]
                 self.db.execute('UPDATE memory_jobs SET extracted_count=?,staged_count=?,updated_at=? WHERE id=?',
                                 (len(candidates), staged, timestamp, job_id))
+                if formation is not None:
+                    from .memory.formation_store import stage
+                    review_rows = self.db.execute('SELECT * FROM memory_reviews WHERE job_id=? ORDER BY ordinal', (job_id,)).fetchall()
+                    stage(self, dict(job), formation, review_rows)
                 self.db.execute("COMMIT")
             except Exception:
                 self.db.execute("ROLLBACK")

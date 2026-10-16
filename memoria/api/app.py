@@ -460,6 +460,37 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             raise HTTPException(409, "任务情节记忆未启用")
         return service.episodes
 
+    @app.get('/api/memory-formation', tags=['memory layers'], summary='当前账号观察、模式及形成策略（只读）')
+    def formation_status():
+        return service.formation.status() if service.formation else {'enabled':False}
+
+    @app.get('/api/memory-observations', tags=['memory layers'], summary='当前账号有来源支持的观察（不是批准事实）')
+    def formation_observations(limit: int = Query(default=50, ge=1, le=200)):
+        from ..memory.formation_store import live_observation
+        result = []
+        with store.lock:
+            rows = store.db.execute("SELECT * FROM memory_observations WHERE state='active' ORDER BY observed_at DESC LIMIT ?", (limit,)).fetchall()
+            for row in rows:
+                try:
+                    live_observation(store,row)
+                except ValueError:
+                    continue
+                result.append(dict(row))
+        return result
+
+    @app.get('/api/memory-patterns', tags=['memory layers'], summary='当前账号可核对的跨会话模式与演化版本')
+    def formation_patterns(limit: int = Query(default=50, ge=1, le=200)):
+        from ..memory.formation_store import pattern_sources
+        result = []
+        with store.lock:
+            for row in store.db.execute('SELECT * FROM memory_pattern_versions ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall():
+                try:
+                    sources = pattern_sources(store,row)
+                except ValueError:
+                    continue
+                result.append({**dict(row),'evidence_message_ids':[s['id'] for s in sources]})
+        return result
+
     @app.get("/api/memory-layers", tags=["memory layers"], summary="查看五层记忆配置与任务情节记忆统计")
     def memory_layers():
         return {
@@ -852,6 +883,12 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
         if not body.content.strip(): raise HTTPException(422, "记忆内容不能为空")
         candidate = store.memory_review(review_id)
         if not candidate: raise HTTPException(404, "候选记忆不存在")
+        with store.lock:
+            pattern_link = store.db.execute('SELECT pattern_id FROM memory_formation_candidates WHERE review_id=?', (review_id,)).fetchone()
+        if pattern_link and pattern_link[0]:
+            if body.claim is not None or (body.content.strip(),body.kind,body.importance) != (candidate['content'],candidate['kind'],candidate['importance']):
+                raise HTTPException(409, '跨会话模式须保留完整证据组，不能直接改成单条原话Claim；请核对来源后重新整理')
+            return await service.auto_review.review(review_id, force=True)
         if not store.message_source(candidate["source_ref"]):
             raise HTTPException(409, "来源消息已删除，不能批准悬空记忆")
         review = store.claim_memory_review(review_id, body.content, body.kind, body.importance)

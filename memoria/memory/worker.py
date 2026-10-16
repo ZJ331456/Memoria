@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class MemoryJobWorker:
     """Durable, retryable post-turn extraction and consolidation worker."""
 
-    def __init__(self, store: Store, llm: LLMClient, memory: MemoryEngine, poll_seconds: float = 0.5, lease_seconds: int = 180, max_retries: int = 3, backoff_seconds: int = 5, reviewer=None):
+    def __init__(self, store: Store, llm: LLMClient, memory: MemoryEngine, poll_seconds: float = 0.5, lease_seconds: int = 180, max_retries: int = 3, backoff_seconds: int = 5, reviewer=None, formation=None):
         self.store, self.llm, self.memory = store, llm, memory
         self.poll_seconds = poll_seconds
         self.lease_seconds = lease_seconds
@@ -24,6 +24,7 @@ class MemoryJobWorker:
         self.backoff_seconds = backoff_seconds
         self.owner = uuid.uuid4().hex
         self.reviewer = reviewer
+        self.formation = formation
 
     async def process_once(self) -> bool:
         job = self.store.claim_memory_job(self.owner, self.lease_seconds, self.max_retries)
@@ -31,11 +32,26 @@ class MemoryJobWorker:
             return False
         heartbeat = asyncio.create_task(self._heartbeat(job["id"]))
         try:
-            extracted = await self.llm.extract_memories(job["user_text"], job["assistant_text"])
-            reviews=self.store.stage_memory_reviews(job["id"], self.owner, extracted)
+            receipt = await self.formation.extract(job) if self.formation else None
+            extracted = self.formation.candidates(receipt) if receipt else await self.llm.extract_memories(job["user_text"], job["assistant_text"])
+            reviews=self.store.stage_memory_reviews(job["id"], self.owner, extracted, formation=receipt)
             if self.reviewer and self.reviewer.mode=='llm':
                 for review in reviews:
                     await self.reviewer.review(review['id'])
+            if self.formation:
+                try:
+                    await self.formation.consolidate(job['source_ref'])
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    # Observation extraction succeeded. A separate consolidation
+                    # failure must not relabel it as failed/empty extraction or
+                    # repeatedly spend the observation budget.
+                    from ..store import now
+                    with self.store._memory_transaction():
+                        self.store.db.execute('INSERT INTO memory_formation_events(pattern_id,action,reason,created_at) VALUES(NULL,?,?,?)',
+                            ('CONSOLIDATION_FAILED',type(exc).__name__,now()))
+                    logger.warning('记忆巩固未完成 job=%s type=%s',job['id'],type(exc).__name__)
             self.store.finish_memory_job(job["id"], owner=self.owner, max_retries=self.max_retries, backoff_seconds=self.backoff_seconds)
         except asyncio.CancelledError:
             self.store.finish_memory_job(job["id"], "worker cancelled", self.owner, self.max_retries, self.backoff_seconds)
@@ -57,6 +73,8 @@ class MemoryJobWorker:
             if self.reviewer:
                 await self.reviewer.process_next()
             if time.monotonic() >= next_index:
+                if self.formation:
+                    self.formation.maintenance()
                 await self.memory.reindex(limit=16)
                 from .experience import reindex
                 await asyncio.to_thread(reindex, self.store, 16)

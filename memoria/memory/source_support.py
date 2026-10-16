@@ -55,8 +55,9 @@ def availability_sql(alias='m'):
     legacy=(f"NOT EXISTS(SELECT 1 FROM memory_source_dependencies d LEFT JOIN messages u ON u.id=d.message_id "
         f"WHERE d.memory_id={alias}.id AND (d.state!='active' OR u.id IS NULL OR u.role!='user')) "
         f"AND NOT EXISTS(SELECT 1 FROM memory_source_revocations r WHERE r.message_id={alias}.source_ref)")
-    return (f"((NOT EXISTS(SELECT 1 FROM memory_support_groups g WHERE g.memory_id={alias}.id) AND {legacy}) "
-            f"OR EXISTS(SELECT 1 FROM memory_support_groups g WHERE {group_valid_sql(alias)}))")
+    from .formation_store import pattern_available_sql
+    return (f"(((NOT EXISTS(SELECT 1 FROM memory_support_groups g WHERE g.memory_id={alias}.id) AND {legacy}) "
+            f"OR EXISTS(SELECT 1 FROM memory_support_groups g WHERE {group_valid_sql(alias)})) AND {pattern_available_sql(alias)})")
 
 
 def add_group(store,memory_id,source_ref,*,origin):
@@ -89,8 +90,9 @@ def live_groups(store,memory_id,*,excluded=()):
 
 
 def source_for(store,memory_id):
-    # Public writers currently produce whole-message singleton groups; never
-    # turn a future multi-message conjunction into an independently valid fragment.
+    # Never turn a multi-message pattern's conjunction into a sufficient singleton.
+    # Pattern Core uses its complete support; the strict source Reader requires a
+    # separately supported singleton and therefore does not promote this inference.
     for group in live_groups(store,memory_id):
         if len(group['evidence'])==1:
             return store.message_source(group['evidence'][0]['message_id'])

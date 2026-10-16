@@ -170,6 +170,13 @@ class AgentRuntime:
                 }
 
                 extra_sections: list[PromptSection] = []
+                formation = getattr(self, 'formation', None)
+                if formation and not claim_request:
+                    core = formation.core()
+                    if core:
+                        extra_sections.append(PromptSection('Core Memory', '\n'.join(line for line, _ in core), 31))
+                        memory_dependencies.update({'memory:'+m['id']:self.store.memory_dependency(m) for _, m in core})
+                    context.metadata['memory_formation'] = {'core_count':len(core), 'inferred_patterns':True}
                 citation_guard = None
                 last_reader_result = None
                 citation_safe_answer = None

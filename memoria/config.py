@@ -197,6 +197,7 @@ class Settings:
     reader_safety_tokens: int = 128
     reader_local_count: bool = False
     memory_approval_mode: str = 'llm'
+    memory_formation: object | None = None
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Settings":
@@ -332,6 +333,8 @@ class Settings:
         from .memory.layer_settings import MemoryLayerSettings
 
         settings.memory_layers = MemoryLayerSettings.from_dict(memory_section.get("layers", {}))
+        from .memory.formation_settings import FormationSettings
+        settings.memory_formation = FormationSettings.from_dict(memory_section.get('formation', {}))
         settings.data_root = db.parent.resolve()
         from .config_store import read_document
         example = source.name.endswith('.example.toml')

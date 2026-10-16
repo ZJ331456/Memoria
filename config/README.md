@@ -11,6 +11,8 @@
 
 四份实际文件直接放在本目录，没有local子目录。只复制example到同名实际文件；已有配置不能覆盖。启动默认读取system.toml及同目录另外三份文件。模型和端口可分别维护，不需要models.file或旧覆盖文件。
 
+system.toml的`[memory.formation]`统一管理观察、跨会话门槛、保留期限和核心预算。默认启用；关闭则使用原直接候选提取，不改变账号隔离、审批或来源撤销。[机制与边界](../docs/implemented/记忆形成巩固与演化.md)。
+
 ```powershell
 Get-ChildItem config/*.example.toml | ForEach-Object {
     $taskConfigFile = $_.FullName.Replace('.example.toml', '.toml')

@@ -7,6 +7,7 @@ import json
 STAGES = {
     "source": ("messages", "memory_source_revocations", "dataset_imports"),
     "extraction": ("memory_jobs",),
+    "formation": ("memory_formation_runs", "memory_observations", "memory_pattern_versions", "memory_formation_candidates"),
     "review": ("memory_reviews",),
     "memory": ("memories", "memory_operations", "memory_validity_intervals", "memory_source_dependencies",
                "memory_support_groups", "memory_support_evidence"),

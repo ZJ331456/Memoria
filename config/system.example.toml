@@ -65,6 +65,17 @@ lease_seconds = 180
 max_retries = 3
 backoff_seconds = 5
 
+# Observation先记录单次行为，跨会话证据足够后才由模型提出模式并独立审核。
+# 阈值是工程起点；不将重复提问自动等同于永久偏好。
+[memory.formation]
+enabled = true
+min_sources = 3
+min_sessions = 2
+max_observations = 24
+retention_days = 90
+core_half_life_days = 45
+core_chars = 1200
+
 # 分层预算是字符上限（不是精确 token），适合本地单用户运行的调优起点。
 # 说明与来源：docs/implemented/记忆分层与配置.md。共享记忆仍独立使用空间权限。
 [memory.layers]

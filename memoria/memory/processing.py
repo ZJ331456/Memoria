@@ -25,17 +25,19 @@ def message_states(store,ids):
     for row in rows:
         reviews=counts.get(row['id'],{})
         number=lambda key:int(reviews.get(key,0) or 0)
+        observation_count = store.db.execute("SELECT count(*) FROM memory_observations WHERE message_id=? AND state='active'", (row['id'],)).fetchone()[0] if row['eligible'] else 0
         if not row['eligible']:state='not_applicable'
         elif row['status'] in {'pending','running','retry','failed'}:state=row['status']
         elif number('applying'):state='reviewing'
         elif number('pending'):state='needs_assistance' if number('assisted')==number('pending') else 'awaiting_review'
         elif number('approved'):state='stored'
         elif number('rejected'):state='rejected'
-        elif row['status']=='completed':state='no_candidates' if row['extracted_count']==0 else 'legacy_unknown'
+        elif row['status']=='completed':state='observing' if observation_count and row['extracted_count']==0 else 'no_candidates' if row['extracted_count']==0 else 'legacy_unknown'
         else:state='not_queued'
         result[row['id']]={'origin':message_origin(store,row['id']),
             'memory_processing':{'state':state,'job_id':row['job_id'],'job_status':row['status'],
                 'extracted_count':row['extracted_count'],'staged_count':row['staged_count'],
+                'observation_count':observation_count,
                 'approved':number('approved'),'pending':number('pending'),'rejected':number('rejected'),
                 'attempts':row['attempts'],'updated_at':row['updated_at'],
                 'active':state in {'pending','running','retry','reviewing','awaiting_review'}}}

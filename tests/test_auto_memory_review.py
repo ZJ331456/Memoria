@@ -170,6 +170,7 @@ def test_assessment_and_history_routes_reject_public_sources(env):
 
 def test_worker_automatically_extracts_reviews_and_publishes(env):
     _,_,store,service=env
+    service.memory_worker.formation=None  # Explicit legacy extraction protocol; formation is covered separately.
     text='我平时喜欢用中文回答。'
     source=store.add_message(store.create_session()['id'],'user',text)
     async def extraction(*args):return [{'content':'用户偏好中文回答','kind':'preference','importance':3}]
