@@ -84,3 +84,5 @@ Next algorithm work: source support groups and retraction, progressive retrieval
 Continuous personal-history effects remain unverified. Backup/restore, migrations, account lifecycle and monitoring remain on the readiness plan. [Plan](docs/plans/长期陪伴记忆研究与实验计划书.md) · [Sources and licensing](assets/data-sources/README.md) · [AI instructions](AGENTS.md)
 
 Routine memories now use model-led admission: extraction, a separate evidence review, and source/risk checks before automatic low-risk publication. Human review handles sensitive, conflicting or ambiguous cases. Studio supports an explicit per-message history request and audit receipts; public corpus data stays separate. See [implementation and limits](docs/implemented/LLM自动审核与人工辅助.md).
+
+Model parameters are now separate from system settings: `config.toml` references `configs/local/models.toml`; [the public model template](configs/models.example.toml) covers OpenAI-compatible cloud/local LLMs, API embeddings and process-local BGE. Server private config stays in ignored `configs/local/`; account overrides and DPAPI profiles remain isolated. [Configuration layout and migration](docs/implemented/配置目录与模型后端.md).

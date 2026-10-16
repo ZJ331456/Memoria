@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import tomllib
 import re
+import copy
+import json
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
 import httpx
 
-from .config import ModelConfig, Settings, SlotRole, _merge
+from .config import ModelConfig, Settings, SlotRole, _merge, _resolve
 from .private_files import load_private_json
 
 
@@ -19,20 +23,39 @@ SLOT_PATHS = {
 
 
 def override_path(settings: Settings) -> Path:
-    return settings.model_override_file or settings.database.parent / "config/models.override.toml"
+    return settings.model_override_file or (settings.private_config_directory or settings.source.parent / "configs/local") / "models.toml"
 
 
 def load_model_overrides(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     with path.open("rb") as handle:
-        return tomllib.load(handle)
+        data = tomllib.load(handle)
+    validate_model_document(data)
+    return data
+
+
+def validate_model_document(data: dict) -> None:
+    allowed = {"model", "api_key", "base_url", "thinking", "backend", "device", "credential_profile"}
+    if not isinstance(data, dict) or set(data) - {"llm", "memory"}:
+        raise ValueError("Model file accepts only llm.main, llm.fast and memory.embedding")
+    for parent, slots in (("llm", {"main", "fast"}), ("memory", {"embedding"})):
+        table = data.get(parent, {})
+        if not isinstance(table, dict) or set(table) - slots:
+            raise ValueError("Unknown model slot in model configuration")
+        for section in table.values():
+            if not isinstance(section, dict) or set(section) - allowed:
+                raise ValueError("Unknown field in model slot; use backend/model/base_url/api_key/device/thinking/credential_profile")
+            if any(not isinstance(value, str) for value in section.values()):
+                raise ValueError("Model slot fields must be strings")
 
 
 def apply_overrides(settings: Settings, data: dict[str, Any] | None = None) -> Settings:
     payload = data if data is not None else load_model_overrides(override_path(settings))
+    validate_model_document(payload)
     if not payload:
         return settings
+    configured = {}
     for slot, keys in SLOT_PATHS.items():
         section = payload
         for key in keys:
@@ -45,10 +68,21 @@ def apply_overrides(settings: Settings, data: dict[str, Any] | None = None) -> S
         current = getattr(settings, slot)
         # A key explicitly empty in a file clears inherited credentials. The UI
         # still omits blank keys when saving, preserving its "keep old key" rule.
-        api_key = str(section.get("api_key", current.api_key)).strip()
+        base_url = str(section.get("base_url", current.base_url)).strip().rstrip("/")
+        backend = section.get("backend", current.backend)
+        # Old account files remain valid. A changed URL without an explicit backend
+        # is interpreted on its own, rather than retaining an inherited local mode.
+        if "base_url" in section and "backend" not in section and base_url != current.base_url:
+            backend = "auto"
+        device = section.get("device", current.device)
+        if "base_url" in section and not base_url.startswith("local://") and "device" not in section:
+            device = "auto"
+        if backend in {"bge", "transformers"} and "base_url" not in section:
+            base_url = ""
+        endpoint_changed = base_url != current.base_url or backend != current.backend
+        api_key = _resolve(str(section.get("api_key", "" if endpoint_changed else current.api_key))).strip()
         model = str(section.get("model", current.model) or current.model)
-        base_url = str(section.get("base_url", current.base_url) or current.base_url).rstrip("/")
-        thinking = section.get("thinking", current.thinking)
+        thinking = section.get("thinking", None if endpoint_changed else current.thinking)
         profile = section.get("credential_profile")
         if profile:
             owner_directory = override_path(settings).parent.parent.resolve()
@@ -62,16 +96,18 @@ def apply_overrides(settings: Settings, data: dict[str, Any] | None = None) -> S
                 raise ValueError("Private credential profile owner/model/endpoint mismatch")
             api_key = saved["api_key"]
             thinking = section.get("thinking", saved.get("thinking"))
-        setattr(
-            settings,
-            slot,
-            ModelConfig(
+        configured[slot] = ModelConfig(
                 model=model,
                 api_key=api_key,
                 base_url=base_url,
                 thinking=thinking,
-            ),
-        )
+                backend=backend,
+                device=device,
+            )
+        configured[slot].validate_role("embedding" if slot == "embedding" else "llm")
+    # An invalid later slot must not leave a partially switched runtime.
+    for slot, config in configured.items():
+        setattr(settings, slot, config)
     return settings
 
 
@@ -85,6 +121,9 @@ def public_models(settings: Settings) -> dict[str, Any]:
             "configured": value.is_ready(role=role),
             "api_key_set": bool(value.api_key),
             "local": value.is_local_process() or value.is_local_http(),
+            "backend_kind": value.backend_kind(role),
+            "device": value.base_url.removeprefix("local://") if value.is_local_process() else None,
+            "thinking": value.thinking,
         }
         if role == "llm":
             payload["backend"] = backend_public_label(value) if value.base_url else ""
@@ -108,6 +147,9 @@ def save_model_overrides(settings: Settings, updates: dict[str, dict[str, str]])
         if slot not in SLOT_PATHS or not isinstance(values, dict):
             continue
         section: dict[str, str] = {}
+        for field in ("backend", "device"):
+            if values.get(field) is not None:
+                section[field] = str(values[field]).strip()
         if values.get("model") is not None:
             section["model"] = str(values.get("model", "")).strip()
         if values.get("base_url") is not None:
@@ -124,20 +166,51 @@ def save_model_overrides(settings: Settings, updates: dict[str, dict[str, str]])
         for key in keys[:-1]:
             cursor = cursor.setdefault(key, {})
         cursor[keys[-1]] = section
-        current = getattr(settings, slot)
-        setattr(
-            settings,
-            slot,
-            ModelConfig(
-                model=section.get("model", current.model) or current.model,
-                api_key=section["api_key"] if "api_key" in section else current.api_key,
-                base_url=(section.get("base_url", current.base_url) or current.base_url).rstrip("/"),
-                thinking=section.get("thinking", current.thinking),
-            ),
-        )
     merged = _merge(existing, patch)
-    path.write_text(_dump_toml(merged), encoding="utf-8")
+    for slot, keys in SLOT_PATHS.items():
+        values = updates.get(slot, {})
+        replacing_route = any(field in values and str(values[field]).strip() != str(getattr(getattr(settings, slot), field))
+                              for field in ("model", "base_url", "backend"))
+        replacing_key = bool(str(values.get("api_key") or "").strip())
+        if replacing_route or replacing_key:
+            section = merged
+            for key in keys:
+                section = section.get(key, {})
+            # A locally selected replacement cannot silently keep a profile bound
+            # to the old model/host. The key can instead come from an env reference.
+            section.pop("credential_profile", None)
+            if replacing_route and not replacing_key:
+                section["api_key"] = ""
+            if values.get("backend") in {"bge", "transformers"}:
+                section.pop("base_url", None)
+                section.pop("thinking", None)
+            elif "base_url" in values and "thinking" not in values:
+                section.pop("thinking", None)
+    validated = copy.deepcopy(settings)
+    apply_overrides(validated, merged)
+    write_model_file(path, merged)
+    for slot in SLOT_PATHS:
+        setattr(settings, slot, getattr(validated, slot))
     return public_models(settings)
+
+
+def write_model_file(path: Path, data: dict[str, Any]) -> None:
+    """Replace complete, valid TOML atomically; never expose a truncated config."""
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    text = _dump_toml(data)
+    tomllib.loads(text)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, prefix=".models-", suffix=".tmp", delete=False) as handle:
+            temporary = Path(handle.name)
+            os.chmod(temporary, 0o600)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary and temporary.exists():
+            temporary.unlink()
 
 
 def _dump_toml(data: dict[str, Any], prefix: str = "") -> str:
@@ -150,13 +223,13 @@ def _dump_toml(data: dict[str, Any], prefix: str = "") -> str:
             if value and all(not isinstance(item, dict) for item in value.values()):
                 lines.append(f"[{path}]")
                 for nested_key, nested_value in value.items():
-                    lines.append(f'{nested_key} = "{_escape(str(nested_value))}"')
+                    lines.append(f'{nested_key} = {_scalar(nested_value)}')
                 lines.append("")
             else:
                 tables.append((path, value))
         else:
             target = lines if not prefix else lines
-            target.append(f'{key} = "{_escape(str(value))}"')
+            target.append(f'{key} = {_scalar(value)}')
     for path, value in tables:
         nested = _dump_toml(value, path)
         if nested.strip():
@@ -165,8 +238,12 @@ def _dump_toml(data: dict[str, Any], prefix: str = "") -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"')
+def _scalar(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return json.dumps(value, allow_nan=False)
+    return json.dumps(str(value), ensure_ascii=False)
 
 
 async def test_model_slot(settings: Settings, slot: str) -> dict[str, Any]:
@@ -213,20 +290,33 @@ async def test_model_slot(settings: Settings, slot: str) -> dict[str, Any]:
             response = await client.post(
                 f"{config.base_url}/embeddings",
                 headers=headers,
-                json={"model": config.model, "input": ["memoria setup ping"]},
+                json={"model": config.model, "input": ["memoria setup ping"], "encoding_format": "float"},
             )
         else:
+            from .llm.backends.openai_http import OpenAICompatBackend
             response = await client.post(
                 f"{config.base_url}/chat/completions",
                 headers=headers,
-                json={
-                    "model": config.model,
-                    "messages": [{"role": "user", "content": "ping"}],
-                    "max_tokens": 8,
-                },
+                json=OpenAICompatBackend.payload(config, [{"role": "user", "content": "ping"}], 8),
             )
     if response.status_code >= 400:
-        detail = response.text[:300]
-        return {"ok": False, "slot": slot, "status_code": response.status_code, "message": detail}
+        return {"ok": False, "slot": slot, "status_code": response.status_code, "message": "模型接口返回错误，请核对模型、端点、权限与配额"}
+    try:
+        body = response.json()
+        if slot == "embedding":
+            from .memory.embedding import EmbeddingClient
+            vectors = EmbeddingClient._vectors(body, 1)
+            details = {"dimension": len(vectors[0])}
+        else:
+            if not isinstance(body["choices"][0]["message"], dict):
+                raise ValueError("invalid message")
+            usage = {key: value for key, value in (body.get("usage") or {}).items()
+                     if key in {"prompt_tokens", "completion_tokens", "total_tokens", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens", "reasoning_tokens"}
+                     and type(value) is int and value >= 0}
+            terminal = body["choices"][0].get("finish_reason")
+            details = {"usage": usage or None, "finish_reason": terminal if terminal in {None,"stop","length","tool_calls","content_filter","function_call"} else "unknown",
+                       "completed_generation": terminal == "stop"}
+    except (ValueError, KeyError, TypeError, IndexError, RuntimeError, AttributeError):
+        return {"ok": False, "slot": slot, "status_code": response.status_code, "message": "接口响应不符合所选模型协议；HTTP 200不等于有效模型结果"}
     message = "本地 OpenAI 兼容服务连通正常" if config.is_local_http() else "连通性正常"
-    return {"ok": True, "slot": slot, "status_code": response.status_code, "message": message}
+    return {"ok": True, "slot": slot, "status_code": response.status_code, "message": message, **details}

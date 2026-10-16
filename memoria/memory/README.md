@@ -103,3 +103,5 @@ Query-only风险不再把月份/人名May当作推测授权；只有有限明确
 [ordinary_update_policy.py](ordinary_update_policy.py)约束普通非精确关系，有限绑定筛选先于Top-3；值/极性、并存/替代和事务版本复核防止明显不兼容更新。未知主体/条件不自动覆盖；精确正文去重、完整语义与12槽位扩展边界见[实施说明](../../docs/implemented/生产重放与普通来源支持.md#4-普通非精确关系的受约束更新)。
 
 2026-10-16[LLM主审机制](../../docs/implemented/LLM自动审核与人工辅助.md)新增审计与有限历史重处理，保留原文归属/撤销/条件和事务检查；模型结果不作为现实核验。
+
+2026-10-16模型配置独立：根config.toml引用configs/local/models.toml，支持显式openai、bge及保留的transformers后端；账号覆盖/DPAPI仍隔离。目录、设备/API参数与检查命令见[配置说明](../../docs/implemented/配置目录与模型后端.md)。

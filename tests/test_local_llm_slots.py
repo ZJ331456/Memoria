@@ -105,6 +105,7 @@ def test_keyless_loopback_main_is_ready_remote_is_not(tmp_path: Path):
         "api_key_set": False,
         "local": True,
         "backend": "openai-local",
+        "backend_kind": "openai", "device": None, "thinking": None,
     }
     assert local.main.auth_headers()["Authorization"] == "Bearer local"
 
@@ -124,8 +125,8 @@ def test_remote_with_key_still_ready(tmp_path: Path):
 
 def test_keyless_override_clears_inherited_remote_credentials(tmp_path: Path):
     settings = _settings(tmp_path, ModelConfig("remote", "old-cloud-key", "https://api.example.test/v1"))
-    (settings.database.parent / "config").mkdir(exist_ok=True)
-    (settings.database.parent / "config/models.override.toml").write_text(
+    settings.model_override_file.parent.mkdir(parents=True,exist_ok=True)
+    settings.model_override_file.write_text(
         '[llm.main]\nmodel="Qwen3.5-2B"\nbase_url="http://127.0.0.1:8080/v1"\napi_key=""\n', encoding="utf-8")
     reloaded = Settings.load(settings.source)
     assert reloaded.main.api_key == "" and reloaded.main.is_ready()
@@ -175,6 +176,9 @@ def test_test_model_slot_allows_keyless_loopback(tmp_path: Path, monkeypatch):
     class FakeResponse:
         status_code = 200
         text = "ok"
+
+        def json(self):
+            return {"choices": [{"message": {"role": "assistant", "content": "pong"}}]}
 
     class FakeClient:
         def __init__(self, *args, **kwargs):

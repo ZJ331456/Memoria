@@ -18,14 +18,14 @@ HELP='请在本地Chat点击“连接飞书”，登录自己的账号后生成�
 
 
 class FeishuHub:
-    def __init__(self,root:Path,accounts,pool):
+    def __init__(self,root:Path,accounts,pool,*,config_directory:Path):
         self.root,self.accounts,self.pool=root,accounts,pool
-        self.credentials_file=root/'config/feishu-bot.credentials.dpapi'
+        self.credentials_file=config_directory/'feishu-bot.credentials.dpapi'
         self.state_file=root/'channels/feishu.db'
         self.state=None;self.api=None;self.app='';self.process=None;self.worker=None
         self.connected=False;self.last_error=None;self.tasks={};self.stopping=False
         self.queue=None;self.stop_signal=None;self.last_heartbeat=0;self.lease=None
-        config=root/'config/feishu-bot.json'
+        config=config_directory/'feishu-bot.json'
         self.configured=False
         if config.is_file():
             try:self.configured=json.loads(config.read_text(encoding='utf-8-sig')).get('enabled') is True

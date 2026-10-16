@@ -12,6 +12,7 @@ BackendKind = Literal["openai_http", "process_local"]
 
 
 def detect_backend_kind(config: ModelConfig) -> BackendKind:
+    config.validate_role("llm")
     if config.is_local_process():
         return "process_local"
     return "openai_http"

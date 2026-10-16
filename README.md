@@ -51,10 +51,10 @@ Python 依赖统一在 [requirements.txt](requirements.txt)，按服务、本地
 
 | 方案 | 需要准备 |
 | --- | --- |
-| 远程 LLM + 本地 BGE | 配置 main / fast 的兼容 API；BGE 权重放入 `model/`，Embedding 使用 `local://auto` |
+| 远程 LLM + 本地 BGE | 在独立模型文件配置 main / fast 的 OpenAI 兼容 API；BGE 使用 `backend="bge"`、本地路径和 device |
 | 本地 Qwen + BGE HTTP 服务 | 安装统一依赖清单、准备本地权重，先启动独立的 8080 模型服务 |
 
-`config.example.toml` 默认使用第二种方案。模型权重不随 Git 下载；已有账号的模型覆盖配置优先于根配置。安装命令、完整 TOML 示例与安全输入凭据的方法见[安装配置指南](docs/implemented/安装配置与启动.md)。
+`config.toml`负责系统参数，通过`[models].file`引用独立模型文件；公开模板为[configs/models.example.toml](configs/models.example.toml)，本机文件统一放忽略的`configs/local/`。默认模板是本地OpenAI兼容LLM＋进程内BGE，模型权重需另备。已有账号的覆盖和DPAPI凭据继续独立，使用`python scripts/configure_models.py show --user qin`查看实际来源（请用项目.venv）。[配置目录、四种调用与安全输入](docs/implemented/配置目录与模型后端.md) · [安装指南](docs/implemented/安装配置与启动.md)。
 
 ### 3. 构建并启动
 
@@ -108,6 +108,7 @@ MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均�
 
 ```text
 Memoria/
+├─ configs/          # 模型模板、忽略的local私密配置与冻结研究登记
 ├─ assets/           # 项目图片、保留评测结果与来源清单
 ├─ docs/
 │  ├─ implemented/  # 已实现行为、操作和验证边界

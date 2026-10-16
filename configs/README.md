@@ -1,13 +1,18 @@
-# Configs：公开研究参数
+# Configs：模型配置与研究登记
 
-[根入口](../README.md) · [研究工具](../scripts/README.md) · [评测结果](../docs/implemented/DenseRRF自动评测与视图性能.md)
+[项目首页](../README.md) · [完整配置说明](../docs/implemented/配置目录与模型后端.md) · [研究工具](../scripts/README.md)
 
-| 文件 | 内容 |
+| 入口 | 用途与提交范围 |
 | --- | --- |
-| research-local-roles.toml | 本地模型角色参数，需已有模型与设备 |
-| research-remote-roles.toml | 历史远程reader/extractor/decider/judge角色配置；不含Key |
-| research-retrieval-eval-20261012.json | 固定21轮、64题、输入/gold/history指纹、调用顺序与576次分母 |
+| [config.example.toml](../config.example.toml) → 根config.toml | 系统参数、端口、预算、数据与模型文件引用；真实config.toml忽略 |
+| [models.example.toml](models.example.toml) | 公开LLM OpenAI兼容API/回环、本地BGE与Embedding API参数模板 |
+| local/models.toml | 本机管理员默认main/fast/embedding；local全目录忽略 |
+| local/feishu-bot.json / credentials.dpapi | 机器人启用和加密应用凭据；忽略，不存入研究协议 |
+| research-local-roles.toml / research-remote-roles.toml | 历史本地/远程Reader等角色参数；不含Key |
+| research-*.json | 冻结研究输入/协议/预算与失败分母，不当生产模型默认值 |
 
-协议是研究登记，不能当作生产模型配置。私密config.toml、账号models.override.toml及DPAPI profile均在忽略路径。原始输入/gold不在此目录；克隆公开协议不能自动得到私有实验产物。
+现有账号还会加载data/users/<UUID>/config/models.override.toml及其独立DPAPI profile；更改全局文件不一定覆盖账号值。命令`python scripts/configure_models.py show --user qin`查看实际来源，使用项目.venv，0推理且不打印Key。
 
-历史图表对应clean040427c。新增实验使用新evaluation_id和相应代码/数据/模型指纹，不覆盖已有登记与预测；人工评估暂缓、未知保持null，不用AI标签冒充独立真人gold。现有编排器已拒绝重复批次，带allow-remote的执行可能付费。[计划与验收](../docs/plans/长期陪伴记忆研究与实验计划书.md)。
+新机器复制models.example.toml到configs/local/models.toml，在根config.toml设置models.file引用；现有文件不覆盖。此前data/config的服务器级配置通过显式迁移工具归拢，账号数据与凭据保持独立，详见完整说明。
+
+公开研究登记保留原ID/指纹/失败，不随本轮目录整理重新评分。新增实验使用新evaluation_id与实际代码/模型/输入指纹；原始gold、预测和费用账本仍在本机data，未知保持未知，不用工程替身作研究成绩。

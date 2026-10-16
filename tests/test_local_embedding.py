@@ -91,6 +91,7 @@ def test_local_model_is_configured_without_api_key(tmp_path):
     assert public_models(settings)["embedding"] == {
         "model": str(model).replace("\\", "/"), "base_url": "local://cpu",
         "configured": True, "api_key_set": False, "local": True,
+        "backend_kind": "bge", "device": "cpu", "thinking": None,
     }
     assert not EmbeddingClient(ModelConfig("remote", "", "https://example.test/v1")).enabled
     # Process-local local:// is valid for LLM and embedding when model+device are set.

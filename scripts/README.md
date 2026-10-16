@@ -14,6 +14,8 @@ Python依赖只维护根[requirements.txt](../requirements.txt)，按七类注�
 
 | 文件 | 职责/命令 | 边界 |
 | --- | --- | --- |
+| configure_models.py | `show [--user your_username]`或`test --slot embedding` | show只读配置/0推理，remote test需--allow-remote；不打印Key |
+| migrate_config_layout.py | 停服后`--config config.toml` | 迁移旧服务器级配置、保留备份/回滚；不搬账号文件 |
 | download_embedding.py | `scripts/download_embedding.py` | 固定公开BGE revision，核对SHA/大小，仅下载模型数据到model |
 | serve_local_llm.py | `scripts/serve_local_llm.py --model model/Qwen3.5-2B --device cuda --port 8080 --warmup` | 本地文本chat与BGE embeddings；依赖/权重需先准备，进程存活不等于质量 |
 | bench_llm_vram.py | 先用`--help`核对实际参数 | 本地模型显存诊断，需要模型；不能作为长期记忆成绩 |
@@ -85,3 +87,5 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 ## 项目说明与框架图
 
 `render_project_diagrams.py`重绘根assets/images内的英文架构PNG/字体轮廓化SVG，保留已选定的ImageGen海报PNG并封装嵌入位图的SVG，更新四幅产物、提示词和实现来源的指纹；`--check`核对指纹。它不会重新调用ImageGen或覆盖海报PNG。`render_locomo_risk_chart.py --check`校验当前全量聚合与图表，`render_eval_charts.py --check`校验LCCC保留图。三个本地渲染器不读取私有原话或调用模型；海报的独立创意生成与素材类型见[assets](../assets/README.md)。旧基线单独绘图脚本随重复结果移除。
+
+模型参数已从系统配置拆出，[configs](../configs/README.md)管理模板/忽略的local与研究登记；protect_local_data.ps1默认保护data及configs/local，其他自定义私密路径需显式-Directory。详见[配置目录与模型后端](../docs/implemented/配置目录与模型后端.md)。

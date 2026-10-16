@@ -29,6 +29,7 @@ class EmbeddingClient:
     """Remote OpenAI embeddings or optional, offline local BGE inference."""
 
     def __init__(self, config: ModelConfig, timeout_seconds: float = 30, max_retries: int = 2, batch_size: int = 10):
+        config.validate_role("embedding")
         self.config = config
         self.timeout_seconds = timeout_seconds
         self.max_retries = max(0, max_retries)

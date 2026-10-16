@@ -48,3 +48,5 @@ Invoke-RestMethod http://127.0.0.1:8080/v1/models
 [完整预算与引用契约](../../docs/implemented/完整Reader预算与生产引用校验.md)说明配置与范围；新增[test_reader_contract.py](../../tests/test_reader_contract.py)核验HTTP实际body与计数一致、流式、绑定失败和输出预留。
 
 HTTP普通/流式调用使用[tls.py](tls.py)缓存CA验证上下文，冷载在线程；证书路径/文件/目录变化刷新，hostname/CERT_REQUIRED保留，不共享用户HTTP会话/凭据。用于修复Windows重复载CA阻塞异步循环。[实测与边界](../../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+
+2026-10-16模型配置独立：根config.toml引用configs/local/models.toml，支持显式openai、bge及保留的transformers后端；账号覆盖/DPAPI仍隔离。目录、设备/API参数与检查命令见[配置说明](../../docs/implemented/配置目录与模型后端.md)。

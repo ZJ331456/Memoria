@@ -123,7 +123,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     accounts = AccountStore(root / "auth/accounts.db")
     pool = TenantPool(settings, root)
     password_slots = asyncio.Semaphore(2)
-    feishu = FeishuHub(root, accounts, pool)
+    feishu = FeishuHub(root, accounts, pool, config_directory=settings.private_config_directory)
 
     @asynccontextmanager
     async def lifespan(app):

@@ -70,6 +70,9 @@ if (-not (Test-Path -LiteralPath $taskConfig -PathType Leaf)) { throw 'Config fi
 if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
     throw "Port $Port is already occupied. No extra process was started or stopped."
 }
+$taskConfigJson = & $taskPython (Join-Path $PSScriptRoot 'configure_models.py') show --config $taskConfig
+if ($LASTEXITCODE -ne 0) { throw 'Configuration validation failed. Inspect root config.toml and the referenced model file.' }
+$taskPrivateConfig = (($taskConfigJson -join "`n") | ConvertFrom-Json).private_config_directory
 New-Item -ItemType Directory -Path $taskRun,$taskLogs -Force | Out-Null
 $taskStamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $taskOut = Join-Path $taskLogs "backend-$Port-$taskStamp.out.log"
@@ -89,7 +92,7 @@ do {
         Write-Host "Chat ready: $taskUrl/ (PID=$($taskStarted.Id))"
         Write-Host "Memory Studio: $taskUrl/studio/"
         Write-Host "API docs: $taskUrl/docs"
-        if (Test-Path -LiteralPath (Join-Path $taskRoot 'data\config\feishu-bot.json')) {
+        if (Test-Path -LiteralPath (Join-Path $taskPrivateConfig 'feishu-bot.json')) {
             Write-Host 'Feishu bot: privately configured channels start with this backend. Check connection and pair after login in Chat.'
         }
         Write-Host "Logs: $taskLogs"

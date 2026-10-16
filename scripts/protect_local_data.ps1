@@ -1,8 +1,12 @@
 # Local administrator utility: restrict data to the current Windows identity and SYSTEM.
-param([string]$Directory = (Join-Path $PSScriptRoot '..\data'))
+param([string]$Directory)
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\')
-$target = [IO.Path]::GetFullPath($Directory).TrimEnd('\')
+$taskPrivateTargets = if ($Directory) { @($Directory) } else { @((Join-Path $repoRoot 'data'), (Join-Path $repoRoot 'configs\local')) }
+$taskProtectedCount = 0
+foreach ($taskPrivateTarget in $taskPrivateTargets) {
+if (-not (Test-Path -LiteralPath $taskPrivateTarget)) { continue }
+$target = [IO.Path]::GetFullPath($taskPrivateTarget).TrimEnd('\')
 if (-not $target.StartsWith($repoRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Private directory must remain inside the repository'
 }
@@ -17,6 +21,14 @@ foreach ($item in $items) {
     foreach ($sid in @($ownerSid, $systemSid)) {
         $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', $inherit, 'None', 'Allow'))
     }
-    [IO.FileSystemAclExtensions]::SetAccessControl($item, $acl)
+    if ($PSVersionTable.PSEdition -eq 'Core') {
+        [IO.FileSystemAclExtensions]::SetAccessControl($item, $acl)
+    } else {
+        # Windows PowerShell 5 has the instance API, without asking Set-Acl to
+        # write auditing/ownership sections requiring SeSecurityPrivilege.
+        $item.SetAccessControl($acl)
+    }
 }
-Write-Output ('Protected private storage items: ' + $items.Count)
+$taskProtectedCount += $items.Count
+}
+Write-Output ('Protected private storage items: ' + $taskProtectedCount)

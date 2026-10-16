@@ -16,6 +16,8 @@
 
 ## 全部实现记录
 
+- [配置目录与模型后端](配置目录与模型后端.md)
+
 - [文档结构与展示资产](文档结构与展示资产.md)
 - [Memoria Agent API 接口文档](API接口文档.md)
 - [独立Chat与Memory Studio前端架构](Chat与Studio前端架构.md)

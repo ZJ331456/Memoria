@@ -102,7 +102,7 @@ def hub(tmp_path):
             return {'message':message}
         return SimpleNamespace(state=SimpleNamespace(store=store,chat_turn=turn))
     accounts=SimpleNamespace(enabled_user=lambda owner:dict(id=owner) if owner in enabled else None)
-    instance=FeishuHub(tmp_path,accounts,SimpleNamespace(get=get))
+    instance=FeishuHub(tmp_path,accounts,SimpleNamespace(get=get),config_directory=tmp_path/'configs/local')
     instance.state=FeishuState(tmp_path/'channel.db');instance.app=digest(APP);instance.configured=True;instance.api=ReplyStub()
     instance.calls=calls;instance.stores=stores;instance.enabled=enabled
     yield instance

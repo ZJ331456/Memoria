@@ -19,8 +19,8 @@ def main():
     parser.add_argument('--credentials-file',type=Path,help='Private input JSON, never a tracked project file')
     parser.add_argument('--disable',action='store_true')
     args=parser.parse_args()
-    root=Settings.load(args.config).database.parent.resolve()
-    target=root/'config/feishu-bot.json';target.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+    directory=Settings.load(args.config).private_config_directory
+    target=directory/'feishu-bot.json';target.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
     if args.disable:
         target.write_text('{"enabled": false}\n',encoding='utf-8');print('Bot ingress disabled; restart the backend. Existing data and bindings are retained.');return
     if args.from_user:
@@ -31,7 +31,7 @@ def main():
         private={'app_id':input('App ID (private local input): ').strip(),'app_secret':getpass.getpass('App Secret (hidden): ').strip()}
     if not isinstance(private.get('app_id'),str) or not private['app_id'].startswith('cli_') or not private.get('app_secret'):
         raise SystemExit('Invalid private bot credentials; no value was printed')
-    save_private_json(root/'config/feishu-bot.credentials.dpapi',{'app_id':private['app_id'],'app_secret':private['app_secret']})
+    save_private_json(directory/'feishu-bot.credentials.dpapi',{'app_id':private['app_id'],'app_secret':private['app_secret']})
     target.write_text('{"enabled": true}\n',encoding='utf-8')
     print('Bot credentials saved with Windows DPAPI. No ID/secret printed. Restart backend; configure receive-message events and pair from Chat.')
 

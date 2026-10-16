@@ -73,10 +73,44 @@ class ModelConfig:
     api_key: str
     base_url: str
     thinking: str | None = None
+    backend: str = "auto"
+    device: str = "auto"
 
     def __post_init__(self):
+        if self.backend not in {"auto", "openai", "bge", "transformers"}:
+            raise ValueError("model backend must be auto, openai, bge or transformers")
+        if self.device not in {"auto", "cpu", "cuda"}:
+            raise ValueError("model device must be auto, cpu or cuda")
+        self.base_url = self.base_url.strip().rstrip("/")
+        if self.backend in {"bge", "transformers"}:
+            if self.base_url and not self.base_url.startswith("local://"):
+                raise ValueError("process-local backends cannot use an HTTP base_url")
+            if self.base_url:
+                previous = self.base_url.removeprefix("local://")
+                if previous not in {"auto", "cpu", "cuda"} or self.device not in {"auto", previous}:
+                    raise ValueError("local base_url and device disagree")
+                self.device = previous
+            self.base_url = "local://" + self.device
+        if self.backend == "openai" or self.base_url.startswith(("http://", "https://")):
+            parsed = urlparse(self.base_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise ValueError("openai backend requires an HTTP(S) base_url without credentials/query/fragment")
         if self.thinking not in {None, "enabled", "disabled"}:
             raise ValueError("thinking must be enabled, disabled or unset")
+
+    def validate_role(self, role: SlotRole) -> None:
+        if (role == "llm" and self.backend == "bge") or (role == "embedding" and self.backend == "transformers"):
+            raise ValueError("model backend does not support this slot role")
+        if role == "embedding" and self.thinking is not None:
+            raise ValueError("embedding slots do not support thinking")
+        if not self.is_local_process() and self.device != "auto":
+            raise ValueError("device applies only to process-local models")
+
+    def backend_kind(self, role: SlotRole) -> str:
+        self.validate_role(role)
+        if self.backend != "auto":
+            return self.backend
+        return ("bge" if role == "embedding" else "transformers") if self.is_local_process() else "openai"
 
     def is_local_process(self) -> bool:
         return self.base_url.startswith("local://")
@@ -86,6 +120,8 @@ class ModelConfig:
 
     def is_ready(self, *, role: SlotRole = "llm") -> bool:
         """Remote slots need an API key; local backends may omit it."""
+        if (role == "llm" and self.backend == "bge") or (role == "embedding" and self.backend == "transformers"):
+            return False
         if not (self.model and self.base_url):
             return False
         if self.api_key:
@@ -151,6 +187,7 @@ class Settings:
     source: Path
     memory_layers: MemoryLayerSettings | None = None
     model_override_file: Path | None = None
+    private_config_directory: Path | None = None
     reader_input_bytes: int = 240000
     reader_context_tokens: int | None = None
     reader_safety_tokens: int = 128
@@ -158,7 +195,7 @@ class Settings:
     memory_approval_mode: str = 'llm'
 
     @classmethod
-    def load(cls, path: str | Path | None = None) -> "Settings":
+    def load(cls, path: str | Path | None = None, *, _legacy_migration: bool = False) -> "Settings":
         root = Path(__file__).resolve().parents[1]
         source = Path(path or os.getenv("MEMORIA_CONFIG", root / "config.toml"))
         if not source.exists():
@@ -189,6 +226,8 @@ class Settings:
                 api_key=_resolve(str(section.get("api_key", ""))),
                 base_url=str(section.get("base_url", "")).rstrip("/"),
                 thinking=section.get("thinking"),
+                backend=section.get("backend", "auto"),
+                device=section.get("device", "auto"),
             )
 
         main = model(llm.get("main", {}))
@@ -285,7 +324,25 @@ class Settings:
         from .memory.layer_settings import MemoryLayerSettings
 
         settings.memory_layers = MemoryLayerSettings.from_dict(memory_section.get("layers", {}))
-        settings.model_override_file = db.parent / "config/models.override.toml"
+        private_dir = Path(str(data.get("configuration", {}).get("private_directory", "configs/local")))
+        settings.private_config_directory = (private_dir if private_dir.is_absolute() else source.resolve().parent / private_dir).resolve()
+        models_file = data.get("models", {}).get("file")
+        if models_file is not None and (not isinstance(models_file, str) or not models_file.strip()):
+            raise ValueError("models.file must be a non-empty file path")
+        settings.model_override_file = Path(models_file) if models_file else settings.private_config_directory / "models.toml"
+        if not settings.model_override_file.is_absolute():
+            settings.model_override_file = source.resolve().parent / settings.model_override_file
+        settings.model_override_file = settings.model_override_file.resolve()
+        legacy = db.parent / "config"
+        if not _legacy_migration and legacy.resolve() != settings.private_config_directory and any(
+            (legacy / name).exists() for name in ("models.override.toml", "feishu-bot.json", "feishu-bot.credentials.dpapi")
+        ):
+            raise ValueError("Legacy data/config found; stop backend and run scripts/migrate_config_layout.py --config config.toml before starting")
+        if models_file and not settings.model_override_file.is_file():
+            raise ValueError("Model configuration file is missing; copy configs/models.example.toml to the configured models.file")
+        for slot in (settings.main, settings.fast):
+            slot.validate_role("llm")
+        settings.embedding.validate_role("embedding")
         from .models_config import apply_overrides
 
         return apply_overrides(settings)
@@ -302,6 +359,7 @@ class Settings:
                 "base_url": value.base_url,
                 "configured": value.is_ready(role=role),
                 "local": value.is_local_process() or (role == "llm" and value.is_local_http()),
+                "backend_kind": value.backend_kind(role),
             }
         return {
             "main": safe(self.main, role="llm"), "fast": safe(self.fast, role="llm"),
@@ -325,6 +383,15 @@ def _read_with_parent(path: Path, seen: set[Path] | None = None) -> dict[str, An
     seen.add(path)
     with path.open("rb") as handle:
         data = tomllib.load(handle)
+    # References inherit the directory of their declaring file, including extends.
+    models_file = data.get("models", {}).get("file")
+    if isinstance(models_file, str) and models_file.strip():
+        target = Path(models_file)
+        data["models"]["file"] = str((target if target.is_absolute() else path.parent / target).resolve())
+    private_dir = data.get("configuration", {}).get("private_directory")
+    if isinstance(private_dir, str) and private_dir.strip():
+        target = Path(private_dir)
+        data["configuration"]["private_directory"] = str((target if target.is_absolute() else path.parent / target).resolve())
     parent = data.pop("extends", None)
     if not parent:
         return data

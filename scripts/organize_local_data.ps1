@@ -10,7 +10,7 @@ $moves = @(
     @('markdown', 'legacy/pre-users/markdown'),
     @('backups', 'legacy/pre-users/backups'),
     @('mcp_servers.json', 'legacy/pre-users/mcp_servers.json'),
-    @('models.override.toml', 'config/models.override.toml'),
+    @('models.override.toml', 'legacy/pre-users/models.override.toml'),
     @('datasets/lccc-base/multiturn-50.db', 'legacy/public-corpus/multiturn-50.db'),
     @('datasets/lccc-base/multiturn-50.import.json', 'legacy/public-corpus/multiturn-50.import.json'),
     @('reports/local_embedding_environment.json', 'reports/system/local_embedding_environment.json'),

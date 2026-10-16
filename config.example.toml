@@ -2,41 +2,15 @@
 # 推荐把真实 Key 放在环境变量中，不要提交到 Git。
 
 [llm]
-provider = "openai"
 request_timeout_seconds = 90
 max_retries = 2
 
-# ---------------------------------------------------------------------------
-# [llm.main]：业务侧统一走 OpenAI 兼容 HTTP（memoria/llm/backends/openai_http.py）
-#
-# A) 远程 API
-#   model = "deepseek-v4-flash"
-#   api_key = "${DEEPSEEK_API_KEY}"
-#   base_url = "https://api.deepseek.com/v1"
-#
-# B) Windows 推荐：先起本仓库本地服务，再连 HTTP
-#   .\.venv\Scripts\python.exe scripts/serve_local_llm.py --model model/Qwen3.5-2B --device cuda --port 8080 --warmup
-#   （vLLM/SGLang 官方不支持原生 Windows，可用 WSL2；Ollama 亦可）
-#
-# C) 进程内兜底（无 HTTP 服务时）：base_url = "local://cuda"
-# ---------------------------------------------------------------------------
-[llm.main]
-model = "model/Qwen3.5-2B"
-api_key = ""
-base_url = "http://127.0.0.1:8080/v1"
-multimodal = false
+# 模型单独管理；默认读取公开本地模板，正式配置复制到configs/local再改file。
+[models]
+file = "configs/models.example.toml"
 
-# 本地模式 fast 复用同一服务，避免记忆提取/检索规划意外请求远程 API。
-# 如需远程 fast，可另填远程模型、base_url 与环境变量 Key。
-[llm.fast]
-model = "model/Qwen3.5-2B"
-api_key = ""
-base_url = "http://127.0.0.1:8080/v1"
-
-[llm.vl]
-model = "qwen3.7-plus"
-api_key = "${DASHSCOPE_API_KEY}"
-base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+[configuration]
+private_directory = "configs/local"
 
 [agent]
 system_prompt = "你是 Memoria，用户的长期 AI 伙伴。用与用户相同的语言回答。"
@@ -89,25 +63,6 @@ engine = ""
 [memory.markdown]
 enabled = true
 directory = "data/markdown"
-
-# ---------------------------------------------------------------------------
-# [memory.embedding] 样例：默认与 LLM 共用本地 OpenAI 兼容 HTTP 服务
-#
-# A) 远程 Embedding API
-# [memory.embedding]
-# model = "text-embedding-v3"
-# api_key = "${DASHSCOPE_API_KEY}"
-# base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-#
-# B) 本地 HTTP BGE（无需 API Key），serve_local_llm.py 默认提供 /v1/embeddings。
-# C) 进程内本地 BGE：model = "model/bge-small-zh-v1.5"，base_url = "local://cuda"
-#    设备也可用 local://cpu | local://auto。
-#    下载与环境见 docs/implemented/本地Embedding配置.md
-# ---------------------------------------------------------------------------
-[memory.embedding]
-model = "bge-small-zh-v1.5"
-api_key = ""
-base_url = "http://127.0.0.1:8080/v1"
 
 [memory.retrieval]
 # auto 会优先使用可选 sqlite-vec，未安装时回退 JSON 向量扫描。

@@ -1,6 +1,6 @@
 # 本地中文 Embedding：BGE small zh v1.5
 
-2026-10-12 更新：支持进程内 `local://cpu/cuda/auto` 和本机 OpenAI 兼容 HTTP 两种方式。默认示例为 Qwen/BGE 共用 `http://127.0.0.1:8080/v1`；远程 LLM 也可搭配进程内 BGE。完整启动顺序见[安装配置指南](安装配置与启动.md#模型方案选择一种)与[统一接口](本地与远程OpenAI统一接口.md)。本页的文件规模与环境数字是 2026-10-10 的下载/环境记录，不是最新部署性能测量。
+2026-10-12 更新：支持进程内 `local://cpu/cuda/auto` 和本机 OpenAI 兼容 HTTP 两种方式。2026-10-16模型已拆到[独立模型配置](配置目录与模型后端.md)，默认模板为OpenAI兼容LLM＋进程内BGE（backend=bge、device独立）；HTTP Embedding仍可选，API模型用backend=openai。完整启动顺序见[安装配置指南](安装配置与启动.md#模型方案选择一种)与[统一接口](本地与远程OpenAI统一接口.md)。本页的文件规模与环境数字是 2026-10-10 的下载/环境记录，不是最新部署性能测量。
 
 模型存储在项目根目录 `model/bge-small-zh-v1.5/`，依赖安装到项目 `.venv`。接入代码已在 main；模型文件、环境、私有 override 与原始报告不随 clone 提供。main/fast 的实际配置取决于默认配置及账号覆盖，本页不固定它们的供应商。
 
@@ -48,12 +48,13 @@ Get-Content .venv/pyvenv.cfg
 
 ## 配置与启动
 
-进程内方案在私密 `config.toml` 中设置；账号已有 `data/users/<UUID>/config/models.override.toml` 时，该文件覆盖默认槽位：
+进程内方案在私密 `configs/local/models.toml` 中设置，根config.toml引用该文件；账号已有 `data/users/<UUID>/config/models.override.toml` 时，该文件覆盖默认槽位：
 
 ```toml
 [memory.embedding]
+backend = "bge"
 model = "model/bge-small-zh-v1.5"
-base_url = "local://cuda"
+device = "cuda"
 ```
 
 本地后端无需 API Key；旧 Embedding key 即使仍存于私有配置中也不会用于本地编码。`local://cuda` 明确要求 GPU，不可用时报告错误；`local://cpu` 明确走 CPU；`local://auto` 自动选择可用设备。模型相对路径按项目根目录解析。
