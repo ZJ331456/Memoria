@@ -129,7 +129,7 @@ class QQHub(PollingHub):
                                 if event.get('t') in {'READY','RESUMED'}:
                                     self.connected=True;self.last_error=None;delay=2
                                 source=parse_event(event)
-                                if source:self.state.ingest(self.app,source)
+                                if source and self.state.ingest(self.app,source):self.wakeup.set()
                                 # A sequence becomes resumable only after durable ingest.
                                 sequence=event.get('s',sequence)
                     pending=[asyncio.create_task(heartbeat()),asyncio.create_task(consume())]

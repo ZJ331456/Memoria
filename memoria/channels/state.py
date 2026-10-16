@@ -19,6 +19,7 @@ class ChannelState:
         self.db=sqlite3.connect(path,check_same_thread=False,timeout=0.5)
         self.db.row_factory=sqlite3.Row;self.lock=threading.RLock()
         self.db.execute('PRAGMA journal_mode=WAL')
+        self.db.execute('PRAGMA foreign_keys=ON')
         self.db.executescript('''
             CREATE TABLE IF NOT EXISTS pairing(app TEXT,owner TEXT,hash TEXT UNIQUE,expires REAL,PRIMARY KEY(app,owner));
             CREATE TABLE IF NOT EXISTS bindings(app TEXT,sender TEXT,owner TEXT,session TEXT,created REAL,
@@ -29,9 +30,32 @@ class ChannelState:
             CREATE TABLE IF NOT EXISTS checkpoints(app TEXT PRIMARY KEY,offset INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS delivery_parts(app TEXT,message_id TEXT,part INTEGER,status TEXT,
                 PRIMARY KEY(app,message_id,part));
+            CREATE TABLE IF NOT EXISTS channel_timings(app TEXT,message_id TEXT,source_created_at REAL,received_at REAL,
+                processing_started_at REAL,generation_started_at REAL,generated_at REAL,sent_at REAL,
+                PRIMARY KEY(app,message_id),FOREIGN KEY(app,message_id) REFERENCES inbox(app,message_id) ON DELETE CASCADE);
+            CREATE INDEX IF NOT EXISTS channel_timings_received ON channel_timings(app,received_at DESC);
         ''')
 
     def close(self):self.db.close()
+
+    def mark_timing(self,app,message_id,field):
+        if field not in {'processing_started_at','generation_started_at','generated_at','sent_at'}:raise ValueError('Invalid timing field')
+        with self.lock,self.db:
+            self.db.execute('UPDATE channel_timings SET '+field+'=COALESCE('+field+',?) WHERE app=? AND message_id=?',
+                            (time.time(),app,message_id))
+
+    def latency(self,app,owner):
+        with self.lock:
+            rows=self.db.execute('''SELECT t.* FROM channel_timings t JOIN inbox i USING(app,message_id)
+                WHERE t.app=? AND i.owner=? AND t.generation_started_at IS NOT NULL AND t.sent_at IS NOT NULL
+                ORDER BY t.received_at DESC LIMIT 20''',(app,owner)).fetchall()
+        result={'samples':len(rows),'scope':'last_20_delivered_turns_current_account','clock_note':'platform timestamps may have second precision and clock skew'}
+        for name,left,right in [('receive_after_platform_timestamp_ms','source_created_at','received_at'),
+                ('queue_and_initialization_ms','received_at','generation_started_at'),
+                ('agent_ms','generation_started_at','generated_at'),('delivery_ms','generated_at','sent_at')]:
+            values=[(r[right]-r[left])*1000 for r in rows if r[left] is not None and r[right] is not None]
+            result[name]=round(sum(values)/len(values),1) if values else None
+        return result
 
     def cursor(self,app):
         with self.lock:row=self.db.execute('SELECT offset FROM checkpoints WHERE app=?',(app,)).fetchone()
@@ -94,8 +118,12 @@ class ChannelState:
             self.db.execute('BEGIN IMMEDIATE')
             binding=self.db.execute('SELECT owner,created FROM bindings WHERE app=? AND sender=?',(app,packet['sender'])).fetchone()
             durable={**packet,'binding_created':binding['created'] if binding else None}
+            received=time.time()
             result=self.db.execute('INSERT OR IGNORE INTO inbox(app,message_id,sender,body,owner,status,created) VALUES(?,?,?,?,?,?,?)',
-                (app,packet['message_id'],packet['sender'],json.dumps(durable,ensure_ascii=False),binding['owner'] if binding else None,'received',time.time()))
+                (app,packet['message_id'],packet['sender'],json.dumps(durable,ensure_ascii=False),binding['owner'] if binding else None,'received',received))
+            if result.rowcount:
+                self.db.execute('INSERT INTO channel_timings(app,message_id,source_created_at,received_at) VALUES(?,?,?,?)',
+                    (app,packet['message_id'],packet['created'],received))
             return result.rowcount==1
 
     def pending(self,app:str,limit=64):
@@ -121,12 +149,19 @@ class ChannelState:
 
     def claim(self,app:str,message_id:str)->bool:
         with self.lock,self.db:
-            return self.db.execute("UPDATE inbox SET status='processing' WHERE app=? AND message_id=? AND status='received'",(app,message_id)).rowcount==1
+            claimed=self.db.execute("UPDATE inbox SET status='processing' WHERE app=? AND message_id=? AND status='received'",(app,message_id)).rowcount==1
+            if claimed:self.db.execute('UPDATE channel_timings SET processing_started_at=COALESCE(processing_started_at,?) WHERE app=? AND message_id=?',
+                                       (time.time(),app,message_id))
+            return claimed
 
     def update(self,app:str,message_id:str,status:str,*,reply:str|None=None,owner=None,session=None,error=None):
         with self.lock,self.db:
             self.db.execute('UPDATE inbox SET status=?,reply=COALESCE(?,reply),owner=COALESCE(?,owner),session=COALESCE(?,session),error=? WHERE app=? AND message_id=?',
                 (status,reply,owner,session,error,app,message_id))
+            if status in {'generated','sent'}:
+                field='generated_at' if status=='generated' else 'sent_at'
+                self.db.execute('UPDATE channel_timings SET '+field+'=COALESCE('+field+',?) WHERE app=? AND message_id=?',
+                                (time.time(),app,message_id))
             if status in {'sent','ignored','interrupted','failed'}:
                 self.db.execute("UPDATE inbox SET body='{}',reply=NULL WHERE app=? AND message_id=?",(app,message_id))
 

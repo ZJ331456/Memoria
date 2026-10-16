@@ -1,7 +1,7 @@
 """Shared account-bound channel turns; adapters only handle platform I/O."""
 from __future__ import annotations
 import asyncio,json,os,time
-from contextlib import suppress
+from contextlib import suppress,asynccontextmanager
 from pathlib import Path
 from .feishu_api import reply_parts
 from .state import digest
@@ -14,6 +14,9 @@ class ChannelHub:
     channel='feishu'
     label='飞书'
     max_parts=12
+    @asynccontextmanager
+    async def processing_feedback(self,packet,owner):
+        yield
     @property
     def help_text(self):
         return '请在本地Chat的账号菜单打开“通讯连接”，选择'+self.label+'，生成绑定码；然后在此私聊发送 /绑定 绑定码。绑定后直接发送文字；/new 新对话，/stop 停止，/unbind 解绑。'
@@ -51,6 +54,7 @@ class ChannelHub:
 
     def finished(self,key,task):
         self.tasks.pop(key,None)
+        if getattr(self,'wakeup',None):self.wakeup.set()
         if not task.cancelled():
             with suppress(Exception):task.result()
 
@@ -87,24 +91,26 @@ class ChannelHub:
                     if self.configuration.get('processing_notice',False):
                         with suppress(Exception):
                             await self.send_reply(packet,'已收到，正在处理。可发送 /stop 停止本轮。',-1)
-                    tenant=await self.pool.get(user)
-                    # Recheck ownership after slow tenant/MCP initialization.
-                    current=self.state.binding(self.app,sender)
-                    if not current or current['owner']!=owner:return self.state.update(self.app,message_id,'ignored')
-                    session=binding['session']
-                    if not session or not tenant.state.store.session(session):
-                        session=tenant.state.store.create_session(self.label+' · '+text[:30])['id']
-                        self.state.session(self.app,sender,owner,session)
-                    self.state.update(self.app,message_id,'processing',owner=owner,session=session)
-                    async with self.turn_slots:
-                        # Binding can change while waiting for the global model slot.
+                    async with self.processing_feedback(packet,owner):
+                        tenant=await self.pool.get(user)
+                        # Recheck ownership after slow tenant/MCP initialization.
                         current=self.state.binding(self.app,sender)
-                        if not current or current['owner']!=owner or current['created']!=binding['created'] or not self.accounts.enabled_user(owner):
-                            self.state.update(self.app,message_id,'ignored');return
-                        from ..provenance import message_ingress
-                        with message_ingress(self.channel,digest(self.app+':'+message_id)):
-                            result=await tenant.state.chat_turn(session,text,request_id=self.channel+'-'+digest(message_id)[:24])
-                    reply=result['message']['content']
+                        if not current or current['owner']!=owner:return self.state.update(self.app,message_id,'ignored')
+                        session=binding['session']
+                        if not session or not tenant.state.store.session(session):
+                            session=tenant.state.store.create_session(self.label+' · '+text[:30])['id']
+                            self.state.session(self.app,sender,owner,session)
+                        self.state.update(self.app,message_id,'processing',owner=owner,session=session)
+                        async with self.turn_slots:
+                            # Binding can change while waiting for the global model slot.
+                            current=self.state.binding(self.app,sender)
+                            if not current or current['owner']!=owner or current['created']!=binding['created'] or not self.accounts.enabled_user(owner):
+                                self.state.update(self.app,message_id,'ignored');return
+                            self.state.mark_timing(self.app,message_id,'generation_started_at')
+                            from ..provenance import message_ingress
+                            with message_ingress(self.channel,digest(self.app+':'+message_id)):
+                                result=await tenant.state.chat_turn(session,text,request_id=self.channel+'-'+digest(message_id)[:24])
+                        reply=result['message']['content']
             self.state.update(self.app,message_id,'generated',reply=reply,owner=owner,session=session)
             await self.deliver({**row,'reply':reply,'owner':owner},packet)
         except asyncio.CancelledError:

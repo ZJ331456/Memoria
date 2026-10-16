@@ -9,12 +9,12 @@
 | 文件 | 职责 |
 | --- | --- |
 | base.py | 共用绑定/命令/账号路由、全局模型并发、生成及有限投递 |
-| state.py | 平台独立SQLite、绑定码摘要、持久化去重、游标和发送状态 |
-| polling.py | QQ/Telegram非阻塞后台生命周期、独占监听与关闭 |
+| state.py | 平台独立SQLite、绑定码摘要、去重/游标/发送状态和按账号的阶段耗时 |
+| polling.py | QQ/Telegram后台生命周期、入箱/完成唤醒、独占监听与关闭 |
 | normalize.py / errors.py / config.py | 入箱前消除绑定码原文、脱敏错误、统一配置校验 |
 | feishu.py / feishu_transport.py / feishu_api.py / feishu_state.py | 飞书官方SDK子进程、REST、事件适配 |
 | qq.py | QQ官方AccessToken、C2C REST、WSS鉴权/心跳/重连与会话恢复 |
-| telegram.py | 官方Bot API鉴权、长轮询、入箱后推进offset、Token URL脱敏与不确定发送保护 |
+| telegram.py | 独立轮询/发送连接池、官方typing状态、持久化offset、Token URL脱敏及不确定发送保护 |
 
 开关、凭据引用和代理统一在config/bot.toml，实际秘密Windows DPAPI保存到data/secrets；代码目录不含私密值。状态/绑定接口为/api/channels/{feishu|qq|telegram}，只取正式登录账号。手机群聊、频道、语音、图片与文件暂不进入个人记忆。
 

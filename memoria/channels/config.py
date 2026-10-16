@@ -7,10 +7,11 @@ def validate_bot_configuration(data):
     for name,table in data.items():
         allowed={'enabled','credentials_file','processing_notice'}
         if name in {'qq','telegram'}:allowed.add('proxy_url')
-        if name=='telegram':allowed|={'expected_username','poll_timeout_seconds'}
+        if name=='telegram':allowed|={'expected_username','poll_timeout_seconds','typing_indicator'}
         if not isinstance(table,dict) or set(table)-allowed:raise ValueError('bot.toml中存在无效配置字段')
         if type(table.get('enabled',False)) is not bool:raise ValueError('机器人enabled必须是布尔值')
         if type(table.get('processing_notice',False)) is not bool:raise ValueError('processing_notice必须是布尔值')
+        if type(table.get('typing_indicator',True)) is not bool:raise ValueError('typing_indicator必须是布尔值')
         if 'credentials_file' in table and (not isinstance(table['credentials_file'],str) or not table['credentials_file'].strip()):raise ValueError('credentials_file必须是非空路径')
         if 'expected_username' in table and not isinstance(table['expected_username'],str):raise ValueError('expected_username必须是字符串')
         timeout=table.get('poll_timeout_seconds',25)

@@ -16,6 +16,7 @@ proxy_url = ""
 [telegram]
 enabled = false
 processing_notice = false
+typing_indicator = true
 credentials_file = "data/secrets/telegram-bot.credentials.dpapi"
 expected_username = ""
 poll_timeout_seconds = 25

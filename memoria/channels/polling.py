@@ -11,6 +11,7 @@ class PollingHub(ChannelHub):
     def __init__(self,root,accounts,pool,*,configuration,project):
         self.root,self.accounts,self.pool=root,accounts,pool
         self.turn_slots=asyncio.Semaphore(4)
+        self.wakeup=asyncio.Event()
         self.configuration=configuration
         self.credentials_file=Path(configuration.get('credentials_file',str(root/'secrets'/(self.channel+'-bot.credentials.dpapi'))))
         if not self.credentials_file.is_absolute():self.credentials_file=project/self.credentials_file
@@ -21,7 +22,8 @@ class PollingHub(ChannelHub):
 
     def status(self,owner):
         return dict(configured=self.configured,connected=self.connected,bound=bool(self.state and self.state.bound(self.app,owner)),
-                    last_error=self.last_error,mode='private_text',pairing_ttl_seconds=600)
+                    last_error=self.last_error,mode='private_text',pairing_ttl_seconds=600,
+                    latency=self.state.latency(self.app,owner) if self.state else {'samples':0})
 
     def pairing(self,owner):
         if not self.state or not self.configured:raise ValueError('该通讯机器人尚未由本机管理员配置')
@@ -49,8 +51,10 @@ class PollingHub(ChannelHub):
 
     async def run(self):
         while True:
+            self.wakeup.clear()
             self.dispatch_pending()
-            await asyncio.sleep(.4)
+            try:await asyncio.wait_for(self.wakeup.wait(),.4)
+            except asyncio.TimeoutError:pass
 
     async def close(self):
         self.stopping=True
