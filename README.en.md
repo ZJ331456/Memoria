@@ -27,7 +27,12 @@ git clone https://github.com/ZJ331456/Memoria.git
 Set-Location Memoria
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
+Get-ChildItem config/*.example.toml | ForEach-Object {
+    $taskConfigFile = $_.FullName.Replace('.example.toml', '.toml')
+    if (-not (Test-Path -LiteralPath $taskConfigFile)) {
+        Copy-Item -LiteralPath $_.FullName -Destination $taskConfigFile
+    }
+}
 ```
 
 Configure models before starting. The example defaults to a local Qwen/BGE HTTP service on port 8080. Alternatively, use a remote main/fast LLM with in-process local BGE. Model weights are excluded from Git; per-account overrides take priority. See the [complete setup guide](docs/implemented/安装配置与启动.md).
@@ -85,4 +90,4 @@ Continuous personal-history effects remain unverified. Backup/restore, migration
 
 Routine memories now use model-led admission: extraction, a separate evidence review, and source/risk checks before automatic low-risk publication. Human review handles sensitive, conflicting or ambiguous cases. Studio supports an explicit per-message history request and audit receipts; public corpus data stays separate. See [implementation and limits](docs/implemented/LLM自动审核与人工辅助.md).
 
-Model parameters are now separate from system settings: `config.toml` references `configs/local/models.toml`; [the public model template](configs/models.example.toml) covers OpenAI-compatible cloud/local LLMs, API embeddings and process-local BGE. Server private config stays in ignored `configs/local/`; account overrides and DPAPI profiles remain isolated. [Configuration layout and migration](docs/implemented/配置目录与模型后端.md).
+Runtime settings live in [config/](config/README.md): system.toml, models.toml, feishu.toml and mcp.toml, each with a public example. Actual files are ignored; there is no local subdirectory. One model file selects cloud/local LLMs and API/process-local BGE embeddings, including UUID-owned account overrides. Encrypted credentials and OAuth remain in private data storage. [Configuration guide](docs/implemented/配置目录与模型后端.md).

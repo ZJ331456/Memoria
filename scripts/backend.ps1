@@ -2,7 +2,7 @@
 param(
     [ValidateSet('Start','Status','Stop')][string]$Action = 'Start',
     [ValidateRange(1024,65535)][int]$Port = 2237,
-    [string]$Config = 'config.toml',
+    [string]$Config = 'config/system.toml',
     [ValidateRange(1,60)][int]$TimeoutSeconds = 30
 )
 $ErrorActionPreference = 'Stop'
@@ -66,13 +66,13 @@ if ($taskExisting) {
     throw 'Managed process exists but health check failed. Inspect logs; use -Action Stop before restarting.'
 }
 if (-not (Test-Path -LiteralPath $taskPython -PathType Leaf)) { throw 'Project .venv is missing; follow README environment setup.' }
-if (-not (Test-Path -LiteralPath $taskConfig -PathType Leaf)) { throw 'Config file missing. Prepare private config.toml first; existing config is never overwritten.' }
+if (-not (Test-Path -LiteralPath $taskConfig -PathType Leaf)) { throw 'Config file missing. Prepare private config/system.toml first; existing config is never overwritten.' }
 if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue) {
     throw "Port $Port is already occupied. No extra process was started or stopped."
 }
 $taskConfigJson = & $taskPython (Join-Path $PSScriptRoot 'configure_models.py') show --config $taskConfig
-if ($LASTEXITCODE -ne 0) { throw 'Configuration validation failed. Inspect root config.toml and the referenced model file.' }
-$taskPrivateConfig = (($taskConfigJson -join "`n") | ConvertFrom-Json).private_config_directory
+if ($LASTEXITCODE -ne 0) { throw 'Configuration validation failed. Inspect config/system.toml.' }
+$taskBotEnabled = (($taskConfigJson -join "`n") | ConvertFrom-Json).feishu_bot_enabled
 New-Item -ItemType Directory -Path $taskRun,$taskLogs -Force | Out-Null
 $taskStamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $taskOut = Join-Path $taskLogs "backend-$Port-$taskStamp.out.log"
@@ -92,7 +92,7 @@ do {
         Write-Host "Chat ready: $taskUrl/ (PID=$($taskStarted.Id))"
         Write-Host "Memory Studio: $taskUrl/studio/"
         Write-Host "API docs: $taskUrl/docs"
-        if (Test-Path -LiteralPath (Join-Path $taskPrivateConfig 'feishu-bot.json')) {
+        if ($taskBotEnabled) {
             Write-Host 'Feishu bot: privately configured channels start with this backend. Check connection and pair after login in Chat.'
         }
         Write-Host "Logs: $taskLogs"

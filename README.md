@@ -40,7 +40,12 @@ git clone https://github.com/ZJ331456/Memoria.git
 Set-Location Memoria
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-if (-not (Test-Path config.toml)) { Copy-Item config.example.toml config.toml }
+Get-ChildItem config/*.example.toml | ForEach-Object {
+    $taskConfigFile = $_.FullName.Replace('.example.toml', '.toml')
+    if (-not (Test-Path -LiteralPath $taskConfigFile)) {
+        Copy-Item -LiteralPath $_.FullName -Destination $taskConfigFile
+    }
+}
 ```
 
 已有项目直接进入仓库并保留现有环境、私密配置和账号资料。
@@ -54,7 +59,7 @@ Python 依赖统一在 [requirements.txt](requirements.txt)，按服务、本地
 | 远程 LLM + 本地 BGE | 在独立模型文件配置 main / fast 的 OpenAI 兼容 API；BGE 使用 `backend="bge"`、本地路径和 device |
 | 本地 Qwen + BGE HTTP 服务 | 安装统一依赖清单、准备本地权重，先启动独立的 8080 模型服务 |
 
-`config.toml`负责系统参数，通过`[models].file`引用独立模型文件；公开模板为[configs/models.example.toml](configs/models.example.toml)，本机文件统一放忽略的`configs/local/`。默认模板是本地OpenAI兼容LLM＋进程内BGE，模型权重需另备。已有账号的覆盖和DPAPI凭据继续独立，使用`python scripts/configure_models.py show --user qin`查看实际来源（请用项目.venv）。[配置目录、四种调用与安全输入](docs/implemented/配置目录与模型后端.md) · [安装指南](docs/implemented/安装配置与启动.md)。
+运行配置统一在[config](config/README.md)：system.toml管系统，models.toml统一LLM的API/本地选择及Embedding，feishu.toml管机器人，mcp.toml统一MCP定义与账号启用。四份实际文件都忽略，仅提交对应example，没有local子目录。账号专属模型也在models.toml按UUID区分，加密凭据和OAuth仍保存在本人私密数据目录。使用项目venv执行`python scripts/configure_models.py show --user qin`查看实际来源，0推理且不显示Key。[配置与调用方式](docs/implemented/配置目录与模型后端.md) · [安装指南](docs/implemented/安装配置与启动.md)。
 
 ### 3. 构建并启动
 
@@ -108,7 +113,8 @@ MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均�
 
 ```text
 Memoria/
-├─ configs/          # 模型模板、忽略的local私密配置与冻结研究登记
+├─ config/           # 系统、模型、飞书、MCP各一份私密配置及公开example
+├─ eval/protocols/   # 冻结研究登记，与生产配置分开
 ├─ assets/           # 项目图片、保留评测结果与来源清单
 ├─ docs/
 │  ├─ implemented/  # 已实现行为、操作和验证边界

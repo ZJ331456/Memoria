@@ -44,14 +44,44 @@ def load_mcp_servers(path: Path) -> list[McpServerConfig]:
     if not path.exists():
         return []
     raw = json.loads(path.read_text(encoding="utf-8"))
+    return parse_mcp_servers(raw)
+
+
+def configured_mcp_servers(settings) -> list[McpServerConfig]:
+    """One MCP document, explicitly enabled for one authenticated UUID only."""
+    if not settings.mcp_enabled or settings.account_directory is None:
+        return []
+    from ..config import _merge
+    from ..config_store import read_document
+    document = read_document(settings.mcp_config_file) if settings.mcp_config_file.is_file() else {}
+    account = document.get('accounts', {}).get(settings.account_directory.name, {}).get('mcp', {})
+    enabled = account.get('enabled_servers', [])
+    definitions = _merge(document.get('servers', {}), account.get('servers', {}))
+    if not isinstance(enabled, list) or any(not isinstance(name, str) for name in enabled) or len(set(enabled)) != len(enabled):
+        raise ValueError('accounts.<UUID>.mcp.enabled_servers must contain unique server names')
+    if any(name not in definitions for name in enabled):
+        raise ValueError('Enabled MCP server has no definition in config/mcp.toml')
+    rows = []
+    for name, definition in definitions.items():
+        row = {**definition, 'name': name, 'enabled': name in enabled}
+        def expand(value):
+            return value.replace('{project}', str(settings.root)).replace('{account_dir}', str(settings.account_directory))
+        row['command'] = [expand(part) for part in row.get('command', [])]
+        row['cwd'] = expand(row.get('cwd', '{project}'))
+        row['env'] = {key: expand(value) for key, value in row.get('env', {}).items()}
+        rows.append(row)
+    return parse_mcp_servers({'servers': rows})
+
+
+def parse_mcp_servers(raw) -> list[McpServerConfig]:
     if isinstance(raw, dict):
         servers = raw.get("servers", [])
     elif isinstance(raw, list):
         servers = raw
     else:
-        raise ValueError("mcp_servers.json 必须是对象或数组")
+        raise ValueError("MCP配置必须是对象或数组")
     if not isinstance(servers, list):
-        raise ValueError("mcp_servers.json.servers 必须是数组")
+        raise ValueError("MCP配置servers必须是数组")
     result: list[McpServerConfig] = []
     seen: set[str] = set()
     for index, item in enumerate(servers):

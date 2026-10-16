@@ -19,7 +19,7 @@ from starlette.requests import Request as ASGIRequest
 
 from ..accounts import AccountStore, SESSION_TTL, user_directory
 from ..config import Settings
-from ..models_config import apply_overrides
+from ..models_config import apply_account_settings
 from ..channels.feishu import FeishuHub
 from .app import VERSION, _create_tenant_app
 
@@ -68,12 +68,9 @@ class TenantPool:
             settings = copy.deepcopy(self.settings)
             settings.database = directory / "memory/memoria.db"
             settings.markdown_directory = directory / "markdown"
-            settings.mcp_config_file = directory / "config/mcp_servers.json"
-            settings.model_override_file = directory / "config/models.override.toml"
-            settings.mcp_enabled = settings.mcp_config_file.is_file()
             settings.api_token = ""  # Login sessions are authenticated by this gateway.
             settings.drift_enabled = False
-            apply_overrides(settings)
+            apply_account_settings(settings, directory)
             app = _create_tenant_app(tenant_settings=settings, tenant_user_id=user["id"])
             try:
                 await self.stack.enter_async_context(app.router.lifespan_context(app))
@@ -123,7 +120,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     accounts = AccountStore(root / "auth/accounts.db")
     pool = TenantPool(settings, root)
     password_slots = asyncio.Semaphore(2)
-    feishu = FeishuHub(root, accounts, pool, config_directory=settings.private_config_directory)
+    feishu = FeishuHub(root, accounts, pool, configuration=settings.feishu_settings.get('bot', {}), project=settings.root)
 
     @asynccontextmanager
     async def lifespan(app):

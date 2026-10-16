@@ -1,4 +1,4 @@
-"""Move server config out of data/config after stopping Memoria; accounts stay private."""
+"""After stopping Memoria, consolidate old layouts into four private config/*.toml files."""
 from __future__ import annotations
 import argparse
 import json

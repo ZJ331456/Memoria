@@ -16,14 +16,14 @@ def test_private_config_and_data_acl_need_no_security_privilege(tmp_path,shell):
     if not executable:pytest.skip('Shell unavailable')
     scripts=tmp_path/'scripts';scripts.mkdir()
     shutil.copy2(ROOT/'scripts/protect_local_data.ps1',scripts/'protect.ps1')
-    for branch in ('data','configs/local'):
+    for branch in ('data','config'):
         folder=tmp_path/branch;folder.mkdir(parents=True)
         (folder/'private.fixture').write_text('engineering fixture only')
     result=subprocess.run([executable,'-NoProfile','-ExecutionPolicy','Bypass','-File',str(scripts/'protect.ps1')],capture_output=True,text=True,timeout=30)
     assert result.returncode==0,result.stderr
     assert 'Protected private storage items: 4' in result.stdout
     command=r'''$taskOwner=[Security.Principal.WindowsIdentity]::GetCurrent().User.Value;
-    foreach($taskPath in @('data','configs/local','configs/local/private.fixture')) {
+    foreach($taskPath in @('data','config','config/private.fixture')) {
       $taskItem=Get-Item -LiteralPath $taskPath;
       $taskAcl=if($PSVersionTable.PSEdition -eq 'Core') { [IO.FileSystemAclExtensions]::GetAccessControl($taskItem) } else { $taskItem.GetAccessControl() };
       $taskRules=$taskAcl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]);

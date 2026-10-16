@@ -6,12 +6,12 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| [config.py](config.py) | JSON server 配置、字段校验、环境变量占位符 |
+| [config.py](config.py) | 统一mcp.toml定义、账号启用、字段校验、路径/环境变量占位符 |
 | [client.py](client.py) | stdio 子进程、JSON-RPC initialize、工具分页/调用、ping 与超时清理 |
 | [host.py](host.py) | 连接/重载/停止，按 mcp_{server}_{tool} 注册和注销 |
 | [__init__.py](__init__.py) | 导出接口 |
 
-正式网关读取 `data/users/<UUID>/config/mcp_servers.json`，新账号无默认 MCP；内部 Settings 配置不是正式多用户入口。命令/cwd/env/工具名单/risk/timeout 由本机管理员维护，状态只公开环境变量名。
+正式网关读取 `config/mcp.toml` 的服务定义与本人UUID启用列表，新账号无默认 MCP；内部 Settings 配置不是正式多用户入口。命令/cwd/env/工具名单/risk/timeout 由本机管理员维护，状态只公开环境变量名。
 
 生命周期随账号运行时启停；GET /api/mcp、POST /api/mcp/reload 需要登录。仅登记发现且获允许的工具，重载注销旧项。server risk、工具参数/输出/超时及本轮授权共同限制执行，普通记忆写授权不覆盖外部写操作。
 

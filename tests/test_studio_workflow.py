@@ -14,7 +14,7 @@ def env(tmp_path, monkeypatch):
     async def idle(_): await asyncio.Event().wait()
     monkeypatch.setattr(MemoryJobWorker,'run',idle)
     config=tmp_path/'config.toml'
-    config.write_text(f'[storage]\ndatabase="{(tmp_path/"data/main.db").as_posix()}"\n[memory.embedding]\nenabled=false\n')
+    config.write_text(f'[storage]\ndatabase="{(tmp_path/"data/main.db").as_posix()}"\n')
     app=create_app(config)
     account=app.state.accounts.register('workflow','Temporary-workflow-password')
     with TestClient(app) as client:

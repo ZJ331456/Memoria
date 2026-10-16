@@ -58,10 +58,12 @@ class McpHost:
         config_path: Path,
         *,
         enabled: bool = True,
+        loader=None,
     ):
         self.registry = registry
         self.config_path = config_path
         self.enabled = enabled
+        self.loader = loader
         self._clients: dict[str, McpClient] = {}
         self._configs: dict[str, McpServerConfig] = {}
         self._status: dict[str, McpServerStatus] = {}
@@ -70,7 +72,7 @@ class McpHost:
     def load_configs(self) -> list[McpServerConfig]:
         if not self.enabled:
             return []
-        configs = load_mcp_servers(self.config_path)
+        configs = self.loader() if self.loader else load_mcp_servers(self.config_path)
         self._configs = {item.name: item for item in configs}
         return configs
 

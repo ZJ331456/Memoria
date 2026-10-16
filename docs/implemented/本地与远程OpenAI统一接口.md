@@ -2,7 +2,7 @@
 
 更新日期：2026-10-13。Windows 本机保留 Qwen3.5-2B 与 BGE small zh v1.5；qin 的 main/fast 已按真实公开来源开发诊断切到 deepseek-flash，embedding 保留本地 BGE；依赖安装在项目独立 `.venv`，模型在 Git 忽略的 `model/`。本机推理服务提供业务所需的 Chat Completions / Embeddings 子集，不实现 OpenAI 的全部产品接口。
 
-2026-10-16配置入口已归拢：根config.toml引用configs/local/models.toml，模型显式backend/device，账号覆盖与加密profile仍独立。[目录、优先级及API/本地配置](配置目录与模型后端.md)。
+2026-10-16运行配置集中到根config目录，模型统一models.toml，显式backend/device；账号槽位也归入本文件UUID表，加密profile仍独立。[目录、优先级及API/本地配置](配置目录与模型后端.md)。
 
 ## 当前账号配置与 DeepSeek
 
@@ -48,7 +48,7 @@ max_tokens = 1024
 
 `fast` 用于记忆提取、关系判断、检索规划；仅改 main 不能保证这些工作已经本地化。本机配置已将三槽位统一到上述服务，原私有配置备份封存于 `data/legacy/pre-users/backups/config_before_openai_20261011.toml` 和同目录 `models_before_openai_20261011.toml`，这些文件不提交。
 
-模型配置由本机管理员维护：默认槽位在 `configs/local/models.toml`（由根models.file指定），单用户覆盖在 `data/users/<UUID>/config/models.override.toml`，修改后重启业务服务。正式登录网关的 `PUT /api/settings/models` 返回 403，防止用户将管理员 Key 或模型进程路径改到其他位置；当前没有配置页面。
+模型配置由本机管理员维护：默认与账号专属槽位都在 `config/models.toml`，账号使用accounts.<UUID>表，修改后重启业务服务。正式登录网关的 `PUT /api/settings/models` 返回 403，防止用户将管理员 Key 或模型进程路径改到其他位置；当前没有配置页面。
 
 切换远程时，在上述私有文件设置对应槽位的远程模型名、`base_url` 与 Key，业务调用保持相同。Keyless loopback 不经过环境代理；远程服务仍保留环境代理与重试。私有 override 文件显式写 `api_key = ""` 会清除继承的远程 Key，不在文档或 Git 写真实值。用户隔离、qin 登录和权限范围见 [登录说明](用户登录与数据隔离.md)。
 

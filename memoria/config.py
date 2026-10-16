@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 from urllib.parse import urlparse
@@ -186,8 +186,12 @@ class Settings:
     port: int
     source: Path
     memory_layers: MemoryLayerSettings | None = None
-    model_override_file: Path | None = None
-    private_config_directory: Path | None = None
+    account_directory: Path | None = None
+    data_root: Path | None = None
+    model_config_file: Path | None = None
+    feishu_config_file: Path | None = None
+    model_settings: dict = field(default_factory=dict, repr=False)
+    feishu_settings: dict = field(default_factory=dict, repr=False)
     reader_input_bytes: int = 240000
     reader_context_tokens: int | None = None
     reader_safety_tokens: int = 128
@@ -195,12 +199,19 @@ class Settings:
     memory_approval_mode: str = 'llm'
 
     @classmethod
-    def load(cls, path: str | Path | None = None, *, _legacy_migration: bool = False) -> "Settings":
+    def load(cls, path: str | Path | None = None) -> "Settings":
         root = Path(__file__).resolve().parents[1]
-        source = Path(path or os.getenv("MEMORIA_CONFIG", root / "config.toml"))
+        explicit = path or os.getenv("MEMORIA_CONFIG")
+        source = Path(explicit or root / "config/system.toml").resolve()
         if not source.exists():
-            source = root / "config.example.toml"
+            if explicit:
+                raise FileNotFoundError('Requested configuration file is missing')
+            if (root / 'config.toml').exists():
+                raise ValueError('Old root config.toml found; stop backend and run scripts/migrate_config_layout.py')
+            source = root / "config/system.example.toml"
         data = _read_with_parent(source.resolve())
+        if 'models' in data or 'private_directory' in data.get('configuration', {}) or 'config_file' in data.get('agent', {}).get('mcp', {}):
+            raise ValueError('Split configuration found; run scripts/migrate_config_layout.py before starting')
         llm = data.get("llm", {})
         agent = data.get("agent", {})
         skills_section = agent.get("skills", {})
@@ -246,9 +257,6 @@ class Settings:
         markdown_dir = Path(str(memory_section.get("markdown", {}).get("directory", "data/markdown")))
         if not markdown_dir.is_absolute():
             markdown_dir = root / markdown_dir
-        mcp_config = Path(str(mcp_section.get("config_file", "data/mcp_servers.json")))
-        if not mcp_config.is_absolute():
-            mcp_config = root / mcp_config
         tool_search_enabled = bool(
             tools_section.get("search_enabled", tools_section.get("tool_search_enabled", True))
         )
@@ -296,7 +304,7 @@ class Settings:
             http_allowed_hosts=_string_tuple(tools_section.get("http_allowed_hosts"), default_http_hosts),
             tool_search_enabled=tool_search_enabled,
             mcp_enabled=bool(mcp_section.get("enabled", True)),
-            mcp_config_file=mcp_config,
+            mcp_config_file=source,
             drift_enabled=bool(drift_section.get("enabled", False)),
             drift_min_idle_seconds=max(30, int(drift_section.get("min_idle_seconds", 300))),
             drift_interval_seconds=max(60, interval_seconds),
@@ -324,28 +332,32 @@ class Settings:
         from .memory.layer_settings import MemoryLayerSettings
 
         settings.memory_layers = MemoryLayerSettings.from_dict(memory_section.get("layers", {}))
-        private_dir = Path(str(data.get("configuration", {}).get("private_directory", "configs/local")))
-        settings.private_config_directory = (private_dir if private_dir.is_absolute() else source.resolve().parent / private_dir).resolve()
-        models_file = data.get("models", {}).get("file")
-        if models_file is not None and (not isinstance(models_file, str) or not models_file.strip()):
-            raise ValueError("models.file must be a non-empty file path")
-        settings.model_override_file = Path(models_file) if models_file else settings.private_config_directory / "models.toml"
-        if not settings.model_override_file.is_absolute():
-            settings.model_override_file = source.resolve().parent / settings.model_override_file
-        settings.model_override_file = settings.model_override_file.resolve()
-        legacy = db.parent / "config"
-        if not _legacy_migration and legacy.resolve() != settings.private_config_directory and any(
-            (legacy / name).exists() for name in ("models.override.toml", "feishu-bot.json", "feishu-bot.credentials.dpapi")
-        ):
-            raise ValueError("Legacy data/config found; stop backend and run scripts/migrate_config_layout.py --config config.toml before starting")
-        if models_file and not settings.model_override_file.is_file():
-            raise ValueError("Model configuration file is missing; copy configs/models.example.toml to the configured models.file")
+        settings.data_root = db.parent.resolve()
+        from .config_store import read_document
+        example = source.name.endswith('.example.toml')
+        suffix = '.example.toml' if example else '.toml'
+        directory = source.parent
+        settings.model_config_file = directory / ('models' + suffix)
+        settings.feishu_config_file = directory / ('feishu' + suffix)
+        settings.mcp_config_file = directory / ('mcp' + suffix)
+        if source.name in {'system.toml', 'system.example.toml'}:
+            if not all(p.is_file() for p in (settings.model_config_file, settings.feishu_config_file, settings.mcp_config_file)):
+                raise FileNotFoundError('Configuration incomplete; prepare all four config/*.toml files from their examples')
+            settings.model_settings = read_document(settings.model_config_file)
+            from .models_config import validate_model_configuration
+            validate_model_configuration(settings.model_settings)
+        else:
+            # Explicit experiment/test configurations may carry isolated inline
+            # slots. They never discover another installation's private models.
+            settings.model_config_file = source
+            settings.model_settings = data
+        settings.feishu_settings = read_document(settings.feishu_config_file) if settings.feishu_config_file.is_file() else {}
         for slot in (settings.main, settings.fast):
             slot.validate_role("llm")
         settings.embedding.validate_role("embedding")
-        from .models_config import apply_overrides
+        from .models_config import apply_overrides, model_document
 
-        return apply_overrides(settings)
+        return apply_overrides(settings, model_document(settings.model_settings))
 
     def preferred_chat_model(self, prefer_fast: bool = False) -> ModelConfig:
         if prefer_fast and self.fast.is_ready(role="llm"):
@@ -383,15 +395,6 @@ def _read_with_parent(path: Path, seen: set[Path] | None = None) -> dict[str, An
     seen.add(path)
     with path.open("rb") as handle:
         data = tomllib.load(handle)
-    # References inherit the directory of their declaring file, including extends.
-    models_file = data.get("models", {}).get("file")
-    if isinstance(models_file, str) and models_file.strip():
-        target = Path(models_file)
-        data["models"]["file"] = str((target if target.is_absolute() else path.parent / target).resolve())
-    private_dir = data.get("configuration", {}).get("private_directory")
-    if isinstance(private_dir, str) and private_dir.strip():
-        target = Path(private_dir)
-        data["configuration"]["private_directory"] = str((target if target.is_absolute() else path.parent / target).resolve())
     parent = data.pop("extends", None)
     if not parent:
         return data

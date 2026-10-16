@@ -1,0 +1,45 @@
+# Copy all four *.example.toml to sibling *.toml files; actual files are ignored.
+# main is the conversation/reader slot; fast is the optional auxiliary slot.
+# Remote and local OpenAI-compatible LLMs both use backend="openai".
+
+[llm.main]
+backend = "openai"
+model = "model/Qwen3.5-2B"
+base_url = "http://127.0.0.1:8080/v1"
+api_key = ""
+
+[llm.fast]
+backend = "openai"
+model = "model/Qwen3.5-2B"
+base_url = "http://127.0.0.1:8080/v1"
+api_key = ""
+
+[memory.embedding]
+backend = "bge"
+model = "model/bge-small-zh-v1.5"
+device = "auto"
+
+# Remote LLM: replace a complete slot above, including fast if used:
+# [llm.main]
+# backend = "openai"
+# model = "your-provider-model-id"
+# base_url = "https://your-provider.example/v1"
+# api_key = "${MEMORIA_LLM_API_KEY}"
+# thinking = "disabled"  # Only supported on the official DeepSeek endpoint.
+
+# API embedding: replace the complete memory.embedding table, omit device:
+# [memory.embedding]
+# backend = "openai"
+# model = "your-embedding-model-id"
+# base_url = "https://your-embedding-provider.example/v1"
+# api_key = "${MEMORIA_EMBEDDING_API_KEY}"
+
+# Account-specific slots, if required, also live in this file:
+# [accounts."SERVER_OWNED_UUID".llm.main]
+# backend = "openai"
+# model = "your-provider-model-id"
+# base_url = "https://your-provider.example/v1"
+# api_key = ""
+# credential_profile = "your-encrypted-account-profile"
+# UUID is assigned by the server; never use a username or another user's profile.
+# VL is not wired into the current pipeline; adding an unused table enables nothing.

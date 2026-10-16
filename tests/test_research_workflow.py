@@ -26,7 +26,7 @@ def setup(tmp_path):
     directory = root / "data/users" / ("a" * 32)
     workspace = HistoryWorkspace(directory)
     cfg = root / "config.toml"
-    cfg.write_text('[llm.main]\nmodel="fixture"\nbase_url="http://127.0.0.1:8080/v1"\n', encoding="utf-8")
+    cfg.write_text('[storage]\ndatabase="'+(root/'data/memoria.db').as_posix()+'"\n[llm.main]\nmodel="fixture"\nbase_url="http://127.0.0.1:8080/v1"\n', encoding="utf-8")
     settings = Settings.load(cfg)
     settings.root = root
     source = root / "source.json"
@@ -542,7 +542,7 @@ def test_deepseek_thinking_is_explicit_and_not_sent_to_other_hosts(setup, stream
 def test_encrypted_profile_binding_rejects_other_account_and_endpoint(setup, monkeypatch):
     from memoria.models_config import apply_overrides
     workspace, settings, _ = setup
-    settings.model_override_file = workspace.path("config/models.override.toml")
+    settings.account_directory = workspace.directory
     saved = {"owner_user_id": workspace.owner, "model": "deepseek-fixture", "api_key": "private-fixture-key",
              "base_url": "https://api.deepseek.com/v1", "thinking": "disabled"}
     monkeypatch.setattr("memoria.models_config.load_private_json", lambda path: saved)

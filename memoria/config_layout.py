@@ -1,163 +1,166 @@
-"""Explicit, local-only migration of server configuration; never moves account data."""
+"""Explicit stopped-service migration to four centralized configuration files."""
 from __future__ import annotations
-
 import copy
-import os
-import re
+import json
 import shutil
-import tempfile
-import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
+from .config import Settings, _merge, _read_with_parent
+from .config_store import read_document, write_document
+from .models_config import model_document, validate_model_document, apply_account_settings
 
-from .config import Settings, _read_with_parent
-from .models_config import SLOT_PATHS, apply_overrides, load_model_overrides, write_model_file
 
-
-def _safe(path: Path, parent: Path) -> Path:
-    absolute = path.absolute()
-    if not absolute.resolve().is_relative_to(parent.resolve()):
+def _safe(path: Path, project: Path) -> Path:
+    path = path.absolute()
+    if not path.resolve().is_relative_to(project.resolve()):
         raise ValueError('Configuration migration target escapes its project directory')
-    for part in (absolute, *absolute.parents):
+    for part in (path, *path.parents):
         if part.is_symlink() or (hasattr(part, 'is_junction') and part.is_junction()):
             raise ValueError('Configuration migration refuses linked paths')
-        if part == parent:
+        if part == project:
             break
-    if absolute.is_dir():
-        for child in absolute.rglob('*'):
+    if path.is_dir():
+        for child in path.rglob('*'):
             if child.is_symlink() or (hasattr(child, 'is_junction') and child.is_junction()):
                 raise ValueError('Configuration migration refuses linked contents')
-    return absolute
-
-
-def _remove_model_tables(text: str) -> str:
-    """Preserve non-model settings/comments, including arrays and multiline prompts."""
-    output, skip, table = [], False, ''
-    for line in text.splitlines(keepends=True):
-        header = re.match(r'^\s*\[([^\[\]]+)\]\s*(?:#.*)?$', line.strip())
-        if header:
-            table = header.group(1).strip()
-            skip = table in {'llm.main', 'llm.fast', 'llm.vl', 'memory.embedding', 'models', 'configuration'}
-        if table == 'llm' and re.match(r'^\s*provider\s*=', line):
-            continue  # The old global provider selector was never consumed.
-        if not skip:
-            output.append(line)
-    return ''.join(output).rstrip() + '\n'
-
-
-def _replace_text(path: Path, text: str | bytes) -> None:
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile('wb', dir=path.parent, prefix='.config-', suffix='.tmp', delete=False) as handle:
-            temporary = Path(handle.name)
-            handle.write(text.encode('utf-8') if isinstance(text, str) else text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary.replace(path)
-    finally:
-        if temporary and temporary.exists():
-            temporary.unlink()
+    return path
 
 
 def migrate_server_configuration(source: Path) -> dict:
     source = source.absolute()
-    project = source.parent
+    project = source.parent.parent if source.parent.name == 'config' else source.parent
     _safe(source, project)
-    original = source.read_bytes()
-    text = original.decode('utf-8-sig')
-    settings = Settings.load(source, _legacy_migration=True)
-    directory = _safe(settings.private_config_directory, project)
-    legacy = _safe(settings.database.parent / 'config', project)
-    target = _safe(directory / 'models.toml', project)
-    data = _read_with_parent(source.resolve())
-    if target.exists():
-        if settings.model_override_file == target and not legacy.exists():
-            return {'already_migrated': True, 'account_files_changed': 0}
-        raise ValueError('Destination models.toml already exists; no file overwritten')
-    allowed = {'models.override.toml', 'feishu-bot.json', 'feishu-bot.credentials.dpapi', 'backups'}
-    if legacy.is_dir() and any(p.name not in allowed for p in legacy.iterdir()):
-        raise ValueError('Unknown legacy config entries; inspect locally before migration')
-    legacy_models = load_model_overrides(legacy / 'models.override.toml')
-    apply_overrides(settings, legacy_models)
-    models = {}
-    for slot, keys in SLOT_PATHS.items():
-        config = getattr(settings, slot)
-        raw = data
-        old = legacy_models
-        for key in keys:
-            raw = raw.get(key, {})
-            old = old.get(key, {})
-        # Preserve env expressions instead of materializing their current secrets.
-        current_file = load_model_overrides(settings.model_override_file)
-        for key in keys:
-            current_file = current_file.get(key, {})
-        credentials = {**raw, **current_file, **old}
-        section = {'backend': config.backend_kind('embedding' if slot == 'embedding' else 'llm') if config.base_url else 'auto', 'model': config.model}
-        if config.is_local_process():
-            section['device'] = config.base_url.removeprefix('local://')
-        else:
-            section.update(base_url=config.base_url, api_key=str(credentials.get('api_key', '')))
-        if config.thinking is not None:
-            section['thinking'] = config.thinking
-        cursor = models
-        for key in keys[:-1]:
-            cursor = cursor.setdefault(key, {})
-        cursor[keys[-1]] = section
-    check = copy.deepcopy(settings)
-    apply_overrides(check, models)
-    for slot in SLOT_PATHS:
-        old, new = getattr(settings, slot), getattr(check, slot)
-        if (old.model, old.api_key, old.base_url, old.thinking) != (new.model, new.api_key, new.base_url, new.thinking):
-            raise ValueError('Migration would alter effective models; no files moved')
-    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-    backup = _safe(directory / 'backups' / ('layout-' + stamp), project)
-    plan = []
-    for name in ('feishu-bot.json', 'feishu-bot.credentials.dpapi', 'models.override.toml', 'backups'):
-        start = _safe(legacy / name, project)
-        destination = _safe(directory / name if name.startswith('feishu-') else backup / ('legacy-models.override.toml' if name == 'models.override.toml' else 'legacy-config-backups'), project)
-        if start.exists():
-            if destination.exists():
-                raise ValueError('Destination configuration exists; no file overwritten')
-            plan.append((start, destination))
-    kept = _remove_model_tables(text)
-    suffix = ('\n[configuration]\nprivate_directory = "' + directory.relative_to(project).as_posix() + '"\n'
-              '\n[models]\nfile = "' + target.relative_to(project).as_posix() + '"\n')
-    replacement = kept + suffix
-    # Do not silently rewrite an unusual TOML syntax/multiline literal as tables.
-    cleaned = tomllib.loads(kept)
-    original_data = tomllib.loads(text)
-    for table in ('models', 'configuration'):
-        original_data.pop(table, None)
-    original_data.get('llm', {}).pop('provider', None)
-    for parent, names in [('llm', ('main', 'fast', 'vl')), ('memory', ('embedding',))]:
+    directory = _safe(project / 'config', project)
+    targets = {name: directory / (name + '.toml') for name in ('system', 'models', 'feishu', 'mcp')}
+    if not source.exists() and all(path.is_file() for path in targets.values()):
+        Settings.load(targets['system'])
+        return {'already_migrated': True, 'runtime_files': 4}
+    if any(path.exists() for path in targets.values()):
+        raise ValueError('Destination configuration already exists; no files overwritten')
+    raw = _read_with_parent(source.resolve())
+    database = Path(raw.get('storage', {}).get('database', 'data/memoria.db'))
+    data_root = _safe(database.parent if database.is_absolute() else project / database.parent, project)
+    if data_root == project or directory.is_relative_to(data_root) or data_root.is_relative_to(directory):
+        raise ValueError('Data root and configuration directory must be separate project subdirectories')
+    private = Path(raw.get('configuration', {}).get('private_directory', 'configs/local'))
+    private = _safe(private if private.is_absolute() else source.parent / private, project)
+    if private in {project, directory, data_root} or directory.is_relative_to(private) or private.is_relative_to(data_root / 'users'):
+        raise ValueError('Legacy private directory overlaps project, data or account storage')
+    model_path = raw.get('models', {}).get('file')
+    models = model_document(raw)
+    originals = [source]
+    if model_path:
+        path = Path(model_path)
+        path = _safe(path if path.is_absolute() else source.parent / path, project)
+        models = _merge(models, read_document(path))
+        originals.append(path)
+    old_data_config = _safe(data_root / 'config', project)
+    for old in (old_data_config / 'models.override.toml',):
+        if old.exists():
+            models = _merge(models, read_document(old)); originals.append(old)
+    models.get('llm', {}).pop('vl', None)  # No runtime consumer exists.
+    validate_model_document(models)
+    system = copy.deepcopy(raw)
+    for key in ('models', 'configuration'):
+        system.pop(key, None)
+    for parent, names in (('llm', ('main', 'fast', 'vl', 'provider')), ('memory', ('embedding',))):
         for name in names:
-            original_data.get(parent, {}).pop(name, None)
-        if parent in original_data and not original_data[parent]:
-            original_data.pop(parent)
-        if parent in cleaned and not cleaned[parent]:
-            cleaned.pop(parent)
-    if cleaned != original_data:
-        raise ValueError('Unsupported model table syntax; non-model settings would change')
-    tomllib.loads(replacement)
+            system.get(parent, {}).pop(name, None)
+    system.get('agent', {}).get('mcp', {}).pop('config_file', None)
+    for unused in ('enabled', 'engine'):
+        system.get('memory', {}).pop(unused, None)
+    template = Path(__file__).resolve().parents[1] / 'config/mcp.example.toml'
+    mcp = read_document(template)
+    feishu = {'bot': {'enabled': False, 'credentials_file': 'data/secrets/feishu-bot.credentials.dpapi'}}
+    bot_directory = private if (private / 'feishu-bot.json').exists() else old_data_config
+    if (bot_directory / 'feishu-bot.json').exists():
+        old = bot_directory / 'feishu-bot.json'
+        feishu['bot']['enabled'] = json.loads(old.read_text(encoding='utf-8-sig')).get('enabled') is True
+        originals.append(old)
+    bot_source = bot_directory / 'feishu-bot.credentials.dpapi'
+    bot_target = _safe(data_root / 'secrets/feishu-bot.credentials.dpapi', project)
+    feishu['bot']['credentials_file'] = bot_target.relative_to(project).as_posix()
+    if bot_source.exists():
+        originals.append(bot_source)
+        if bot_target.exists():
+            raise ValueError('Bot credential destination already exists')
+    def portable(value, account):
+        if isinstance(value, str):
+            return value.replace(str(account), '{account_dir}').replace(account.as_posix(), '{account_dir}').replace(str(project), '{project}').replace(project.as_posix(), '{project}').replace('\\', '/')
+        if isinstance(value, list):return [portable(v, account) for v in value]
+        if isinstance(value, dict):return {k:portable(v, account) for k,v in value.items()}
+        return value
+    accounts = 0
+    for account in sorted((data_root / 'users').glob('*')):
+        if not account.is_dir():continue
+        import re
+        if not re.fullmatch(r'[a-f0-9]{32}', account.name):
+            raise ValueError('Unexpected account directory; inspect before migration')
+        _safe(account, project)
+        old_models = account / 'config/models.override.toml'
+        if old_models.is_file():
+            payload = read_document(old_models);validate_model_document(payload)
+            models.setdefault('accounts', {})[account.name] = payload
+            originals.append(old_models);accounts += 1
+        old_mcp = account / 'config/mcp_servers.json'
+        if old_mcp.is_file():
+            payload = json.loads(old_mcp.read_text(encoding='utf-8'))
+            from .mcp.config import parse_mcp_servers
+            parse_mcp_servers(payload)
+            enabled, overrides = [], {}
+            for server in payload['servers']:
+                server = portable(server, account)
+                name = server.pop('name')
+                if server.pop('enabled', True):enabled.append(name)
+                base = mcp['servers'].get(name, {})
+                difference = {key:value for key,value in server.items() if base.get(key) != value}
+                if difference:overrides[name] = difference
+            selection = {'enabled_servers': enabled}
+            if overrides:selection['servers'] = overrides
+            mcp.setdefault('accounts', {})[account.name] = {'mcp': selection}
+            originals.append(old_mcp)
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+    backup = _safe(data_root / 'backups' / ('configuration-' + stamp), project)
     backup.mkdir(parents=True, exist_ok=False, mode=0o700)
-    shutil.copy2(source, backup / 'root-config.toml')
-    moved = []
+    # Backup known inputs before publication. Encrypted credentials stay encrypted.
+    for path in set(originals):
+        _safe(path, project)
+        target = backup / 'originals' / path.relative_to(project)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+    created, moved = [], []
     try:
-        write_model_file(target, models)
-        for start, destination in plan:
-            destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            shutil.move(str(start), str(destination))
-            moved.append((start, destination))
-        _replace_text(source, replacement)
-        Settings.load(source)  # Full post-write validation, including env expressions.
+        if bot_source.exists():
+            bot_target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            shutil.copy2(bot_source, bot_target);created.append(bot_target)
+        for name, document in (('system', system), ('models', models), ('feishu', feishu), ('mcp', mcp)):
+            write_document(targets[name], document);created.append(targets[name])
+        checked = Settings.load(targets['system'])
+        for owner in models.get('accounts', {}):
+            apply_account_settings(copy.deepcopy(checked), data_root / 'users' / owner)
+        from .mcp.config import configured_mcp_servers
+        for owner in mcp.get('accounts', {}):
+            configured_mcp_servers(apply_account_settings(copy.deepcopy(checked), data_root / 'users' / owner))
+        # Retire known active files only. Preserve all older backup material.
+        for path in set(originals):
+            destination = backup / 'retired' / path.relative_to(project)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(path), str(destination));moved.append((path,destination))
+        for old_directory in (private, old_data_config):
+            if old_directory.is_dir():
+                if old_directory not in {project / 'configs/local', data_root / 'config'}:
+                    continue  # Custom directories may contain unrelated files.
+                _safe(old_directory, project)
+                destination = backup / 'retired-directories' / old_directory.relative_to(project)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(old_directory), str(destination));moved.append((old_directory,destination))
     except BaseException:
         for start, destination in reversed(moved):
-            start.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            start.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(destination), str(start))
-        target.unlink(missing_ok=True)
-        _replace_text(source, original)
+        for path in reversed(created):path.unlink(missing_ok=True)
         raise
-    if legacy.is_dir() and not any(legacy.iterdir()):
-        legacy.rmdir()  # Empty directory only; no recursive deletion.
-    return {'already_migrated': False, 'moved_entries': len(moved), 'account_files_changed': 0,
-            'models_file': str(target), 'private_configuration': str(directory), 'backup': str(backup)}
+    for path in originals:
+        if path.parent.is_dir() and path.parent.name == 'config' and path.parent != directory and not any(path.parent.iterdir()):path.parent.rmdir()
+    return {'already_migrated': False, 'runtime_files': 4, 'account_model_sections': accounts,
+            'backup': str(backup), 'system_config': str(targets['system']), 'credentials_decrypted_for_copy': False}

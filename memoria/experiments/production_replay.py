@@ -31,10 +31,9 @@ async def capture_production(workspace, settings, request, *, local_embeddings=F
     embedder = None
     if local_embeddings:
         import copy
-        from ..models_config import apply_overrides
+        from ..models_config import apply_account_settings
         settings = copy.deepcopy(settings)
-        settings.model_override_file = workspace.path("config", "models.override.toml")
-        apply_overrides(settings)
+        apply_account_settings(settings, workspace.directory)
         if embedding_backend=="process":
             from ..config import ModelConfig
             name=settings.embedding.model.replace('\\','/').split('/')[-1]

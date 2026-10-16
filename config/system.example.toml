@@ -1,16 +1,11 @@
-# 复制为 config.toml 后填写，config.toml 已被 .gitignore 忽略。
+# 与其余三份example一起复制成同目录实际TOML；实际文件已被Git忽略。
 # 推荐把真实 Key 放在环境变量中，不要提交到 Git。
 
 [llm]
 request_timeout_seconds = 90
 max_retries = 2
 
-# 模型单独管理；默认读取公开本地模板，正式配置复制到configs/local再改file。
-[models]
-file = "configs/models.example.toml"
-
-[configuration]
-private_directory = "configs/local"
+# Models, Feishu and MCP use their sibling files in config/.
 
 [agent]
 system_prompt = "你是 Memoria，用户的长期 AI 伙伴。用与用户相同的语言回答。"
@@ -42,7 +37,6 @@ http_allowed_hosts = ["wttr.in", "api.open-meteo.com", "open-meteo.com"]
 [agent.mcp]
 # 从 JSON 加载外部 MCP server；示例见 mcp_servers.example.json。
 enabled = true
-config_file = "data/mcp_servers.json"
 
 [agent.drift]
 # 空闲时跑限定技能（整理记忆候选等）；默认关闭，按需开启。
@@ -55,10 +49,6 @@ quiet_hours = [0, 1, 2, 3, 4, 5, 6]
 allowed_skills = ["drift-digest", "memory-review"]
 allow_write_tools = ["memorize"]
 timezone = "Asia/Shanghai"
-
-[memory]
-enabled = true
-engine = ""
 
 [memory.markdown]
 enabled = true

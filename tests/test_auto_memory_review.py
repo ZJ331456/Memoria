@@ -13,7 +13,7 @@ from memoria.llm.types import ChatResult
 @pytest.fixture
 def env(tmp_path):
     config=tmp_path/'config.toml'
-    config.write_text('[storage]\ndatabase="'+(tmp_path/'memory.db').as_posix()+'"\n[memory.embedding]\nenabled=false\n[memory.markdown]\nenabled=false\n[llm.main]\nmodel="engineering-model"\nbase_url="https://model.invalid/v1"\napi_key="engineering-only"\n')
+    config.write_text('[storage]\ndatabase="'+(tmp_path/'memory.db').as_posix()+'"\n[memory.markdown]\nenabled=false\n[llm.main]\nmodel="engineering-model"\nbase_url="https://model.invalid/v1"\napi_key="engineering-only"\n')
     app=_create_tenant_app(config)
     yield app,TestClient(app),app.state.store,app.state.service
     app.state.store.close()

@@ -12,7 +12,7 @@ import unicodedata
 from collections import Counter
 from pathlib import Path
 
-from ..models_config import apply_overrides
+from ..models_config import apply_account_settings
 from ..observability.timing import StageTimings
 from .history import HistoryWorkspace, canonical, identifier, read_json, write_json
 from .records import RunRecorder, digest_file
@@ -28,8 +28,7 @@ from ..memory.temporal_query import TemporalQueryParser
 
 
 def account_settings(settings, workspace, profile=None):
-    settings.model_override_file = workspace.path("config", "models.override.toml")
-    apply_overrides(settings)
+    apply_account_settings(settings, workspace.directory)
     if profile:
         profile = identifier(profile)
         saved = load_private_json(workspace.path("secrets", profile + ".research-model.dpapi"))
@@ -579,7 +578,8 @@ def score_retrieval(workspace,run_id,path,manifest,cases):
 
 def activate_profile(workspace, settings, profile, run_id):
     """Activate only this account, after an actual nonempty grounded run."""
-    from ..models_config import _dump_toml, load_model_overrides
+    from ..models_config import apply_overrides, load_model_overrides
+    from ..config_store import update_document, write_document
     identifier(profile)
     path, manifest, cases = load_run(workspace, run_id)
     saved = load_private_json(workspace.path("secrets", profile + ".research-model.dpapi"))
@@ -592,27 +592,25 @@ def activate_profile(workspace, settings, profile, run_id):
         raise ValueError("Validated run does not match this account's private model profile")
     if not any(c.get("status") == "success" and c.get("candidates") for c in cases):
         raise ValueError("No source-grounded extraction candidates in validated run")
-    override = workspace.path("config", "models.override.toml")
-    existing = load_model_overrides(override)
-    # Keep a private rollback copy; never put a plaintext key into the new override.
-    if override.exists():
-        backup = workspace.path("config", "model-backups", run_id + ".toml")
-        backup.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if not backup.exists():
-            backup.write_bytes(override.read_bytes())
-    llm = existing.setdefault("llm", {})
-    for slot in ("main", "fast"):
-        llm[slot] = {"model": saved["model"], "base_url": saved["base_url"],
-                     "api_key": "", "credential_profile": profile}
-        if saved.get("thinking"):
-            llm[slot]["thinking"] = saved["thinking"]
-    settings.model_override_file = override
-    apply_overrides(settings, existing)  # Validate binding before publishing.
-    override.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = override.with_suffix(".toml.tmp")
-    temporary.write_text(_dump_toml(existing), encoding="utf-8")
-    temporary.replace(override)
-    write_json(workspace.path("config", "model-activation.json"),
+    existing = load_model_overrides(settings.model_config_file, workspace.owner)
+    # Archive this account's old tables only, never the shared file containing
+    # other accounts. Research receipts do not act as runtime configuration.
+    backup = workspace.root / 'model-activations' / (run_id + '.previous.toml')
+    if not backup.exists():
+        write_document(backup, existing)
+    llm = existing.setdefault('llm', {})
+    for slot in ('main', 'fast'):
+        llm[slot] = {'backend': 'openai', 'model': saved['model'], 'base_url': saved['base_url'],
+                     'api_key': '', 'credential_profile': profile}
+        if saved.get('thinking'):
+            llm[slot]['thinking'] = saved['thinking']
+    apply_account_settings(settings, workspace.directory)
+    apply_overrides(settings, existing)
+    def publish(document):
+        document.setdefault('accounts', {}).setdefault(workspace.owner, {})['llm'] = llm
+    settings.model_settings = update_document(settings.model_config_file, publish)
+    override = settings.model_config_file
+    write_json(workspace.root / "model-activation.json",
                {"owner_user_id": workspace.owner, "profile": profile, "model": saved["model"],
                 "validated_run": run_id, "candidates_not_human_approved": True,
                 "requires_business_service_restart": True})

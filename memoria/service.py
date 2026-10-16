@@ -58,7 +58,9 @@ class AgentService:
             claims=self.claims,
         )
         self.tool_presentation = ToolPresentation(tools, enabled=settings.tool_search_enabled)
-        self.mcp = McpHost(tools, settings.mcp_config_file, enabled=settings.mcp_enabled)
+        from .mcp.config import configured_mcp_servers
+        self.mcp = McpHost(tools, settings.mcp_config_file, enabled=settings.mcp_enabled,
+                           loader=lambda: configured_mcp_servers(settings))
         self.runtime = AgentRuntime(
             settings,
             store,

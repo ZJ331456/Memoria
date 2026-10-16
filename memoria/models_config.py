@@ -1,11 +1,7 @@
 from __future__ import annotations
 
-import tomllib
 import re
 import copy
-import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -23,16 +19,37 @@ SLOT_PATHS = {
 
 
 def override_path(settings: Settings) -> Path:
-    return settings.model_override_file or (settings.private_config_directory or settings.source.parent / "configs/local") / "models.toml"
+    return settings.model_config_file or settings.source
 
 
-def load_model_overrides(path: Path) -> dict[str, Any]:
-    if not path.exists():
-        return {}
-    with path.open("rb") as handle:
-        data = tomllib.load(handle)
-    validate_model_document(data)
-    return data
+def model_document(data: dict) -> dict:
+    return {parent: {slot: data.get(parent, {}).get(slot, {}) for slot in slots}
+            for parent, slots in (("llm", ("main", "fast")), ("memory", ("embedding",)))}
+
+
+def load_model_overrides(path: Path, owner: str | None = None) -> dict:
+    from .config_store import read_document
+    data = read_document(path)
+    return model_document(data.get('accounts', {}).get(owner, {}) if owner else data)
+
+
+def apply_account_settings(settings: Settings, directory: Path) -> Settings:
+    from .accounts import user_directory
+    directory = directory.resolve()
+    owner = directory.name
+    if not re.fullmatch(r"[a-f0-9]{32}", owner) or directory != user_directory(settings.data_root, owner).resolve():
+        raise ValueError('Account configuration requires its server-owned UUID directory')
+    # Switching identities must discard the previous account's credentials.
+    # A fresh server/experiment Settings retains explicit in-memory run overrides.
+    if settings.account_directory is not None and settings.account_directory != directory:
+        settings.account_directory = None
+        settings.main = ModelConfig('', '', '')
+        settings.fast = ModelConfig('', '', '')
+        settings.embedding = ModelConfig('', '', '')
+        apply_overrides(settings, model_document(settings.model_settings))
+    settings.account_directory = directory
+    apply_overrides(settings)
+    return settings
 
 
 def validate_model_document(data: dict) -> None:
@@ -50,8 +67,21 @@ def validate_model_document(data: dict) -> None:
                 raise ValueError("Model slot fields must be strings")
 
 
+def validate_model_configuration(data: dict) -> None:
+    if not isinstance(data, dict) or set(data) - {'llm', 'memory', 'accounts'}:
+        raise ValueError('Unknown table in models.toml')
+    validate_model_document({key:value for key,value in data.items() if key != 'accounts'})
+    accounts = data.get('accounts', {})
+    if not isinstance(accounts, dict):
+        raise ValueError('models.toml.accounts must be a UUID table')
+    for owner, values in accounts.items():
+        if not re.fullmatch(r'[a-f0-9]{32}', owner):
+            raise ValueError('Model account table requires a server-owned UUID')
+        validate_model_document(values)
+
+
 def apply_overrides(settings: Settings, data: dict[str, Any] | None = None) -> Settings:
-    payload = data if data is not None else load_model_overrides(override_path(settings))
+    payload = data if data is not None else model_document(settings.model_settings.get('accounts', {}).get(settings.account_directory.name, {}) if settings.account_directory else settings.model_settings)
     validate_model_document(payload)
     if not payload:
         return settings
@@ -85,7 +115,10 @@ def apply_overrides(settings: Settings, data: dict[str, Any] | None = None) -> S
         thinking = section.get("thinking", None if endpoint_changed else current.thinking)
         profile = section.get("credential_profile")
         if profile:
-            owner_directory = override_path(settings).parent.parent.resolve()
+            owner_directory = settings.account_directory
+            if owner_directory is None:
+                raise ValueError('Private model profiles require an account-owned override')
+            owner_directory = owner_directory.resolve()
             if not re.fullmatch(r"[a-f0-9]{32}", owner_directory.name) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,95}", str(profile)):
                 raise ValueError("Private model profiles require an account-owned override")
             secret_path = owner_directory / "secrets" / (str(profile) + ".research-model.dpapi")
@@ -141,7 +174,7 @@ def public_models(settings: Settings) -> dict[str, Any]:
 def save_model_overrides(settings: Settings, updates: dict[str, dict[str, str]]) -> dict[str, Any]:
     path = override_path(settings)
     path.parent.mkdir(parents=True, exist_ok=True)
-    existing = load_model_overrides(path)
+    existing = load_model_overrides(path, settings.account_directory.name if settings.account_directory else None)
     patch: dict[str, Any] = {}
     for slot, values in updates.items():
         if slot not in SLOT_PATHS or not isinstance(values, dict):
@@ -188,62 +221,15 @@ def save_model_overrides(settings: Settings, updates: dict[str, dict[str, str]])
                 section.pop("thinking", None)
     validated = copy.deepcopy(settings)
     apply_overrides(validated, merged)
-    write_model_file(path, merged)
+    from .config_store import update_document
+    def publish(document):
+        target = document.setdefault('accounts', {}).setdefault(settings.account_directory.name, {}) if settings.account_directory else document
+        for parent, slots in merged.items():
+            target.setdefault(parent, {}).update(slots)
+    settings.model_settings = update_document(path, publish)
     for slot in SLOT_PATHS:
         setattr(settings, slot, getattr(validated, slot))
     return public_models(settings)
-
-
-def write_model_file(path: Path, data: dict[str, Any]) -> None:
-    """Replace complete, valid TOML atomically; never expose a truncated config."""
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    text = _dump_toml(data)
-    tomllib.loads(text)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, prefix=".models-", suffix=".tmp", delete=False) as handle:
-            temporary = Path(handle.name)
-            os.chmod(temporary, 0o600)
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary and temporary.exists():
-            temporary.unlink()
-
-
-def _dump_toml(data: dict[str, Any], prefix: str = "") -> str:
-    lines: list[str] = []
-    tables: list[tuple[str, dict[str, Any]]] = []
-    for key, value in data.items():
-        if isinstance(value, dict):
-            path = f"{prefix}.{key}" if prefix else key
-            # leaf model tables have scalar values only
-            if value and all(not isinstance(item, dict) for item in value.values()):
-                lines.append(f"[{path}]")
-                for nested_key, nested_value in value.items():
-                    lines.append(f'{nested_key} = {_scalar(nested_value)}')
-                lines.append("")
-            else:
-                tables.append((path, value))
-        else:
-            target = lines if not prefix else lines
-            target.append(f'{key} = {_scalar(value)}')
-    for path, value in tables:
-        nested = _dump_toml(value, path)
-        if nested.strip():
-            lines.append(nested.rstrip())
-            lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def _scalar(value: Any) -> str:
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, (int, float)):
-        return json.dumps(value, allow_nan=False)
-    return json.dumps(str(value), ensure_ascii=False)
 
 
 async def test_model_slot(settings: Settings, slot: str) -> dict[str, Any]:

@@ -104,4 +104,4 @@ Query-only风险不再把月份/人名May当作推测授权；只有有限明确
 
 2026-10-16[LLM主审机制](../../docs/implemented/LLM自动审核与人工辅助.md)新增审计与有限历史重处理，保留原文归属/撤销/条件和事务检查；模型结果不作为现实核验。
 
-2026-10-16模型配置独立：根config.toml引用configs/local/models.toml，支持显式openai、bge及保留的transformers后端；账号覆盖/DPAPI仍隔离。目录、设备/API参数与检查命令见[配置说明](../../docs/implemented/配置目录与模型后端.md)。
+2026-10-16模型配置统一：config/models.toml管理API/本地LLM与Embedding，账号槽位在同文件UUID表；DPAPI仍隔离，系统/飞书/MCP各有对应统一文件。目录、设备/API参数与检查命令见[配置说明](../../docs/implemented/配置目录与模型后端.md)。

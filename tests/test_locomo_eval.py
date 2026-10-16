@@ -110,7 +110,7 @@ def test_bundle_no_gold_input_immutable(tmp_path, monkeypatch):
     source = tmp_path/'source.json'
     source.write_text(json.dumps(fixture_records()), encoding='utf-8')
     monkeypatch.setattr(bench, 'SOURCE_SHA256', bench.digest_file(source))
-    workspace = HistoryWorkspace(tmp_path/'owner')
+    workspace = HistoryWorkspace(tmp_path/'data/users'/('a'*32))
     bundle, protocol, cases, histories = bench.prepare(workspace, source, 'full')
     assert protocol['requested_cases'] == 40
     assert 'GOLD' not in (bundle/'inputs.jsonl').read_text()
@@ -156,9 +156,9 @@ def test_concurrent_reader_call_ids_and_fallback(tmp_path, monkeypatch, first_ou
             return ChatResult(content=json.dumps({'status':'answer', 'answer':'temporary',
                                'evidence_ids':[packet['evidence'][0]['id']]}))
     config=tmp_path/'config.toml'
-    config.write_text('[llm.main]\nmodel="temporary"\nbase_url="http://localhost:11434/v1"\n', encoding='utf-8')
+    config.write_text('[storage]\ndatabase="'+(tmp_path/'data/memoria.db').as_posix()+'"\n[llm.main]\nmodel="temporary"\nbase_url="http://localhost:11434/v1"\n', encoding='utf-8')
     settings=Settings.load(config)
-    workspace=HistoryWorkspace(tmp_path/'owner')
+    workspace=HistoryWorkspace(tmp_path/'data/users'/('a'*32))
     path=asyncio.run(bench.execute(workspace,settings,source,scope='full',concurrency=4,
                  client_factory=Reader, embedding_factory=lambda cfg:Embedding(), roles=load_roles(None)))
     calls=[json.loads(line) for line in (path/'calls.jsonl').read_text().splitlines()]

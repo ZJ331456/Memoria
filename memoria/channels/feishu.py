@@ -18,18 +18,15 @@ HELP='请在本地Chat点击“连接飞书”，登录自己的账号后生成�
 
 
 class FeishuHub:
-    def __init__(self,root:Path,accounts,pool,*,config_directory:Path):
+    def __init__(self,root:Path,accounts,pool,*,configuration:dict,project:Path):
         self.root,self.accounts,self.pool=root,accounts,pool
-        self.credentials_file=config_directory/'feishu-bot.credentials.dpapi'
+        self.credentials_file=Path(configuration.get('credentials_file',str(root/'secrets/feishu-bot.credentials.dpapi')))
+        if not self.credentials_file.is_absolute():self.credentials_file=project/self.credentials_file
         self.state_file=root/'channels/feishu.db'
         self.state=None;self.api=None;self.app='';self.process=None;self.worker=None
         self.connected=False;self.last_error=None;self.tasks={};self.stopping=False
         self.queue=None;self.stop_signal=None;self.last_heartbeat=0;self.lease=None
-        config=config_directory/'feishu-bot.json'
-        self.configured=False
-        if config.is_file():
-            try:self.configured=json.loads(config.read_text(encoding='utf-8-sig')).get('enabled') is True
-            except (ValueError,OSError):self.last_error='invalid_configuration'
+        self.configured=configuration.get('enabled',False) is True
 
     async def start(self):
         if not self.configured:return

@@ -10,7 +10,7 @@
 Memoria-Agent/
 ├─ model/bge-small-zh-v1.5/      # Safetensors、tokenizer、配置与下载校验清单
 ├─ .venv/                      # 独立 Python 环境，不继承 base site-packages
-├─ data/users/<UUID>/config/models.override.toml  # 当前账号槽位覆盖，忽略
+├─ config/models.toml                 # 默认及accounts.<UUID>槽位，忽略
 ├─ scripts/download_embedding.py
 └─ scripts/serve_local_llm.py    # 可选独立 HTTP 推理服务
 ```
@@ -48,7 +48,7 @@ Get-Content .venv/pyvenv.cfg
 
 ## 配置与启动
 
-进程内方案在私密 `configs/local/models.toml` 中设置，根config.toml引用该文件；账号已有 `data/users/<UUID>/config/models.override.toml` 时，该文件覆盖默认槽位：
+进程内方案统一在私密 `config/models.toml` 设置；同文件accounts.<UUID>.memory.embedding表可覆盖该账号的默认槽位：
 
 ```toml
 [memory.embedding]

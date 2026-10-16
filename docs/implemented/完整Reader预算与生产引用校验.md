@@ -20,7 +20,7 @@ ReaderBudget.prepare 按完整协议组移除较早的可选消息，再压缩�
 
 ## 2. 配置与本地计数接口
 
-管理员在项目私有 config.toml 的已有 agent.context 表中合并以下字段，修改后重启业务服务；不要创建重复 TOML 表：
+管理员在项目私有 config/system.toml 的已有 agent.context 表中合并以下字段，修改后重启业务服务；不要创建重复 TOML 表：
 
 ```toml
 [agent.context]

@@ -45,7 +45,7 @@ database="{(tmp_path / 'override.db').as_posix()}"
     reloaded = Settings.load(config)
     assert reloaded.main.model == "new-model"
     assert reloaded.main.api_key == "new-key"
-    data = load_model_overrides(tmp_path / "configs/local/models.toml")
+    data = load_model_overrides(config)
     assert data["llm"]["main"]["model"] == "new-model"
 
 

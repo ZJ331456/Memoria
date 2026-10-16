@@ -317,7 +317,7 @@ curl -s -X POST http://127.0.0.1:2237/api/episodes/maintenance \
 
 ### `POST /api/mcp/reload`
 
-重新读取 `mcp_servers.json`、断开旧连接并重新注册工具。
+重新读取 `config/mcp.toml` 中当前账号的启用列表与服务定义、断开旧连接并重新注册工具。
 
 ## 7.2 Drift API
 

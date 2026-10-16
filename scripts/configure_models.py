@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from memoria.config import Settings
-from memoria.models_config import apply_overrides, public_models, test_model_slot
+from memoria.models_config import apply_account_settings, public_models, test_model_slot
 from user_paths import directory_for
 
 
@@ -23,14 +23,12 @@ def main():
     parser.add_argument('--allow-remote', action='store_true', help='Allow a remote test call that may cost money')
     args = parser.parse_args()
     settings = Settings.load(args.config)
-    defaults_file = settings.model_override_file
     if args.user:
-        settings.model_override_file = directory_for(args.user, args.config) / 'config/models.override.toml'
-        apply_overrides(settings)
+        apply_account_settings(settings, directory_for(args.user, args.config))
     if args.action == 'show':
         result = public_models(settings)
-        result.update(server_config=str(settings.source.resolve()), defaults_file=str(defaults_file),
-                      private_config_directory=str(settings.private_config_directory),
+        result.update(server_config=str(settings.source.resolve()), configuration_file=str(settings.model_config_file.resolve()),
+                      feishu_bot_enabled=settings.feishu_settings.get('bot', {}).get('enabled', False),
                       scope='account' if args.user else 'server_defaults', inference_calls=0)
     else:
         selected = getattr(settings, args.slot)

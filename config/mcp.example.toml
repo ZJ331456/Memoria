@@ -1,0 +1,32 @@
+# Service definitions are shared; account authorization/selection is explicit.
+# Runtime installs: .mcp/node/node_modules and .mcp/github; not this config folder.
+[servers.search]
+command = ["{project}/.venv/Scripts/python.exe", "{project}/scripts/mcp_server.py", "search"]
+cwd = "{project}"
+risk = "read-only"
+timeout_seconds = 60
+allowed_tools = ["search", "fetchWebContent"]
+
+[servers.github]
+command = ["{project}/.venv/Scripts/python.exe", "{project}/scripts/mcp_server.py", "github"]
+cwd = "{project}"
+risk = "read-only"
+timeout_seconds = 60
+allowed_tools = ["get_me", "get_file_contents", "search_repositories", "search_code", "list_branches", "list_commits", "issue_read", "pull_request_read"]
+
+[servers.feishu]
+command = ["{project}/.venv/Scripts/python.exe", "{project}/scripts/mcp_server.py", "feishu"]
+cwd = "{project}"
+risk = "read-only"
+timeout_seconds = 60
+allowed_tools = ["docx_v1_document_rawContent", "drive_v1_file_list", "wiki_v2_space_list", "wiki_v2_space_getNode"]
+
+[servers.feishu.env]
+MEMORIA_FEISHU_CREDENTIALS = "{account_dir}/secrets/feishu.credentials.dpapi"
+MEMORIA_FEISHU_PROFILE = "{account_dir}/secrets/feishu-profile"
+
+# No account is granted MCP by copying this example.
+# python scripts/configure_mcp.py --user YOUR_USERNAME
+# writes the real UUID into mcp.toml, default enables search/github for that user.
+# [accounts."SERVER_OWNED_UUID".mcp]
+# enabled_servers = ["search", "github"]

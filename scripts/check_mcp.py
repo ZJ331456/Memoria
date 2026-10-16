@@ -11,7 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from memoria.mcp.client import McpClient
-from memoria.mcp.config import load_mcp_servers
+from memoria.mcp.config import configured_mcp_servers
+from memoria.config import Settings
+from memoria.models_config import apply_account_settings
 from user_paths import directory_for
 
 
@@ -36,7 +38,7 @@ async def check(server):
             if login != "ZJ331456":
                 raise ValueError("GitHub authenticated identity is not ZJ331456")
             row["login"] = login
-            result = await client.call("get_file_contents", {"owner": "ZJ331456", "repo": "Memoria-Agent", "path": "README.md", "ref": "refs/heads/main"}, timeout=60)
+            result = await client.call("get_file_contents", {"owner": "ZJ331456", "repo": "Memoria", "path": "README.md", "ref": "refs/heads/main"}, timeout=60)
             if "README" not in result and "Memoria" not in result:
                 raise ValueError("GitHub repository read returned no expected content")
             row["repository_read"] = True
@@ -81,7 +83,7 @@ async def main():
     parser.add_argument("--config")
     args = parser.parse_args()
     directory = directory_for(args.user, args.config)
-    servers = load_mcp_servers(directory / "config/mcp_servers.json")
+    servers = configured_mcp_servers(apply_account_settings(Settings.load(args.config), directory))
     targets = [s for s in servers if (s.name == args.server if args.server else s.enabled)]
     if not targets:
         raise SystemExit("No matching servers; run configure_mcp.py first")

@@ -30,9 +30,9 @@
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe scripts/download_embedding.py --model-id BAAI/bge-small-en-v1.5 --local-dir model/bge-small-en-v1.5
 # 相同十题开发诊断
-.\.venv\Scripts\python.exe scripts/research.py --user qin locomo-run --scope smoke --input data/benchmarks/locomo/raw/locomo10.json --embedding-device cuda --profile deepseek --roles configs/research-remote-roles.toml --allow-remote --concurrency 4
+.\.venv\Scripts\python.exe scripts/research.py --user qin locomo-run --scope smoke --input data/benchmarks/locomo/raw/locomo10.json --embedding-device cuda --profile deepseek --roles eval/protocols/research-remote-roles.toml --allow-remote --concurrency 4
 # 正式完整分母，默认scope=full
-.\.venv\Scripts\python.exe scripts/research.py --user qin locomo-run --input data/benchmarks/locomo/raw/locomo10.json --embedding-device cuda --profile deepseek --roles configs/research-remote-roles.toml --allow-remote --concurrency 4
+.\.venv\Scripts\python.exe scripts/research.py --user qin locomo-run --input data/benchmarks/locomo/raw/locomo10.json --embedding-device cuda --profile deepseek --roles eval/protocols/research-remote-roles.toml --allow-remote --concurrency 4
 ```
 
 原文件SHA见[清单](../../assets/data-sources/locomo10.manifest.json)。冻结包在账号research/benchmarks，manifest/cases/prompts/calls/score/anomalies/metrics在账号experiments/run_id，详细报告在账号reports。代码/清单/无原话聚合可提交；原始数据、逐题输出、凭据/UUID、模型不提交。LoCoMo为CC-BY-NC-4.0官方构建研究基准，不变为qin本人来源或商用许可。

@@ -48,7 +48,7 @@ def test_sampling_does_not_change_with_answers_or_evidence():
 
 
 def test_bundle_is_immutable_and_source_sha_is_checked(tmp_path,source):
-    workspace=HistoryWorkspace(tmp_path/'temporary-owner')
+    workspace=HistoryWorkspace(tmp_path/'data/users'/('a'*32))
     bundle,protocol,_=locomo.prepare_smoke(workspace,source)
     assert not (workspace.directory/'memory').exists()
     assert locomo.prepare_smoke(workspace,source)[1]==protocol
@@ -83,7 +83,7 @@ def test_failed_cases_and_unresolved_gold_remain_in_denominator():
 
 
 def test_execute_uses_only_input_sources_and_exactly_ten_reader_calls(tmp_path,source):
-    path=tmp_path/'config.toml';path.write_text('[storage]\ndatabase="temporary.db"\n[llm.main]\nmodel="fixture"\napi_key="x"\nbase_url="http://example.test/v1"\n')
+    path=tmp_path/'config.toml';path.write_text('[storage]\ndatabase="'+(tmp_path/'data/memoria.db').as_posix()+'"\n[llm.main]\nmodel="fixture"\napi_key="x"\nbase_url="http://example.test/v1"\n')
     class Reader:
         def __init__(self,settings,roles,recorder,timings):self.calls=[];self.timings=timings
         def public_roles(self):return {'reader':{'model':'engineering-only'}}
@@ -94,7 +94,7 @@ def test_execute_uses_only_input_sources_and_exactly_ten_reader_calls(tmp_path,s
             self.calls.append({'usage':None})
             ids=packet['allowed_evidence_ids']
             return ChatResult(content=json.dumps({'status':'answer','answer':'Engineering only','evidence_ids':ids[:1]}))
-    workspace=HistoryWorkspace(tmp_path/'temporary-owner')
+    workspace=HistoryWorkspace(tmp_path/'data/users'/('a'*32))
     roles=load_roles(None)
     from dataclasses import replace
     roles={k:replace(v,thinking='provider_default_unknown') for k,v in roles.items()}

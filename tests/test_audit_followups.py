@@ -316,7 +316,7 @@ def test_full_history_repair_never_drops_query_or_evidence(tmp_path, monkeypatch
     source.write_text(json.dumps(fixture_records()), encoding='utf-8')
     monkeypatch.setattr(bench, 'SOURCE_SHA256', bench.digest_file(source))
     config = tmp_path / 'config.toml'
-    config.write_text('[llm.main]\nmodel="temporary"\nbase_url="http://localhost:11434/v1"\n', encoding='utf-8')
+    config.write_text('[storage]\ndatabase="'+(tmp_path/'data/memoria.db').as_posix()+'"\n[llm.main]\nmodel="temporary"\nbase_url="http://localhost:11434/v1"\n', encoding='utf-8')
     settings, roles = Settings.load(config), load_roles(None)
     cases, histories, _ = bench.benchmark_cases(fixture_records(), 'smoke')
     packet = {'question': cases[0]['question'], 'evidence': [
@@ -357,7 +357,7 @@ def test_full_history_repair_never_drops_query_or_evidence(tmp_path, monkeypatch
             return ChatResult(content=json.dumps(output), usage={'total_tokens': 1})
 
     monkeypatch.setattr(bench, 'PrefixRetriever', Retriever)
-    path = asyncio.run(bench.execute(HistoryWorkspace(tmp_path / 'owner'), settings, source, scope='smoke',
+    path = asyncio.run(bench.execute(HistoryWorkspace(tmp_path / 'data/users' / ('a'*32)), settings, source, scope='smoke',
         client_factory=Reader, embedding_factory=lambda cfg: None, roles=roles))
     rows = [json.loads(line) for line in (path / 'cases.jsonl').read_text().splitlines()]
     assert len(rows) == 10

@@ -46,7 +46,11 @@ async def evaluate(workspace,config,registration,*,allow_remote):
     embedding = EmbeddingClient(ModelConfig("model/bge-small-zh-v1.5","","local://"+registered["embedding_device"]))
     if embedding.namespace!=registered["embedding_namespace"]:
         raise ValueError("Local BGE weights/tokenizer differ from registration")
-    roles = load_roles(private_input(ROOT/registered["roles"],workspace.directory))
+    role_path = ROOT / registered["roles"]
+    if not role_path.is_file():
+        # Moved frozen registrations retain their original bytes and hashes.
+        role_path = registration.parent / Path(registered["roles"]).name
+    roles = load_roles(private_input(role_path,workspace.directory))
     runs = []
     summary = workspace.path("reports",registered["evaluation_id"]+".json")
     summary.parent.mkdir(exist_ok=True,parents=True,mode=0o700)
@@ -92,7 +96,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--user",required=True)
     parser.add_argument("--config")
-    parser.add_argument("--registration",default="configs/research-retrieval-eval-20261012.json")
+    parser.add_argument("--registration",default="eval/protocols/research-retrieval-eval-20261012.json")
     parser.add_argument("--allow-remote",action="store_true")
     args = parser.parse_args()
     workspace = HistoryWorkspace(directory_for(args.user,args.config))

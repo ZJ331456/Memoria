@@ -45,4 +45,4 @@
 
 2026-10-16[LLM主审、人工辅助](implemented/LLM自动审核与人工辅助.md)替代全部必经手工批准：默认低风险候选自动审核入库，敏感/冲突/约束不明保留辅助；历史单条原话可明确请求提取，纯改写词面错误接语义审核。实现、调研和四次真实调用的范围见该文；下一步与验收见[计划41](plans/长期陪伴记忆研究与实验计划书.md#41-llm主审与人工辅助的写入闭环2026-10-16)。
 
-2026-10-16[配置归拢与显式模型后端](implemented/配置目录与模型后端.md)：服务器级配置统一configs/local，根入口引用独立models.toml；OpenAI兼容API/回环LLM与Embedding、本地BGE按backend/device配置，账号覆盖/DPAPI保持独立。迁移、原子保存、实际检查与剩余边界见[计划42](plans/长期陪伴记忆研究与实验计划书.md#42-配置归拢与模型后端显式化2026-10-16)。
+2026-10-16[四类统一配置](implemented/配置目录与模型后端.md)：根[config](../config/README.md)内system/models/feishu/mcp各一份实际TOML及example，没有local。账号模型与MCP启用分别归入对应文件的UUID表；加密秘密/OAuth仍隔离。旧根JSON模板与分散覆盖退休，研究登记迁入[eval/protocols](../eval/protocols/README.md)。本机迁移/真实MCP检查及后续边界见[计划43](plans/长期陪伴记忆研究与实验计划书.md#43-四类统一配置与mcp归拢2026-10-16)。

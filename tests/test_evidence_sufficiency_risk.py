@@ -148,8 +148,8 @@ def test_new_modes_freeze_no_gold_bound_calls_and_reject_foreign_sources(tmp_pat
             self.calls.append({'usage':{'total_tokens':10}})
             self.recorder.append('calls.jsonl',{'call':call_id,'role':role,'usage':{'total_tokens':10}})
             return ChatResult(content=json.dumps(output),usage={'total_tokens':10})
-    settings=replace(Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml'),root=tmp_path)
-    workspace=HistoryWorkspace(tmp_path/'owner')
+    settings=replace(Settings.load(Path(__file__).resolve().parents[1]/'config/system.example.toml'),root=tmp_path,data_root=tmp_path/'data',database=tmp_path/'data/memoria.db')
+    workspace=HistoryWorkspace(tmp_path/'data/users'/('a'*32))
     result=asyncio.run(bench.execute(workspace,settings,raw,scope='development',fallback=method,
         allow_remote=True,client_factory=Client,embedding_factory=lambda cfg:None,roles=load_roles(None)))
     metrics=json.loads((result/'metrics.json').read_text())
@@ -210,7 +210,7 @@ def test_supplement_never_discards_prior_evidence_to_make_room_for_new_ranked_it
             return ChatResult(content=json.dumps(output))
     async def retrieve(query,limit):return history[1:],{}
     row={}
-    settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    settings=Settings.load(Path(__file__).resolve().parents[1]/'config/system.example.toml')
     asyncio.run(run_case(Client(),settings,load_roles(None),'pets',history,[history[0]],chosen,row,retrieve,
                          method='targeted',reader_system=bench.SYSTEM,select_context=bench.select_context))
     assert set(chosen['presented_ids'])<=set(row['presented_ids'])
@@ -232,7 +232,7 @@ def test_repair_cannot_release_a_second_answer_with_refusal_text():
                    'status':'answer','answer':'Not mentioned.','evidence_ids':['c/D1']}
             return ChatResult(content=json.dumps(value))
     async def retrieve(query,limit):return history,{}
-    row={};settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    row={};settings=Settings.load(Path(__file__).resolve().parents[1]/'config/system.example.toml')
     asyncio.run(run_case(Client(),settings,load_roles(None),'Temporary question',history,history,chosen,row,retrieve,
                         method='targeted',reader_system=bench.SYSTEM,select_context=bench.select_context))
     assert row['answer_status']=='abstain' and row['evidence_ids']==[]
@@ -308,7 +308,7 @@ def test_support_envelope_covers_unicode_json_escapes_and_complete_repair_input(
     from memoria.memory.verification import support_envelope,REPAIR_INSTRUCTION
     from memoria.memory.answer_risk import SYSTEM
     from memoria.prompting.reader_budget import ReaderBudget
-    settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    settings=Settings.load(Path(__file__).resolve().parents[1]/'config/system.example.toml')
     meter=ReaderBudget(settings)
     packet={'question':'Temporary','evidence':evidence()}
     bound=asyncio.run(support_envelope(meter,SYSTEM,packet))
@@ -351,7 +351,7 @@ def test_runner_repairs_negative_gate_and_truncated_support_inside_reserved_pipe
         return await original(role,messages,**kw)
     client.call=call
     async def retrieve(*args):return history,{}
-    row={};settings=Settings.load(Path(__file__).resolve().parents[1]/'config.example.toml')
+    row={};settings=Settings.load(Path(__file__).resolve().parents[1]/'config/system.example.toml')
     asyncio.run(run_case(client,settings,load_roles(None),'What pets?',history,history,chosen,row,retrieve,
         method='adaptive_risk',reader_system=bench.SYSTEM,select_context=bench.select_context))
     assert row['answer_status']=='answer' and row['answer']=='three dogs'

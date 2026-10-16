@@ -31,7 +31,7 @@ GitHub 使用 `--read-only` 并限制 toolsets；launcher 从 Git Credential Man
 
 - npm 依赖仅安装在 `.mcp/node`，版本与完整依赖锁在 `deploy/mcp/`；GitHub exe 位于 `.mcp/github`，下载按官方 release SHA256 校验。
 - 安装清单 `.mcp/installation.json`，实际调用记录 `data/users/<UUID>/reports/mcp-check.json`；这些本机文件不提交 Git。
-- `configure_mcp.py` 生成带绝对 Python/脚本路径及 cwd 的 `data/users/<UUID>/config/mcp_servers.json`，保留已配置开关和自定义服务。模板 `mcp_servers.example.json` 的相对命令仅适用于从仓库根目录启动。
+- `config/mcp.toml`集中管理服务定义、命令/cwd/env、工具名单和各UUID账号启用列表；`configure_mcp.py --user USERNAME`只更新该文件本人启用项，已有项保留。`{project}`和`{account_dir}`在服务器展开，飞书OAuth路径始终指向本人。公开模板为[config/mcp.example.toml](../../config/mcp.example.toml)，旧根JSON模板和账号JSON已退休。
 - 用户首次访问业务 API 时创建该账号运行时并启动 MCP，不另外启动公网监听。修改配置后通过 `POST /api/mcp/reload` 重载，`GET /api/mcp` 查看该账号连接状态；使用该用户的登录 Bearer 或 Cookie。
 - MCP 工具受项目工具注册、风险策略及按需工具搜索限制；工具发现列表可多于实际开放的白名单工具。
 
@@ -162,7 +162,7 @@ Set-Location 'C:\Users\zero\Desktop\Memory-Project\Memoria'
 
 报告保存在 `data/users/<UUID>/reports/mcp-check.json`；检查脚本不保存文档正文或 token。它只验证该业务调用，不代表已测过所有 4 个工具或所有文档。本机检查结果为 0 个可见空间、24 个云盘文件；不保存文件名称或正文。
 
-configure_feishu 在官方登录命令返回成功后会将 `data/users/<UUID>/config/mcp_servers.json` 中 feishu 的 enabled 设为 true；**仍需以 check_mcp 结果确认实际访问**。然后：
+configure_feishu 在官方登录命令返回成功后会将 `config/mcp.toml` 中本人UUID的enabled_servers加入feishu；**仍需以 check_mcp 结果确认实际访问**。然后：
 
 - Memoria-Agent 尚未运行：正常启动服务，启动时加载配置。
 - 服务已经运行：登录 qin 后，在 `/docs` 使用当前用户会话，执行 `POST /api/mcp/reload`，再查看 `GET /api/mcp`。不要用 App Secret 或旧全局 API Token 代替登录令牌。
@@ -223,3 +223,5 @@ Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
 没有默认增加第二套“记忆 MCP”：当前任务应验证本项目的来源、纠正与长期状态管理，额外记忆库会造成事实归属与评测边界混淆。
 
 候选发现入口：[mcp.so 中文目录](https://mcp.so/zh)、[mcp-cn](https://mcp-cn.com/)。目录收录不等于已安装、免费无限制或业务验证成功。
+
+2026-10-16四类配置迁移后，三个实际安装路径均核对存在；新mcp.toml下三服务真实初始化/只读业务检查通过（搜索返回链接、GitHub身份/仓库读取、飞书知识空间/云盘列表）。安装目录仍在.mcp，不以配置模板替代服务。没有发送飞书消息或执行外部写操作；此为接线验收，不是记忆质量评测。

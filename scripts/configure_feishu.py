@@ -11,6 +11,8 @@ from pathlib import Path
 from mcp_server import ROOT, command
 from memoria.private_files import load_private_json, save_private_json
 from user_paths import directory_for
+from memoria.config import Settings
+from memoria.config_store import update_document
 
 
 def main():
@@ -38,13 +40,13 @@ def main():
     completed = subprocess.run(argv, env=env, cwd=ROOT)
     if completed.returncode:
         raise SystemExit("Official OAuth login did not complete; check app publication, scopes and callback URL.")
-    config = directory / "config/mcp_servers.json"
-    if config.exists():
-        settings = json.loads(config.read_text(encoding="utf-8"))
-        for server in settings["servers"]:
-            if server["name"] == "feishu":
-                server["enabled"] = True
-        config.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+    def enable(document):
+        if 'feishu' not in document.get('servers', {}):
+            raise ValueError('config/mcp.toml has no Feishu definition')
+        selection = document.setdefault('accounts', {}).setdefault(directory.name, {}).setdefault('mcp', {}).setdefault('enabled_servers', [])
+        if 'feishu' not in selection:
+            selection.append('feishu')
+    update_document(Settings.load(args.config).mcp_config_file, enable)
     print("OAuth completed. Verify with scripts/check_mcp.py --user USERNAME --server feishu; reload MCP after logging in as that account.")
 
 

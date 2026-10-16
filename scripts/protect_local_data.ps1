@@ -2,7 +2,7 @@
 param([string]$Directory)
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')).TrimEnd('\')
-$taskPrivateTargets = if ($Directory) { @($Directory) } else { @((Join-Path $repoRoot 'data'), (Join-Path $repoRoot 'configs\local')) }
+$taskPrivateTargets = if ($Directory) { @($Directory) } else { @((Join-Path $repoRoot 'data'), (Join-Path $repoRoot 'config')) }
 $taskProtectedCount = 0
 foreach ($taskPrivateTarget in $taskPrivateTargets) {
 if (-not (Test-Path -LiteralPath $taskPrivateTarget)) { continue }

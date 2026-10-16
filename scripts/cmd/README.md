@@ -14,7 +14,7 @@ Double-click these files or run them from the repository root in PowerShell:
 The entry points resolve the repository from their own location, so they also work when called from another directory. Arguments are forwarded to `scripts/frontend.ps1` or `scripts/backend.ps1`; quote configuration paths containing spaces. For example:
 
 ```powershell
-.\scripts\cmd\start_backend.cmd -Port 2238 -Config "configs/my-local.toml"
+.\scripts\cmd\start_backend.cmd -Port 2238 -Config "config/system.toml"
 .\scripts\cmd\stop_backend.cmd -Port 2238
 .\scripts\cmd\build_frontend.cmd -Install
 ```

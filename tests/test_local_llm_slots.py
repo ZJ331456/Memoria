@@ -125,8 +125,7 @@ def test_remote_with_key_still_ready(tmp_path: Path):
 
 def test_keyless_override_clears_inherited_remote_credentials(tmp_path: Path):
     settings = _settings(tmp_path, ModelConfig("remote", "old-cloud-key", "https://api.example.test/v1"))
-    settings.model_override_file.parent.mkdir(parents=True,exist_ok=True)
-    settings.model_override_file.write_text(
+    settings.model_config_file.write_text(
         '[llm.main]\nmodel="Qwen3.5-2B"\nbase_url="http://127.0.0.1:8080/v1"\napi_key=""\n', encoding="utf-8")
     reloaded = Settings.load(settings.source)
     assert reloaded.main.api_key == "" and reloaded.main.is_ready()
