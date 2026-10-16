@@ -14,6 +14,8 @@ Python依赖只维护根[requirements.txt](../requirements.txt)，按七类注�
 
 | 文件 | 职责/命令 | 边界 |
 | --- | --- | --- |
+| configure_bot.py | `--channel feishu/qq/telegram` | 隐藏输入并DPAPI保存，统一bot.toml；不打印凭据 |
+| check_bots.py | `--channel qq`（省略则检查已启用） | 只读鉴权/接入点检查，0消息/0LLM |
 | configure_models.py | `show [--user your_username]`或`test --slot embedding` | show只读配置/0推理，remote test需--allow-remote；不打印Key |
 | migrate_config_layout.py | 停服后`--config config.toml` | 合并系统/模型/飞书/MCP到config四文件；先备份，失败回滚，账号凭据仍隔离 |
 | download_embedding.py | `scripts/download_embedding.py` | 固定公开BGE revision，核对SHA/大小，仅下载模型数据到model |
@@ -43,7 +45,7 @@ evaluate_retrieval.py读取公开注册协议、要求clean代码及指纹/分�
 | install_mcp.py | 无参数时在项目.mcp安装锁定搜索/飞书npm依赖和校验后的官方GitHub二进制；`--help`只显示说明，未知参数拒绝 |
 | configure_mcp.py | `--user your_username`写账号独立工具白名单配置 |
 | configure_feishu.py | `--user your_username`私密输入与OAuth；`--login-only`重授权 |
-| configure_feishu_bot.py | 独立机器人消息入口；隐藏输入或`--from-user your_username`复用加密应用凭据，`--disable`关闭；无默认绑定 |
+| configure_bot.py --channel feishu | 飞书入口；隐藏输入或`--from-user your_username`复用加密应用凭据，`--disable`关闭；无默认绑定 |
 | mcp_server.py | 正式本机stdio桥接，读取指定账号凭据，避免命令行Secret |
 | check_mcp.py | `--user your_username [--server search/github/feishu]`真实初始化与只读业务调用 |
 | prepare_real_dialogues.py | `--limit 50 --user your_username`复现公开LCCC子集和回执，重复导入核对原文 |

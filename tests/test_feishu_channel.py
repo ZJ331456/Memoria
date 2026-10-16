@@ -138,8 +138,16 @@ def test_person_binding_routes_to_exactly_its_own_tenant(hub):
     assert hub.calls==['owner-a'] and len(hub.stores['owner-a'].sessions())==1
     assert hub.stores['owner-b'].sessions()==[]
     assert hub.api.sent[-1][1]=='private answer for owner-a'
+    assert len(hub.api.sent)==1
     record=hub.state.db.execute('SELECT * FROM inbox').fetchone()
     assert record['status']=='sent' and record['body']=='{}' and record['reply'] is None
+
+
+def test_optional_processing_notice_is_enabled_explicitly(hub):
+    hub.configuration['processing_notice']=True
+    bind(hub);asyncio.run(hub.handle(ingest(hub)))
+    assert len(hub.api.sent)==2 and hub.api.sent[0][2]==-1
+    assert hub.api.sent[-1][1]=='private answer for owner-a'
 
 
 def test_disabled_account_and_old_prebinding_message_never_invoke_model(hub):
@@ -275,4 +283,4 @@ def test_channel_endpoints_require_login_and_cannot_select_another_owner(tmp_pat
         assert client.post('/api/channels/feishu/pairing',json={'user_id':'other'}).status_code==503
         assert client.delete('/api/channels/feishu/binding').status_code==204
         schema=client.get('/openapi.json').json()
-        assert schema['paths']['/api/channels/feishu/pairing']['post']['security']==[{'UserSession':[]}]
+        assert schema['paths']['/api/channels/{channel}/pairing']['post']['security']==[{'UserSession':[]}]

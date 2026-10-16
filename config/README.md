@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | system.toml | [system.example.toml](system.example.toml) | HTTP端口、数据库根、记忆策略、Reader预算、任务与安全 |
 | models.toml | [models.example.toml](models.example.toml) | main/fast LLM的API或本地调用、Embedding API或本地BGE、账号专属槽位 |
-| feishu.toml | [feishu.example.toml](feishu.example.toml) | 机器人启用和加密应用凭据位置 |
+| bot.toml | [bot.example.toml](bot.example.toml) | 飞书/QQ/Telegram各自启用、加密凭据引用及Telegram代理 |
 | mcp.toml | [mcp.example.toml](mcp.example.toml) | 全部MCP服务定义、工具权限、超时及各账号启用列表 |
 
 四份实际文件直接放在本目录，没有local子目录。只复制example到同名实际文件；已有配置不能覆盖。启动默认读取system.toml及同目录另外三份文件。模型和端口可分别维护，不需要models.file或旧覆盖文件。

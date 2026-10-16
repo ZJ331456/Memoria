@@ -31,7 +31,36 @@ def migrate_server_configuration(source: Path) -> dict:
     project = source.parent.parent if source.parent.name == 'config' else source.parent
     _safe(source, project)
     directory = _safe(project / 'config', project)
-    targets = {name: directory / (name + '.toml') for name in ('system', 'models', 'feishu', 'mcp')}
+    targets = {name: directory / (name + '.toml') for name in ('system', 'models', 'bot', 'mcp')}
+    if source==targets['system'] and source.is_file() and not targets['bot'].exists() and (directory/'feishu.toml').is_file():
+        # Upgrade the immediately previous four-file layout without touching
+        # model/MCP files, account data, credentials or existing Feishu bindings.
+        old=_safe(directory/'feishu.toml',project)
+        previous=read_document(old)
+        if set(previous)!={'bot'}:raise ValueError('Unknown old Feishu configuration tables')
+        raw=_read_with_parent(source.resolve())
+        database=Path(raw.get('storage',{}).get('database','data/memoria.db'))
+        data_root=_safe(database.parent if database.is_absolute() else project/database.parent,project)
+        if data_root==project or directory.is_relative_to(data_root) or data_root.is_relative_to(directory):raise ValueError('Data/config roots overlap')
+        bot=read_document(Path(__file__).resolve().parents[1]/'config/bot.example.toml')
+        bot['feishu']=previous['bot']
+        from .channels.config import validate_bot_configuration
+        validate_bot_configuration(bot)
+        stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
+        backup=_safe(data_root/'backups'/('bot-config-'+stamp),project)
+        backup.mkdir(parents=True,exist_ok=False,mode=0o700)
+        shutil.copy2(old,backup/'feishu.toml')
+        try:
+            write_document(targets['bot'],bot)
+            Settings.load(source)
+            old.unlink()
+        except BaseException:
+            targets['bot'].unlink(missing_ok=True)
+            raise
+        return {'already_migrated':False,'runtime_files':4,'bot_config':str(targets['bot']),'backup':str(backup),'account_files_changed':0}
+    if source==targets['system'] and all(path.is_file() for path in targets.values()):
+        Settings.load(source)
+        return {'already_migrated':True,'runtime_files':4}
     if not source.exists() and all(path.is_file() for path in targets.values()):
         Settings.load(targets['system'])
         return {'already_migrated': True, 'runtime_files': 4}
@@ -71,15 +100,15 @@ def migrate_server_configuration(source: Path) -> dict:
         system.get('memory', {}).pop(unused, None)
     template = Path(__file__).resolve().parents[1] / 'config/mcp.example.toml'
     mcp = read_document(template)
-    feishu = {'bot': {'enabled': False, 'credentials_file': 'data/secrets/feishu-bot.credentials.dpapi'}}
+    feishu = {'feishu': {'enabled': False, 'credentials_file': 'data/secrets/feishu-bot.credentials.dpapi'}, 'qq': {'enabled':False}, 'telegram': {'enabled':False}}
     bot_directory = private if (private / 'feishu-bot.json').exists() else old_data_config
     if (bot_directory / 'feishu-bot.json').exists():
         old = bot_directory / 'feishu-bot.json'
-        feishu['bot']['enabled'] = json.loads(old.read_text(encoding='utf-8-sig')).get('enabled') is True
+        feishu['feishu']['enabled'] = json.loads(old.read_text(encoding='utf-8-sig')).get('enabled') is True
         originals.append(old)
     bot_source = bot_directory / 'feishu-bot.credentials.dpapi'
     bot_target = _safe(data_root / 'secrets/feishu-bot.credentials.dpapi', project)
-    feishu['bot']['credentials_file'] = bot_target.relative_to(project).as_posix()
+    feishu['feishu']['credentials_file'] = bot_target.relative_to(project).as_posix()
     if bot_source.exists():
         originals.append(bot_source)
         if bot_target.exists():
@@ -133,7 +162,7 @@ def migrate_server_configuration(source: Path) -> dict:
         if bot_source.exists():
             bot_target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             shutil.copy2(bot_source, bot_target);created.append(bot_target)
-        for name, document in (('system', system), ('models', models), ('feishu', feishu), ('mcp', mcp)):
+        for name, document in (('system', system), ('models', models), ('bot', feishu), ('mcp', mcp)):
             write_document(targets[name], document);created.append(targets[name])
         checked = Settings.load(targets['system'])
         for owner in models.get('accounts', {}):

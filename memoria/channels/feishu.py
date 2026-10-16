@@ -2,7 +2,6 @@
 from __future__ import annotations
 import asyncio
 import importlib.util
-import json
 import multiprocessing
 import os
 import queue
@@ -10,16 +9,16 @@ import time
 from contextlib import suppress
 from pathlib import Path
 from ..private_files import load_private_json
-from .feishu_api import FeishuAPI, FeishuError, reply_parts
-from .feishu_state import FeishuState, digest
+from .feishu_api import FeishuAPI
+from .state import ChannelState as FeishuState, digest
+from .base import ChannelHub
 from .feishu_transport import listen
 
-HELP='请在本地Chat点击“连接飞书”，登录自己的账号后生成绑定码，再在此私聊发送 /绑定 绑定码。绑定后直接发送文字即可；/new 新对话，/stop 停止，/unbind 解绑。'
-
-
-class FeishuHub:
+class FeishuHub(ChannelHub):
     def __init__(self,root:Path,accounts,pool,*,configuration:dict,project:Path):
         self.root,self.accounts,self.pool=root,accounts,pool
+        self.configuration=configuration
+        self.turn_slots=asyncio.Semaphore(4)
         self.credentials_file=Path(configuration.get('credentials_file',str(root/'secrets/feishu-bot.credentials.dpapi')))
         if not self.credentials_file.is_absolute():self.credentials_file=project/self.credentials_file
         self.state_file=root/'channels/feishu.db'
@@ -97,85 +96,5 @@ class FeishuHub:
                     if status.get('error'):self.last_error=status['error']
                 except queue.Empty:break
             if self.process and not self.process.is_alive():self.connected=False;self.last_error='transport_stopped'
-            for row in self.state.pending(self.app):
-                sender=row['sender'];packet=json.loads(row['body'])
-                if (packet.get('text','').strip().lower() in {'/stop','/停止'} and sender in self.tasks
-                        and row['message_id']!=self.tasks[sender]['message_id'] and row['owner']==self.tasks[sender]['owner']):
-                    self.tasks[sender]['task'].cancel()
-                if sender in self.tasks or len(self.tasks)>=4:continue
-                if row['status']=='received' and not self.state.claim(self.app,row['message_id']):continue
-                binding=self.state.binding(self.app,sender)
-                task=asyncio.create_task(self.handle(row),name='feishu-turn')
-                self.tasks[sender]={'task':task,'owner':binding['owner'] if binding else None,'message_id':row['message_id']}
-                task.add_done_callback(lambda done,key=sender:self.finished(key,done))
+            self.dispatch_pending()
             await asyncio.sleep(0.4)
-
-    def finished(self,key,task):
-        self.tasks.pop(key,None)
-        if not task.cancelled():
-            with suppress(Exception):task.result()
-
-    async def handle(self,row:dict):
-        message_id=row['message_id'];packet=json.loads(row['body']);sender=packet['sender']
-        try:
-            binding=self.state.binding(self.app,sender)
-            if row['status'] in {'generated','delivery_failed'}:
-                await self.deliver(row,packet);return
-            text=packet.get('text','').strip();command=text.lower()
-            owner=None;session=None
-            if packet.get('pair_hash'):
-                try:reply=self.state.bind(self.app,sender,packet['pair_hash'])
-                except ValueError:reply='绑定尝试过于频繁，请十分钟后再试。'
-            elif command in {'/help','/帮助'}:reply=HELP
-            elif not binding:reply=HELP
-            elif row.get('owner')!=binding['owner'] or packet.get('binding_created')!=binding['created']:
-                reply='这条消息的账号绑定已变化，请重新发送。'
-            else:
-                owner=binding['owner'];user=self.accounts.enabled_user(owner)
-                if not user:
-                    self.state.unbind(self.app,owner);reply='本地账号当前不可用，请登录本机确认。';owner=None
-                elif command in {'/unbind','/解绑'}:
-                    self.state.unbind(self.app,owner);reply='已解除绑定；已有聊天记录仍保留在原Memoria账号。';owner=None
-                elif command in {'/new','/新对话'}:
-                    self.state.session(self.app,sender,owner,None);reply='已切换到新对话，发送下一条文字开始。'
-                elif command in {'/stop','/停止'}:
-                    self.state.cancel_pending(self.app,sender,message_id);reply='已停止当前生成并清空待处理消息；已保存内容可在本地查看。'
-                elif packet['kind']!='text':reply='目前支持机器人私聊文字消息，请发送文字。'
-                elif packet['created']<binding['created']-5 or packet['created']<time.time()-86400:
-                    reply='这条消息早于当前绑定或过旧，请重新发送。'
-                elif not self.state.allowed_turn(self.app,sender):reply='十分钟内对话次数已达到30条，请稍后继续。'
-                else:
-                    await self.api.reply(message_id,'已收到，正在处理。可发送 /stop 停止本轮。',-1)
-                    tenant=await self.pool.get(user)
-                    # Recheck ownership after slow tenant/MCP initialization.
-                    current=self.state.binding(self.app,sender)
-                    if not current or current['owner']!=owner:return self.state.update(self.app,message_id,'ignored')
-                    session=binding['session']
-                    if not session or not tenant.state.store.session(session):
-                        session=tenant.state.store.create_session('飞书 · '+text[:30])['id']
-                        self.state.session(self.app,sender,owner,session)
-                    self.state.update(self.app,message_id,'processing',owner=owner,session=session)
-                    result=await tenant.state.chat_turn(session,text,request_id='feishu-'+digest(message_id)[:24])
-                    reply=result['message']['content']
-            self.state.update(self.app,message_id,'generated',reply=reply,owner=owner,session=session)
-            await self.deliver({**row,'reply':reply,'owner':owner},packet)
-        except asyncio.CancelledError:
-            self.state.update(self.app,message_id,'interrupted',error='turn_cancelled');raise
-        except Exception:
-            self.last_error='turn_failed'
-            reply='本轮处理失败，请在本地Studio核对模型配置和运行记录后重试；系统不会自动重复调用模型。'
-            self.state.update(self.app,message_id,'generated',reply=reply,error='turn_failed')
-            await self.deliver({**row,'reply':reply,'owner':None},packet)
-
-    async def deliver(self,row:dict,packet:dict):
-        try:
-            for number,part in enumerate(reply_parts(row['reply'])):
-                if row.get('owner'):
-                    binding=self.state.binding(self.app,packet['sender'])
-                    if not binding or binding['owner']!=row['owner'] or not self.accounts.enabled_user(row['owner']):
-                        self.state.update(self.app,row['message_id'],'ignored');return
-                await self.api.reply(row['message_id'],part,number)
-            self.state.update(self.app,row['message_id'],'sent');self.last_error=None
-        except Exception as exc:
-            code=exc.code if isinstance(exc,FeishuError) else 'delivery_network'
-            self.last_error=code;self.state.delivery_failed(self.app,row['message_id'],code)

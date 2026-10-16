@@ -17,7 +17,7 @@ def system_config(tmp_path, models=None):
     source=directory/'system.toml'
     source.write_text('[storage]\ndatabase="'+(tmp_path/'data/memoria.db').as_posix()+'"\n[llm]\nrequest_timeout_seconds=37\n')
     (directory/'models.toml').write_text(models or '')
-    (directory/'feishu.toml').write_text('[bot]\nenabled=false\n')
+    (directory/'bot.toml').write_text('[feishu]\nenabled=false\n')
     (directory/'mcp.toml').write_text('')
     return source
 
@@ -290,3 +290,19 @@ def test_migration_cannot_retire_project_config_or_account_roots(tmp_path,privat
     original=source.read_bytes()
     with pytest.raises(ValueError,match='overlaps'):migrate_server_configuration(source)
     assert source.read_bytes()==original and account.is_dir()
+
+
+def test_previous_feishu_file_moves_into_unified_bot_without_touching_models_or_accounts(tmp_path):
+    source=system_config(tmp_path)
+    directory=source.parent
+    (directory/'bot.toml').unlink()
+    old=directory/'feishu.toml';old.write_text('[bot]\nenabled=true\ncredentials_file="data/secrets/existing.dpapi"\n')
+    models=(directory/'models.toml').read_bytes()
+    result=migrate_server_configuration(source)
+    assert result['account_files_changed']==0 and not old.exists()
+    current=Settings.load(source)
+    assert current.bot_settings['feishu']['enabled']
+    assert not current.bot_settings['qq']['enabled'] and not current.bot_settings['telegram']['enabled']
+    assert (directory/'models.toml').read_bytes()==models
+    assert (Path(result['backup'])/'feishu.toml').is_file()
+    assert migrate_server_configuration(source)['already_migrated']

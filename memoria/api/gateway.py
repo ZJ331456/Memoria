@@ -21,6 +21,8 @@ from ..accounts import AccountStore, SESSION_TTL, user_directory
 from ..config import Settings
 from ..models_config import apply_account_settings
 from ..channels.feishu import FeishuHub
+from ..channels.qq import QQHub
+from ..channels.telegram import TelegramHub
 from .app import VERSION, _create_tenant_app
 
 COOKIE = "memoria_session"
@@ -120,21 +122,26 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     accounts = AccountStore(root / "auth/accounts.db")
     pool = TenantPool(settings, root)
     password_slots = asyncio.Semaphore(2)
-    feishu = FeishuHub(root, accounts, pool, configuration=settings.feishu_settings.get('bot', {}), project=settings.root)
+    channels = {name: hub(root, accounts, pool, configuration=settings.bot_settings.get(name, {}), project=settings.root)
+                for name, hub in (('feishu',FeishuHub),('qq',QQHub),('telegram',TelegramHub))}
+    feishu=channels['feishu']
+    channel_slots=asyncio.Semaphore(4)
+    for hub in channels.values():hub.turn_slots=channel_slots
 
     @asynccontextmanager
     async def lifespan(app):
         try:
-            await feishu.start()
+            for hub in channels.values():await hub.start()
             yield
         finally:
-            await feishu.close()
+            for hub in reversed(list(channels.values())):await hub.close()
             await pool.close()
             accounts.close()
 
     app = FastAPI(title="Memoria authenticated memory API", version=VERSION, lifespan=lifespan)
     app.state.accounts, app.state.tenants, app.state.data_root = accounts, pool, root
     app.state.feishu = feishu
+    app.state.channels = channels
     app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins),
                        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
                        allow_headers=["Content-Type", "Authorization", "X-Agent-Key", "X-Request-ID"], allow_credentials=True)
@@ -284,20 +291,26 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     def health():
         return {"status": "ok", "version": VERSION, "login_required": True}
 
-    @app.get('/api/channels/feishu', tags=['channels'])
-    def feishu_status(request: Request):
-        return feishu.status(current_user(request)['id'])
+    def channel_for(name):
+        if name not in channels:raise HTTPException(404,'未知通讯渠道')
+        return channels[name]
 
-    @app.post('/api/channels/feishu/pairing', tags=['channels'])
-    def feishu_pairing(request: Request):
+    @app.get('/api/channels/{channel}', tags=['channels'])
+    def channel_status(channel: str,request: Request):
+        user=current_user(request)
+        return channel_for(channel).status(user['id'])
+
+    @app.post('/api/channels/{channel}/pairing', tags=['channels'])
+    def channel_pairing(channel: str,request: Request):
         user=current_user(request)
         check_rate(request,user['username'])
-        try:return feishu.pairing(user['id'])
+        try:return channel_for(channel).pairing(user['id'])
         except ValueError as exc:raise HTTPException(503,str(exc))
 
-    @app.delete('/api/channels/feishu/binding',status_code=204,tags=['channels'])
-    async def feishu_unbind(request: Request):
-        feishu.unbind(current_user(request)['id'])
+    @app.delete('/api/channels/{channel}/binding',status_code=204,tags=['channels'])
+    async def channel_unbind(channel: str,request: Request):
+        user=current_user(request)
+        channel_for(channel).unbind(user['id'])
 
     @app.get("/", include_in_schema=False)
     def index(request: Request):

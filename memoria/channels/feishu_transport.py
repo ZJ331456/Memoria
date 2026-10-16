@@ -5,7 +5,8 @@ import logging
 import threading
 from pathlib import Path
 from ..private_files import load_private_json
-from .feishu_state import FeishuState, digest, parse_event
+from .state import ChannelState as FeishuState, digest
+from .feishu_state import parse_event
 
 
 def listen(credentials_file:str,state_file:str,status_queue,stop):

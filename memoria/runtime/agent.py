@@ -131,6 +131,7 @@ class AgentRuntime:
 
                 interrupt_note = (session or {}).get("interrupt_note") or ""
                 claim_request = infer_query(user_text) if self.claims else None
+                context.metadata["query_route"] = "personal_memory" if claim_request else "dialogue"
                 if claim_request:
                     claim_request.session_id = session_id
                 with tracer.timings.measure("compaction"):

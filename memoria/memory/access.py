@@ -18,14 +18,26 @@ from .evidence.requirements import coverage
 
 
 def infer_query(text: str) -> QueryRequest | None:
-    """Only short personal-state questions. General tasks keep their existing planner."""
+    """Route recall of personal facts, not advice merely mentioning a known slot.
+
+    parse_query recognizes vocabulary/qualifiers, not the speaker's intent. In
+    particular, a negated '吃什么' in a complaint is not a diet-memory question.
+    Explicit memory API requests remain strict independently of this chat gate.
+    """
     from ..claims import infer_access
     if infer_access(text):
         return QueryRequest(query=text)
     if len(text) > 160 or re.search(r"请记住|帮我|写代码|生成|翻译|总结", text):
         return None
+    # Cause, advice, planning and recommendations belong to the normal dialogue
+    # planner. Missing personal memory must not block general-purpose assistance.
+    if re.search(r"为什么|为何|怎么回事|什么原因|原因是什么|如何|怎么办|怎么(?:办|做|选|处理|解决|安排|改善|调整)|"
+                 r"应该|应当|该不该|要不要|能不能|可不可以|建议|推荐|适不适合|是否适合|会不会|"
+                 r"吃什么(?:好|比较|才能)|选什么|能买什么|适合.*什么", text):
+        return None
+    question = re.sub(r"(?:没(?:有)?|不(?:是)?|无论|不管|随便)(?:[^，。！？?；;]{0,8})什么", "", text)
     parsed = parse_query(text)
-    if parsed["predicates"] and re.search(r"我|我的", text) and re.search(r"哪里|在哪|什么|何时|什么时候|哪种|哪所|有哪些|是多少", text):
+    if parsed["predicates"] and re.search(r"我|我的", text) and re.search(r"哪里|在哪|什么|何时|什么时候|哪种|哪所|有哪些|是多少", question):
         return QueryRequest(query=text)
     return None
 

@@ -189,9 +189,9 @@ class Settings:
     account_directory: Path | None = None
     data_root: Path | None = None
     model_config_file: Path | None = None
-    feishu_config_file: Path | None = None
+    bot_config_file: Path | None = None
     model_settings: dict = field(default_factory=dict, repr=False)
-    feishu_settings: dict = field(default_factory=dict, repr=False)
+    bot_settings: dict = field(default_factory=dict, repr=False)
     reader_input_bytes: int = 240000
     reader_context_tokens: int | None = None
     reader_safety_tokens: int = 128
@@ -338,10 +338,10 @@ class Settings:
         suffix = '.example.toml' if example else '.toml'
         directory = source.parent
         settings.model_config_file = directory / ('models' + suffix)
-        settings.feishu_config_file = directory / ('feishu' + suffix)
+        settings.bot_config_file = directory / ('bot' + suffix)
         settings.mcp_config_file = directory / ('mcp' + suffix)
         if source.name in {'system.toml', 'system.example.toml'}:
-            if not all(p.is_file() for p in (settings.model_config_file, settings.feishu_config_file, settings.mcp_config_file)):
+            if not all(p.is_file() for p in (settings.model_config_file, settings.bot_config_file, settings.mcp_config_file)):
                 raise FileNotFoundError('Configuration incomplete; prepare all four config/*.toml files from their examples')
             settings.model_settings = read_document(settings.model_config_file)
             from .models_config import validate_model_configuration
@@ -351,7 +351,9 @@ class Settings:
             # slots. They never discover another installation's private models.
             settings.model_config_file = source
             settings.model_settings = data
-        settings.feishu_settings = read_document(settings.feishu_config_file) if settings.feishu_config_file.is_file() else {}
+        settings.bot_settings = read_document(settings.bot_config_file) if settings.bot_config_file.is_file() else {}
+        from .channels.config import validate_bot_configuration
+        validate_bot_configuration(settings.bot_settings)
         for slot in (settings.main, settings.fast):
             slot.validate_role("llm")
         settings.embedding.validate_role("embedding")

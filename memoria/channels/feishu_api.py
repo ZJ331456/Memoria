@@ -8,10 +8,11 @@ from urllib.parse import quote
 import httpx
 
 
-class FeishuError(Exception):
-    def __init__(self,code):
-        self.code=str(code)
-        super().__init__('feishu_error_'+self.code)
+from .errors import ChannelError
+
+
+class FeishuError(ChannelError):
+    pass
 
 
 def reply_parts(text:str,maximum=3500)->list[str]:

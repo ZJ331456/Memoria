@@ -1,0 +1,23 @@
+# Unified private bot ingress. OAuth MCP authorization remains independent.
+[feishu]
+enabled = false
+processing_notice = false
+credentials_file = "data/secrets/feishu-bot.credentials.dpapi"
+
+# Configure privately: python scripts/configure_bot.py --channel feishu
+# App ID/secret are encrypted with Windows DPAPI, never committed or printed.
+
+[qq]
+enabled = false
+processing_notice = false
+credentials_file = "data/secrets/qq-bot.credentials.dpapi"
+proxy_url = ""
+
+[telegram]
+enabled = false
+processing_notice = false
+credentials_file = "data/secrets/telegram-bot.credentials.dpapi"
+expected_username = ""
+poll_timeout_seconds = 25
+# Telegram may require your existing local HTTP proxy, e.g. http://127.0.0.1:7890
+proxy_url = ""

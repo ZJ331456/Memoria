@@ -1,7 +1,0 @@
-# Feishu bot ingress. OAuth MCP authorization is separate and account-owned.
-[bot]
-enabled = false
-credentials_file = "data/secrets/feishu-bot.credentials.dpapi"
-
-# Configure privately: python scripts/configure_feishu_bot.py
-# App ID/secret are encrypted with Windows DPAPI, never committed or printed.

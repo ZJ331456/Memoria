@@ -12,7 +12,7 @@
 | --- | --- |
 | 安装与启动 | [完整配置指南](implemented/安装配置与启动.md) · [统一依赖与平台目录](implemented/安装配置与启动.md#依赖清单与平台脚本) · [后台启动/停止](implemented/本机后台启动与停止.md) |
 | 系统与接口 | [系统架构](implemented/系统架构与实现说明.md) · [API](implemented/API接口文档.md) |
-| Chat、Studio与渠道 | [前端架构](implemented/Chat与Studio前端架构.md) · [资料与记忆后台](implemented/MemoryStudio与统一记忆访问.md) · [飞书私聊](implemented/飞书机器人对话接入.md) |
+| Chat、Studio与渠道 | [前端架构](implemented/Chat与Studio前端架构.md) · [资料与记忆后台](implemented/MemoryStudio与统一记忆访问.md) · [三平台通讯接入](implemented/飞书QQ与Telegram通讯接入.md) · [飞书详细](implemented/飞书机器人对话接入.md) |
 | 记忆与状态 | [分层配置](implemented/记忆分层与配置.md) · [Claim/条件视图](implemented/Claim条件视图与访问路由.md) · [来源与审核](implemented/自动记忆审核与来源定位.md) |
 | 算法现状与参照 | [本地代码与七个同类项目对照](implemented/算法现状与同类项目对照.md) · [下一阶段算法路线与消融](plans/下一阶段算法路线与对照实验.md) |
 | 检索与回答 | [条件/证据选择](implemented/条件时序抽取与预算证据选择.md) · [完整Reader预算](implemented/完整Reader预算与生产引用校验.md) · [风险核验](implemented/证据充分性与风险感知回答.md) |
@@ -46,3 +46,5 @@
 2026-10-16[LLM主审、人工辅助](implemented/LLM自动审核与人工辅助.md)替代全部必经手工批准：默认低风险候选自动审核入库，敏感/冲突/约束不明保留辅助；历史单条原话可明确请求提取，纯改写词面错误接语义审核。实现、调研和四次真实调用的范围见该文；下一步与验收见[计划41](plans/长期陪伴记忆研究与实验计划书.md#41-llm主审与人工辅助的写入闭环2026-10-16)。
 
 2026-10-16[四类统一配置](implemented/配置目录与模型后端.md)：根[config](../config/README.md)内system/models/feishu/mcp各一份实际TOML及example，没有local。账号模型与MCP启用分别归入对应文件的UUID表；加密秘密/OAuth仍隔离。旧根JSON模板与分散覆盖退休，研究登记迁入[eval/protocols](../eval/protocols/README.md)。本机迁移/真实MCP检查及后续边界见[计划43](plans/长期陪伴记忆研究与实验计划书.md#43-四类统一配置与mcp归拢2026-10-16)。
+
+2026-10-16新增[QQ与Telegram](implemented/飞书QQ与Telegram通讯接入.md)：飞书配置升级为统一bot.toml；三平台分别绑定当前账号，复用同一Agent/记忆链路。真实鉴权/接入点、接收在线及用户本人两平台绑定收发均已确认；工程测试不替代长期效果。默认关闭多余等待通知，修复[日常咨询误入严格个人记忆路由](implemented/完整Reader预算与生产引用校验.md#6-日常咨询与个人事实查询的入口边界2026-10-16)。进度见[计划44](plans/长期陪伴记忆研究与实验计划书.md#44-qqtelegram与统一通讯配置2026-10-16)与[45](plans/长期陪伴记忆研究与实验计划书.md#45-渠道等待通知与日常咨询入口修复2026-10-16)。

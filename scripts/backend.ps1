@@ -72,7 +72,7 @@ if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyCon
 }
 $taskConfigJson = & $taskPython (Join-Path $PSScriptRoot 'configure_models.py') show --config $taskConfig
 if ($LASTEXITCODE -ne 0) { throw 'Configuration validation failed. Inspect config/system.toml.' }
-$taskBotEnabled = (($taskConfigJson -join "`n") | ConvertFrom-Json).feishu_bot_enabled
+$taskBotChannels = (($taskConfigJson -join "`n") | ConvertFrom-Json).bot_channels_enabled
 New-Item -ItemType Directory -Path $taskRun,$taskLogs -Force | Out-Null
 $taskStamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $taskOut = Join-Path $taskLogs "backend-$Port-$taskStamp.out.log"
@@ -92,8 +92,8 @@ do {
         Write-Host "Chat ready: $taskUrl/ (PID=$($taskStarted.Id))"
         Write-Host "Memory Studio: $taskUrl/studio/"
         Write-Host "API docs: $taskUrl/docs"
-        if ($taskBotEnabled) {
-            Write-Host 'Feishu bot: privately configured channels start with this backend. Check connection and pair after login in Chat.'
+        if ($taskBotChannels.Count -gt 0) {
+            Write-Host ('Bot channels: ' + ($taskBotChannels -join ', ') + '. Check connections and pair separately after login in Chat.')
         }
         Write-Host "Logs: $taskLogs"
         if (-not (Test-Path -LiteralPath (Join-Path $taskRoot 'frontend\dist\studio\index.html')) -or

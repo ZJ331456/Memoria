@@ -28,7 +28,7 @@ def main():
     if args.action == 'show':
         result = public_models(settings)
         result.update(server_config=str(settings.source.resolve()), configuration_file=str(settings.model_config_file.resolve()),
-                      feishu_bot_enabled=settings.feishu_settings.get('bot', {}).get('enabled', False),
+                      bot_channels_enabled=[name for name,table in settings.bot_settings.items() if table.get('enabled')],
                       scope='account' if args.user else 'server_defaults', inference_calls=0)
     else:
         selected = getattr(settings, args.slot)

@@ -2,18 +2,18 @@
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import type { useAccount } from './auth'
 import PasswordPanel from './PasswordPanel.vue'
-import FeishuPanel from './FeishuPanel.vue'
+import ChannelPanel from './ChannelPanel.vue'
 
 const props = defineProps<{account:ReturnType<typeof useAccount>; placement?:'up'|'down'; disabled?:boolean; manageAccounts?:boolean}>()
 const emit = defineEmits<{manage:[]}>()
 const {user,busy,api}=props.account
 const root=ref<HTMLElement|null>(null),details=ref<HTMLDetailsElement|null>(null),trigger=ref<HTMLElement|null>(null)
-const password=ref<InstanceType<typeof PasswordPanel>|null>(null),feishu=ref<InstanceType<typeof FeishuPanel>|null>(null)
+const password=ref<InstanceType<typeof PasswordPanel>|null>(null),channels=ref<InstanceType<typeof ChannelPanel>|null>(null)
 function close(){if(details.value)details.value.open=false}
 function outside(event:Event){if(!root.value?.contains(event.target as Node))close()}
 function escape(event:KeyboardEvent){if(event.key==='Escape'&&details.value?.open){close();trigger.value?.focus()}}
 async function openPassword(){close();await nextTick();password.value?.open()}
-async function openFeishu(){close();await nextTick();feishu.value?.open()}
+async function openChannels(){close();await nextTick();channels.value?.open()}
 function manage(){close();emit('manage')}
 onMounted(()=>{document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape)})
 onUnmounted(()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape)})
@@ -22,10 +22,10 @@ onUnmounted(()=>{document.removeEventListener('pointerdown',outside);document.re
   <div v-if="user" ref="root" class="account-control" :class="placement==='up'?'opens-up':'opens-down'">
     <details ref="details">
       <summary ref="trigger" :aria-label="user.username+' 的账号设置'"><span class="account-control-avatar">{{ user.username[0].toUpperCase() }}</span><span class="account-control-identity"><strong>{{ user.username }}</strong><small>{{ user.role==='superadmin'?'超级管理员 · 账号设置':'账号设置 · 退出 / 换号' }}</small></span><span class="account-control-arrow" aria-hidden="true">⌄</span></summary>
-      <section class="account-popover" aria-label="账号操作"><header><span>当前登录账号</span><strong>{{ user.username }}</strong><small>对话、记忆和渠道绑定按账号独立保存</small></header><button :disabled="busy||disabled" @click="openPassword"><span>修改密码</span><small>验证旧密码后修改</small></button><button :disabled="busy||disabled" @click="props.account.switchAccount"><span>切换账号</span><small>退出后登录其他账号</small></button><button :disabled="busy||disabled" @click="openFeishu"><span>飞书连接</span><small>查看或管理本账号绑定</small></button><button v-if="manageAccounts&&user.role==='superadmin'" :disabled="busy||disabled" @click="manage"><span>账号管理</span><small>超级管理员操作</small></button><button class="account-signout" :disabled="busy||disabled" @click="props.account.logout">退出登录</button></section>
+      <section class="account-popover" aria-label="账号操作"><header><span>当前登录账号</span><strong>{{ user.username }}</strong><small>对话、记忆和渠道绑定按账号独立保存</small></header><button :disabled="busy||disabled" @click="openPassword"><span>修改密码</span><small>验证旧密码后修改</small></button><button :disabled="busy||disabled" @click="props.account.switchAccount"><span>切换账号</span><small>退出后登录其他账号</small></button><button :disabled="busy||disabled" @click="openChannels"><span>通讯连接</span><small>查看或管理本账号绑定</small></button><button v-if="manageAccounts&&user.role==='superadmin'" :disabled="busy||disabled" @click="manage"><span>账号管理</span><small>超级管理员操作</small></button><button class="account-signout" :disabled="busy||disabled" @click="props.account.logout">退出登录</button></section>
     </details>
     <PasswordPanel ref="password" :api="api" hide-trigger @changed="props.account.passwordChanged" @closed="trigger?.focus()"/>
-    <FeishuPanel ref="feishu" :api="api" hide-trigger/>
+    <ChannelPanel ref="channels" :api="api" hide-trigger/>
   </div>
 </template>
 <style scoped>
