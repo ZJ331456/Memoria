@@ -565,6 +565,9 @@ class AgentRuntime:
                 raise
 
     def _memory_dependency_valid(self, dependency: dict) -> bool:
+        if dependency.get('dependency_type') == 'library':
+            library=getattr(self,'library',None)
+            return bool(library and library.dependency_valid(dependency))
         if dependency.get('dependency_type') == 'claim_access':
             return bool(self.claims and self.claims.access_dependency_valid(dependency))
         return self.store.memory_dependency_valid(dependency)
@@ -609,7 +612,7 @@ class AgentRuntime:
                         content = "[claim-access-atomic]\n" + content
                     tool_ok, elapsed_ms = tool_result.ok, tool_result.elapsed_ms
                     if memory_budget and tool_name in _MEMORY_READ_TOOLS:
-                        consumed = memory_budget.consume(content,atomic=tool_name=="access_claims")
+                        consumed = memory_budget.consume(content,atomic=tool_name in {"access_claims","search_library"})
                         if consumed != content:
                             if consumed.startswith("[本轮记忆检索预算已用尽"):
                                 budget_blocked = True

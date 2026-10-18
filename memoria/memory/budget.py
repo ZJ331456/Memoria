@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 
-_MEMORY_READ_TOOLS = frozenset({"recall_memory", "recall_episodes", "search_history", "load_skill", "access_claims"})
+_MEMORY_READ_TOOLS = frozenset({"recall_memory", "recall_episodes", "search_history", "load_skill", "access_claims", "search_library"})
 _TRUNCATED = "\n[本轮记忆检索预算已截断]"
 _EXHAUSTED = "[本轮记忆检索预算已用尽；此结果未作为有效记忆注入]"
 

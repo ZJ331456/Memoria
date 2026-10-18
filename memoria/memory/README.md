@@ -1,5 +1,7 @@
 # Memory：记忆版本、统一访问与证据选择
 
+[EvidenceLibrary](library.py)保存原生笔记/文档/任务结果与不可变修订，结合反馈提炼有限知识观察；不写个人Claim，search_library遵守原预算与来源版本复核。见[实现边界](../../docs/implemented/多来源资料与任务反馈记忆.md)。
+
 [核心包](../README.md) · [运行时](../runtime/README.md) · [分层说明](../../docs/implemented/记忆分层与配置.md) · [Studio/统一访问](../../docs/implemented/MemoryStudio与统一记忆访问.md)
 
 本包实现当前登录账号的普通记忆、情景记忆及其访问链路。结构化 Claim 的写入/审批位于 [claims.py](../claims.py)，共享空间由 [governance.py](../governance.py) 管理；三者不自动互相复制。

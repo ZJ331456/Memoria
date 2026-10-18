@@ -1,10 +1,10 @@
 # Memoria
 
-**面向长期陪伴、以原话证据为基础的记忆系统。**
+**面向长期陪伴与任务经验、以可追溯证据为基础的记忆系统。**
 
 [English](README.en.md) · [快速开始](#快速开始) · [系统架构](#系统架构) · [评测结果](#locomo-全量评测) · [文档](docs/README.md)
 
-Memoria 将原话、审核、条件和版本连接起来，让有限上下文中的回答能够使用有来源、在当前情境下适用的记忆。项目提供独立 Chat、Memory Studio、HTTP API 与研究工具，当前后台使用 DeepSeek 大模型与本地 BGE Embedding；也支持本地 Qwen 和兼容 OpenAI 接口的模型配置。
+Memoria 管理对话、笔记、文档和任务结果的来源、审核、条件与版本，让有限上下文中的回答和后续任务使用适用的记忆。个人事实与资料知识分别管理，项目提供独立 Chat、Memory Studio、HTTP API 与研究工具，当前后台使用 DeepSeek 大模型与本地 BGE Embedding；也支持本地 Qwen 和兼容 OpenAI 接口的模型配置。
 
 ![Memoria — Memory that stays in context.](assets/images/memoria-overview.png)
 
@@ -16,6 +16,7 @@ Memoria 将原话、审核、条件和版本连接起来，让有限上下文中
 | --- | --- |
 | 可追溯的记忆 | 保存原话与来源定位；完整支持组、候选审核、纠正、撤销和不可变修订 |
 | 记忆形成与巩固 | 单次行为先记录Observation，跨会话积累后由模型归纳近期Pattern并独立审核；支持受约束强化、演化及核心降级 |
+| 非对话资料与经验 | 笔记、文档和任务结果独立保存，修订/撤回可追溯；明确反馈后提炼有限经验，[Studio与API入口](docs/implemented/多来源资料与任务反馈记忆.md) |
 | 适用的状态 | Claim、条件视图、明确会话临时范围与双时间；区分当前、历史和未知 |
 | 有界的访问 | 普通记忆混合检索；原始经历BM25及可选Dense/RRF、邻块展开、预算和依赖复核 |
 | 受约束的更新 | 非精确关系先筛主体/属性/条件/时间，未知关系不自动覆盖旧记忆 |

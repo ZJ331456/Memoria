@@ -1,5 +1,7 @@
 # Memory Studio：数据与记忆管理后台
 
+“资料与经验”（#library）支持笔记、文档和任务结果的独立保存/阅读/修订/检索、验收反馈、提炼及撤回；数据来自当前账号/library接口，不造聊天记录。保存/检索不调用模型，明确提炼才产生模型调用。
+
 [前端目录/构建](../README.md) · [行为与验证](../../docs/implemented/MemoryStudio与统一记忆访问.md) · [API](../../memoria/api/README.md)
 
 Vue 3 + TypeScript + Element Plus，入口 `/studio/`。保留数据总览、完整历史全文搜索/来源/分页/命中定位、普通记忆库、候选审核、结构化Claim审核、双时间、检索实验室、只读评测运行及超管账号元数据。页面不提供聊天发送/新建；需要交流时通过“返回Chat”到根地址。
