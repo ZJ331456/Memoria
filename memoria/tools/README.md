@@ -6,6 +6,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
+| [knowledge.py](knowledge.py) | search_knowledge/search_library调用MemoryKernel，服务端会话、完整JSON预算与可信依赖 |
 | [registry.py](registry.py) | Tool 元数据、严格参数校验、hooks、授权、超时与输出限额 |
 | [builtin.py](builtin.py) | 个人记忆/Claim、历史、情景、时间、计算、技能与 HTTP GET |
 | [search.py](search.py) | 按需 schema、tool_search/tool_call 解码 |
@@ -19,7 +20,7 @@ build_registry 注册 recall_memory/memorize/forget_memory/search_history/curren
 
 search_enabled 开启时常驻工具及搜索/调用包装器直接展示，其余 schema 按需发现；关闭则暴露普通工具。MCP 接同一注册表并受相同校验/权限/超时/输出限制。
 
-每轮 recall_memory/recall_episodes/search_history/load_skill/access_claims 共享默认 6 次/12000 字符，初始帧计入。包装调用按真实解码名称记账，Claim 超额整体省略。API 调试没有聊天轮次配额，但有单次校验/限额，写调试需 confirm_write=true。
+每轮 recall_memory/recall_episodes/search_history/load_skill/access_claims/search_library/search_knowledge 共享默认 6 次/12000 字符，初始帧计入。包装调用按真实解码名称记账，Claim及资料/统一证据工具超额整体省略，不能截断引用JSON。API 调试没有聊天轮次配额，但有单次校验/限额，写调试需 confirm_write=true。
 
 ## 写入与网络边界
 

@@ -13,7 +13,7 @@ class SearchInput(BaseModel):
     budget: int=Field(default=4000,ge=800,le=8000)
 
 
-def library_router(library):
+def library_router(library, kernel=None):
     router=APIRouter(prefix='/api/library',tags=['non-conversation memory'])
 
     @router.get('/sources')
@@ -22,7 +22,7 @@ def library_router(library):
 
     @router.post('/sources',status_code=201)
     def create(body: SourceInput):
-        return library.create(body)
+        return kernel.ingest(body) if kernel else library.create(body)
 
     @router.post('/search')
     def search(body: SearchInput):

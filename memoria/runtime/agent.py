@@ -15,7 +15,7 @@ from ..memory.reader import CitationGuard, ANSWER_CONTRACT, SAFE_UNKNOWN, SAFE_R
 from ..lifecycle import Phase, Pipeline, TurnContext
 from ..llm import ContextLengthError, LLMClient
 from ..memory import MemoryEngine, MemoryQueryPlanner
-from ..memory.budget import TurnMemoryBudget
+from ..memory.budget import TurnMemoryBudget, _MEMORY_READ_TOOLS
 from ..memory.episodic import EpisodicMemory
 from ..observability import EventBus, RequestContext, TurnTracer
 from ..prompting import ContextBudget, PromptAssembler, PromptSection
@@ -31,7 +31,6 @@ from .compaction import SessionCompactor
 
 
 logger = logging.getLogger(__name__)
-_MEMORY_READ_TOOLS = frozenset({"recall_memory", "recall_episodes", "search_history", "load_skill", "access_claims"})
 
 
 class AgentRuntime:
@@ -124,7 +123,9 @@ class AgentRuntime:
                 if on_event:
                     await on_event({"type": "phase", "phase": "before_turn"})
 
-                user_message = self.store.add_message(session_id, "user", user_text)
+                kernel = getattr(self, 'kernel', None)
+                write_message = kernel.record_message if kernel else self.store.add_message
+                user_message = write_message(session_id, "user", user_text)
                 from ..provenance import current_ingress
                 context.metadata['message_origin']=(current_ingress.get() or {'channel':'unknown'}).get('channel')
                 context.metadata['user_message_id']=user_message['id']
@@ -148,7 +149,10 @@ class AgentRuntime:
 
                 history = self.store.messages(session_id, self.settings.memory_window)
                 with tracer.timings.measure("claim.access"):
-                    claim_access = await MemoryAccessOrchestrator(self.claims, self.memory, self.llm).access(claim_request) if claim_request else None
+                    claim_access = None
+                    if claim_request:
+                        access = kernel.access if kernel else MemoryAccessOrchestrator(self.claims, self.memory, self.llm).access
+                        claim_access = await access(claim_request)
                 with tracer.timings.measure("query_planner"):
                     plan = RetrievalPlan(False,user_text,reason="structured_claim_access") if claim_request else await self.retrieval_planner.plan(user_text, history[:-1])
                 context.metadata["retrieval_plan"] = plan.public_dict()
@@ -503,7 +507,7 @@ class AgentRuntime:
                             context.response=verdict['answer']
                             context.metadata['citation_validation']=verdict['validation']
                             context.metadata['citations']=verdict['citations']
-                    assistant_message = self.store.add_message(session_id, "assistant", context.response)
+                    assistant_message = write_message(session_id, "assistant", context.response)
                 if (citation_guard or memory_dependencies) and on_event:
                     tracer.mark_visible_text(context.response)
                     await on_event({'type':'delta','content':context.response})
@@ -565,6 +569,10 @@ class AgentRuntime:
                 raise
 
     def _memory_dependency_valid(self, dependency: dict) -> bool:
+        kernel = getattr(self, 'kernel', None)
+        if kernel:
+            from ..observability.context import current_session_id
+            return kernel.dependency_valid(dependency, session_id=current_session_id.get())
         if dependency.get('dependency_type') == 'library':
             library=getattr(self,'library',None)
             return bool(library and library.dependency_valid(dependency))
@@ -612,7 +620,7 @@ class AgentRuntime:
                         content = "[claim-access-atomic]\n" + content
                     tool_ok, elapsed_ms = tool_result.ok, tool_result.elapsed_ms
                     if memory_budget and tool_name in _MEMORY_READ_TOOLS:
-                        consumed = memory_budget.consume(content,atomic=tool_name in {"access_claims","search_library"})
+                        consumed = memory_budget.consume(content,atomic=tool_name in {"access_claims","search_library","search_knowledge"})
                         if consumed != content:
                             if consumed.startswith("[本轮记忆检索预算已用尽"):
                                 budget_blocked = True

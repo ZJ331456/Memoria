@@ -12,6 +12,8 @@ The current scope is a local research prototype and a controlled-pilot foundatio
 
 ## Architecture
 
+The [MemoryKernel](docs/implemented/独立记忆核心与多来源接口.md) can be used without a chat runtime or web server. Conversation quotes, derived memories, documents and task results share a bounded evidence interface while retaining their authorship, scope and revision rules. Chat and task applications are clients of this core; documents do not automatically become personal facts.
+
 ![How Memoria works — identity, memory runtime, models and storage](assets/images/memoria-architecture.png)
 
 Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Sufficiency and risk verification require an explicit option. See [implementation and limits](docs/implemented/系统架构与实现说明.md). [Poster PNG](assets/images/memoria-overview.png) · [Vector architecture SVG](assets/images/memoria-architecture.svg).

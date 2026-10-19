@@ -447,3 +447,6 @@ memory-access、claim-views、memory-query、memory-answer接受可选session_id
 - `GET /api/studio/pipeline`新增approval_policy，返回llm/manual及实际默认说明；读取不触发推理。
 
 默认llm主审可自动发布普通记忆与简单Claim；人工approve及明确联合批准保留。仅别名/改写障碍可经LLM Supported放行，主体/条件/时间/来源和冲突仍硬校验。原analyze仍是建议，不能用它绕过新写入策略。详见[自动审核机制](LLM自动审核与人工辅助.md)。
+## 独立记忆核心（2026-10-20）
+
+`POST /api/memory-kernel/sources`原生保存note/document/task_result，`GET /api/memory-kernel/sources/{domain}/{source_id}`按conversation/memory/library读取有效来源，`POST /api/memory-kernel/search`有界检索并返回类型、原文span、引用、依赖及完整JSON字符预算。个人状态仍使用既有Claim/双时间访问；三者均由正式登录选择账号，不允许请求体指定user_id。参数、独立Python用法和边界见[独立核心](独立记忆核心与多来源接口.md)。

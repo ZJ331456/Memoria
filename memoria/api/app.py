@@ -429,7 +429,9 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     @app.exception_handler(LibraryError)
     async def library_error(request: Request, exc: LibraryError):
         return _error(request,exc.status,_error_code(exc.status),exc.detail)
-    app.include_router(library_router(service.library if service else None))
+    app.include_router(library_router(service.library if service else None, service.kernel if service else None))
+    from .memory_kernel import memory_kernel_router
+    app.include_router(memory_kernel_router(service.kernel if service else None))
 
     @app.get("/api/health", response_model=HealthResponse, tags=["system"], summary="存活检查")
     def health() -> HealthResponse:

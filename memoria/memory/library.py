@@ -229,9 +229,11 @@ class EvidenceLibrary:
             if revision['source_id']!=sid:raise LibraryError(404,'版本不属于该资料')
             return {**revision,'is_current':source['head_id']==rid}
 
-    def search(self, query, *, session_id=None, limit=5, budget=4000):
+    def search(self, query, *, session_id=None, limit=5, budget=4000, chunks_per_source=1):
         if not 1<=limit<=8 or not 800<=budget<=8000 or not 1<=len(query)<=2000:
             raise LibraryError(422,'检索参数超出预算范围')
+        if type(chunks_per_source) is not int or not 1<=chunks_per_source<=2:
+            raise LibraryError(422,'单来源片段数超出范围')
         tokens=list(dict.fromkeys(token_sequence(query)))[:32]
         if not tokens:return []
         match=' OR '.join('"'+t.replace('"','""')+'"' for t in tokens)
@@ -242,10 +244,10 @@ class EvidenceLibrary:
                 JOIN library_revisions r ON r.id=c.revision_id JOIN library_sources s ON s.id=r.source_id
                 WHERE library_fts MATCH ? AND s.status='active' AND s.head_id=r.id
                 AND (s.scope='personal' OR s.session_id=?) ORDER BY rank,c.id LIMIT ?''',(match,session_id,limit*4)).fetchall()
-            result,seen,used=[],set(),0
+            result,seen,used=[],{},0
             for row in rows:
                 item=dict(row)
-                if item['source_id'] in seen or digest(self._revision(item['revision_id'])['content'])!=item['sha']:continue
+                if seen.get(item['source_id'],0)>=chunks_per_source or digest(self._revision(item['revision_id'])['content'])!=item['sha']:continue
                 feedback=self._feedback(item['revision_id'])
                 fid=feedback['id'] if feedback else None
                 cards=[dict(c) for c in self.store.db.execute('''SELECT content,applicability,quote,feedback_quote
@@ -255,7 +257,7 @@ class EvidenceLibrary:
                 cost=len(item['quote'])+len(json.dumps(cards,ensure_ascii=False))
                 if used+cost>budget:cards=[];cost=len(item['quote'])
                 if used+cost>budget:continue
-                seen.add(item['source_id']);used+=cost
+                seen[item['source_id']]=seen.get(item['source_id'],0)+1;used+=cost
                 item['knowledge_cards']=cards
                 item['citation']='[library:'+item['revision_id']+':'+str(item['start'])+':'+str(item['end'])+']'
                 item['dependency']={'dependency_type':'library','id':item['source_id'],'revision_id':item['revision_id'],'sha':item['sha'],'feedback_id':fid}
@@ -296,6 +298,8 @@ class EvidenceLibrary:
                      status,round((time.monotonic()-started)*1000),now()))
 
     async def distill(self, sid):
+        if self.llm is None:
+            raise LibraryError(503,'当前记忆核心未配置LLM；原始资料存取与词面检索仍可使用')
         # Fixed-size locks bound resource use and coalesce concurrent duplicate requests.
         async with self._distill_locks[int(digest(sid)[:8],16)%len(self._distill_locks)]:
             return await self._distill(sid)

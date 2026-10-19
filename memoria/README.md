@@ -4,6 +4,8 @@
 
 此目录实现账号隔离的记忆 HTTP 服务。正式入口是 `main.py → api.create_app`；网关登录后以服务器生成的 UUID 选择独立数据库、运行时、Markdown 和 MCP 配置。Memory Studio 调用同一网关，不另建数据源。
 
+[MemoryKernel](memory/kernel.py)是可独立调用的记忆核心，组装存储/形成/检索/Claim/资料能力，不依赖AgentRuntime、Web或MCP。AgentService使用同一组实例；Chat、原生文档/任务API和工具通过适配器接入。[接口与边界](../docs/implemented/独立记忆核心与多来源接口.md)。
+
 ## 模块导航
 
 | 目录 | 职责与入口 |

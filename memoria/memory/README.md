@@ -12,6 +12,8 @@
 
 | 文件 | 职责 |
 | --- | --- |
+| [kernel.py](kernel.py) | 独立账号记忆核心、组件组装、原生资料/消息存取、跨来源预算读出与依赖复核；[契约](../../docs/implemented/独立记忆核心与多来源接口.md) |
+| [records.py](records.py) | MemorySearch/EvidenceRecord与类型/来源适配器，保留精确字符span |
 | [engine.py](engine.py) | 普通记忆写入、强化/替代/纠正、有效区间、词面/BM25/Dense/RRF 和图扩展 |
 | [planner.py](planner.py) | 问候门控及可选 fast 模型查询/类型/数量规划 |
 | [access.py](access.py) | QueryRequest/MemoryAccessOrchestrator：Claim、时间、来源复核、候选和选择解释 |
