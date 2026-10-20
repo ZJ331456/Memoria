@@ -80,6 +80,8 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 
 `research.py --user USERNAME locomo-run --help`；默认全1986题，`--scope smoke`同固定10题。英文BGE在model/，评分可选依赖`requirements.txt`安装到.venv；远程显式授权/profile/roles，默认并发4，错误不丢分母。旧locomo-smoke仅历史v1复现。[完整说明](../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
 
+`research.py --user USERNAME prepare-memory-probe --input PATH_TO_LOCOMO`仅准备SHA固定、单角色的生产记忆诊断输入，默认v2，`--protocol-version v1`保留描述性偏好首轮；不调用模型或导入生产库。随后`closed-loop --input PRIVATE_INPUT --execute --allow-remote --max-calls 8 --max-input-chars 60000`才真实执行原形成/审核/Claim/View/Reader及撤回；不跑官方全量QA。[完整命令与两轮实际结果](../docs/implemented/生产记忆闭环与逐题归因.md#claim与view真实调用补测2026-10-20)。
+
 locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为interrupted，由账号边界及产物/协议/模型指纹校验；不会对仍运行源run并发续跑。继承与新增调用分别记录，旧产物不覆盖。
 
 `locomo-run --resume-from RUN --retry-errors`：仅对停止run的执行/回退错误恢复，完整分母继承，递归保留祖先调用/成本；未带resume-from则拒绝。

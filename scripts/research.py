@@ -77,6 +77,9 @@ def main():
     sub = subs.add_parser("replay-production", help="Compare four selectors on a private production capture; zero model calls")
     sub.add_argument("--input", required=True)
     sub.add_argument("--budgets", type=int, nargs="+")
+    sub = subs.add_parser('prepare-memory-probe',help='Prepare fixed single-speaker LoCoMo production diagnostic; no models or production writes')
+    sub.add_argument('--input',required=True,help='Verified official locomo10.json; never imports the account history')
+    sub.add_argument('--protocol-version',choices=['v1','v2'],default='v2',help='v1 descriptive preference; v2 explicit preference, separate frozen inputs')
     sub = subs.add_parser('closed-loop',help='Bounded chronological production formation/review/access/Reader; validate only by default')
     sub.add_argument('--input',required=True)
     sub.add_argument('--execute',action='store_true')
@@ -186,6 +189,9 @@ def main():
     elif args.command == "replay-production":
         from memoria.experiments.production_replay import replay_file
         result = replay_file(workspace,Settings.load(args.config),private_input(args.input,directory),budgets=args.budgets)
+    elif args.command == 'prepare-memory-probe':
+        from memoria.experiments.production_replay import prepare_locomo_probe
+        result = prepare_locomo_probe(workspace, private_input(args.input, directory), version=args.protocol_version)
     elif args.command == 'closed-loop':
         from memoria.experiments.production_replay import execute_closed_loop
         result=asyncio.run(execute_closed_loop(workspace,Settings.load(args.config),private_input(args.input,directory),

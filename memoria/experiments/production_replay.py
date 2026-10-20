@@ -1,6 +1,7 @@
 """Private production diagnostics: frozen selection or explicitly bounded full-chain execution."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import tempfile
@@ -11,7 +12,7 @@ from ..memory import MemoryEngine, EmbeddingClient
 from ..memory.access import MemoryAccessOrchestrator, QueryRequest
 from ..observability.memory_trace import replay, watermark
 from ..store import Store
-from .history import write_json
+from .history import canonical, write_json
 from .records import RunRecorder
 
 from typing import Annotated, Literal
@@ -112,6 +113,57 @@ class CallCeiling(RuntimeError):
     pass
 
 
+def prepare_locomo_probe(workspace, input_path, *, version='v2'):
+    """Materialize the fixed, single-speaker diagnostic without reading QA/gold into a run.
+
+    LoCoMo characters are constructed benchmark subjects, never the account owner.
+    Only exact released text is used; dates are kept as raw provenance, not backdated.
+    This is deliberately separate from the official full benchmark protocol.
+    """
+    from .locomo import SOURCE_SHA256, SOURCE_URL
+    from .records import digest_file
+    if version not in {'v1', 'v2'}:
+        raise ValueError('Unknown production probe version')
+    name = 'production-memory-locomo-probe' + ('-v2' if version == 'v2' else '') + '-20261020.json'
+    protocol_path = Path(__file__).resolve().parents[2] / 'eval/protocols' / name
+    protocol = json.loads(protocol_path.read_text(encoding='utf-8'))
+    input_path = Path(input_path)
+    if digest_file(input_path) != SOURCE_SHA256 or protocol['source_sha256'] != SOURCE_SHA256:
+        raise ValueError('Official LoCoMo source fingerprint mismatch')
+    record = json.loads(input_path.read_text(encoding='utf-8'))[protocol['conversation_index']]
+    conversation = record['conversation']
+    turns = [m for m in conversation[protocol['session']] if m['dia_id'] == protocol['dia_id']]
+    if len(turns) != 1 or turns[0]['speaker'] != protocol['speaker']:
+        raise ValueError('Fixed source identity or turn mismatch')
+    turn = turns[0]
+    actor = record['sample_id'] + ':' + protocol['speaker']
+    provenance = {'source_url': SOURCE_URL, 'source_sha256': SOURCE_SHA256,
+        'sample_id': record['sample_id'], 'speaker': protocol['speaker'], 'dia_id': turn['dia_id'],
+        'session': protocol['session'], 'session_date_raw': conversation[protocol['session'] + '_date_time'],
+        'text_sha256': hashlib.sha256(turn['text'].encode('utf-8')).hexdigest(),
+        'protocol_sha256': digest_file(protocol_path), 'source_kind': protocol['source_kind'],
+        'qa_gold_used': False, 'identity_policy': protocol['identity_policy']}
+    events = [{'id': 'source_turn', 'kind': 'message', 'session': protocol['session'],
+        'actor': actor, 'role': 'user', 'content': turn['text']}]
+    for question in protocol['questions']:
+        if question['id'] == protocol['withdraw_before']:
+            events.append({'id': 'withdraw', 'kind': 'retract', 'source': 'source_turn'})
+        events.append({'id': question['id'], 'kind': 'question', 'target': 'personal',
+            'request': {k: v for k, v in question.items() if k != 'id'} | protocol['request_limits']})
+    document = ClosedLoopInput(provenance=(protocol['id'] + '; official constructed benchmark, not real personal history; '
+        + SOURCE_SHA256 + '; ' + record['sample_id'] + '/' + protocol['dia_id'] + '; protocol=' + digest_file(protocol_path)),
+        allowed_purposes=['memory_processing', 'evaluation'], subject_key=actor, events=events)
+    files = {'input.json': canonical(document.model_dump(mode='json')) + '\n',
+        'source-provenance.json': canonical(provenance) + '\n', 'protocol.json': canonical(protocol) + '\n'}
+    target = workspace.path('research', 'benchmarks', protocol['id'])
+    if target.exists():
+        if any((target / name).read_bytes() != value.encode('utf-8') for name, value in files.items()):
+            raise ValueError('Existing probe bundle differs; never overwrite frozen input')
+    else:
+        target = workspace._publish(('benchmarks', protocol['id']), files)
+    return target / 'input.json'
+
+
 class CaseJudgment(BaseModel):
     model_config=ConfigDict(extra='forbid',strict=True)
     case_id: str=Field(min_length=1,max_length=64)
@@ -160,6 +212,7 @@ def attribute_closed_loop(case, judgment):
                    'not_retrieved' if groups and not covered(retrieved) else
                    'candidate_not_selected' if groups and not covered(selected) else
                    'reader_contract_failure' if result.get('validation',{}).get('valid') is False else
+                   'declared_correct_nonanswer' if result.get('status') in {'clarify','abstain'} and label.stage_judgments.get('answer') is True else
                    'reader_not_called' if not result.get('reader_called') else
                    'reader_abstained_or_clarified' if result.get('status')!='answer' else
                    'answered_correct_by_declared_label' if label.stage_judgments.get('answer') is True else 'answered_unscored')
@@ -375,7 +428,11 @@ async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allo
             'failed_model_calls':len(failed_calls),'incomplete_model_calls':len(incomplete_calls),
             'model_calls':len(calls),'known_total_tokens_lower_bound':known,'unknown_usage_calls':sum(n is None for n in totals),
             'input_chars':used_chars,'blocked_call_attempts':len(blocked),'quality':'unscored','gold_read':False,'production_writes':0,
-            'claim_view_questions':sum(bool(c.get('result',{}).get('access',{}).get('state')) for c in cases),
+            'structured_state_attempts':sum(c.get('result',{}).get('access',{}).get('state') is not None for c in cases),
+            'claim_view_questions':sum(any(item.get('claim_revisions') for item in
+                c.get('result',{}).get('closed_loop',{}).get('selected',[])) for c in cases),
+            'compiled_view_questions':sum(bool((c.get('result',{}).get('access',{}).get('state') or {}).get('compiled_view_id')) for c in cases),
+            'view_hit_questions':sum(c.get('result',{}).get('access',{}).get('path')=='view' for c in cases),
             'contract_rejections':sum(c.get('result',{}).get('validation',{}).get('valid') is False for c in cases),
             'limitations':['engineering execution is not semantic accuracy','no future source ingestion before a question',
                 'source declaration is not independent consent/identity verification']}

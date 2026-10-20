@@ -1,0 +1,24 @@
+{
+  "id": "production-memory-locomo-probe-v1",
+  "source_kind": "official_constructed_benchmark",
+  "scope": "Production mechanism execution diagnostic; not official QA, real personal history, F1 or causal benefit",
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "conversation_index": 0,
+  "speaker": "Melanie",
+  "session": "session_1",
+  "dia_id": "D1:16",
+  "selection": "Fixed textual self-description of painting in the first conversation, before model execution; no QA answers or gold evidence used",
+  "questions": [
+    {"id": "cold_state", "query": "我的爱好是什么？", "mode": "unified"},
+    {"id": "warm_state", "query": "我的爱好是什么？", "mode": "unified"},
+    {"id": "lexical_read", "query": "我的爱好是什么？", "mode": "keyword"},
+    {"id": "unknown_state", "query": "我现在住在哪里？", "mode": "unified"},
+    {"id": "after_withdrawal", "query": "我的爱好是什么？", "mode": "unified"}
+  ],
+  "withdraw_before": "after_withdrawal",
+  "request_limits": {"top_k": 8, "candidate_limit": 32, "budget_chars": 6000},
+  "execution_limits": {"max_calls": 8, "max_input_chars": 60000},
+  "time_policy": "Original session date retained only as raw provenance; no invented event time, timezone or historical clock replay",
+  "identity_policy": "One explicitly bound benchmark speaker in a new isolated DB; never identify this character as the account owner",
+  "scoring": "Structural mechanism checks plus explicitly declared post-hoc AI inspection; no independent human labels or benchmark score"
+}

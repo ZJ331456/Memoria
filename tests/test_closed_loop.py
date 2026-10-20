@@ -15,7 +15,7 @@ from memoria.memory.auto_review import PROMPT
 from memoria.memory.source_formation import OBSERVE,VERIFY
 from memoria.experiments.history import HistoryWorkspace
 from memoria.experiments.production_replay import (ClosedLoopInput,execute_closed_loop,
-    attribute_closed_loop,attribute_closed_loop_file)
+    attribute_closed_loop,attribute_closed_loop_file,prepare_locomo_probe)
 from tests.test_memory_kernel import config_at
 
 
@@ -99,6 +99,90 @@ def test_actual_worker_publishes_claim_and_reader_uses_view_before_future_source
     assert rows[1]['result']['access']['path']=='view'
     assert not (environment[0].directory/'memory/memoria.db').exists()
     assert json.loads((path/'metrics.json').read_text())['production_writes']==0
+    metrics=json.loads((path/'metrics.json').read_text())
+    assert metrics['structured_state_attempts']==2
+    assert metrics['claim_view_questions']==2
+    assert metrics['compiled_view_questions']==1 and metrics['view_hit_questions']==1
+
+
+def test_state_lookup_without_published_claim_is_not_counted_as_claim_view(environment):
+    class OrdinaryModel(Model):
+        async def chat(self,messages,**kwargs):
+            result=await super().chat(messages,**kwargs)
+            if messages[0]['content']==PROMPT:
+                verdict=json.loads(result.content);verdict['claim']=None
+                result.content=json.dumps(verdict,ensure_ascii=False)
+            return result
+    workspace,settings,tmp=environment
+    payload=document();payload['events']=payload['events'][:3]
+    source=tmp/'ordinary-input.json';source.write_text(json.dumps(payload),encoding='utf-8')
+    path=asyncio.run(execute_closed_loop(workspace,settings,source,execute=True,allow_remote=True,client_factory=OrdinaryModel))
+    metrics=json.loads((path/'metrics.json').read_text())
+    assert metrics['structured_state_attempts']==2
+    assert metrics['claim_view_questions']==metrics['compiled_view_questions']==metrics['view_hit_questions']==0
+    assert any(p['kind']=='memory' for p in cases(path)[0]['prefix']['m1']['lineage']['published'])
+
+
+def test_posthoc_correct_nonanswer_is_not_presented_as_reader_failure(environment):
+    payload=document();payload['events']=payload['events'][:2]+[
+        {'id':'withdraw','kind':'retract','source':'m1'},payload['events'][2]]
+    row=cases(run(environment,payload))[1]
+    diagnostic=attribute_closed_loop(row,{'case_id':'q2','stage_judgments':{'answer':True}})
+    assert diagnostic['stage']=='declared_correct_nonanswer'
+    assert diagnostic['unknown_semantic_stages']==['extraction','publication','retrieval','selection','reader']
+    assert diagnostic['declared_answer_correct'] is True
+    unknown=attribute_closed_loop(row,{'case_id':'q2'})
+    assert unknown['stage']=='reader_not_called' and unknown['declared_answer_correct'] is None
+
+
+def test_probe_rejects_unverified_dataset_without_materializing_input(environment):
+    workspace,_,tmp=environment
+    source=tmp/'unverified.json';source.write_text('[]',encoding='utf-8')
+    with pytest.raises(ValueError,match='fingerprint'):
+        prepare_locomo_probe(workspace,source)
+    assert not workspace.path('research','benchmarks').exists()
+
+
+@pytest.mark.parametrize('version',['v1','v2'])
+def test_fixed_probe_preserves_exact_text_separates_identity_and_excludes_gold(environment,monkeypatch,version):
+    from memoria.experiments import records,locomo
+    workspace,_,tmp=environment
+    # Engineering-only source and fingerprint substitute; never published as actual benchmark data.
+    text='Engineering fixture, not a real user or benchmark history.'
+    raw={'sample_id':'engineering-conv','qa':[{'answer':'GOLD_CANARY'}],
+        'conversation':{'session_1_date_time':'RAW_DATE_ONLY','session_15_date_time':'RAW_DATE_ONLY',
+            'session_1':[{'dia_id':'D1:16','speaker':'Melanie','text':text,'blip_caption':'IMAGE_CANARY'}],
+            'session_15':[{'dia_id':'D15:12','speaker':'Melanie','text':text,'blip_caption':'IMAGE_CANARY'}]}}
+    source=tmp/'engineering.json';source.write_text(json.dumps([raw]),encoding='utf-8')
+    digest=records.digest_file
+    monkeypatch.setattr(records,'digest_file',lambda p:locomo.SOURCE_SHA256 if str(p)==str(source) else digest(p))
+    path=prepare_locomo_probe(workspace,source,version=version)
+    document=ClosedLoopInput.model_validate_json(path.read_text(encoding='utf-8'))
+    assert document.subject_key=='engineering-conv:Melanie' and document.subject_key!=workspace.owner
+    assert document.events[0].content==text and document.events[0].original_time is None
+    assert len([e for e in document.events if e.kind=='message'])==1
+    assert len([e for e in document.events if e.kind=='question'])==5
+    assert document.events[-2].kind=='retract'
+    bundle=''.join(p.read_text(encoding='utf-8') for p in path.parent.iterdir())
+    assert 'GOLD_CANARY' not in bundle and 'IMAGE_CANARY' not in bundle
+    assert 'RAW_DATE_ONLY' in bundle
+    assert prepare_locomo_probe(workspace,source,version=version)==path
+    path.write_text('{}',encoding='utf-8')
+    with pytest.raises(ValueError,match='never overwrite'):
+        prepare_locomo_probe(workspace,source,version=version)
+
+
+@pytest.mark.parametrize('fault',['speaker','duplicate'])
+def test_probe_does_not_silently_rebind_or_choose_a_duplicate_turn(environment,monkeypatch,fault):
+    from memoria.experiments import records,locomo
+    workspace,_,tmp=environment
+    turn={'dia_id':'D15:12','speaker':'someone_else' if fault=='speaker' else 'Melanie','text':'Engineering only'}
+    raw=[{'sample_id':'engineering-conv','conversation':{'session_15':[turn]* (2 if fault=='duplicate' else 1)}}]
+    source=tmp/'engineering.json';source.write_text(json.dumps(raw),encoding='utf-8')
+    digest=records.digest_file
+    monkeypatch.setattr(records,'digest_file',lambda p:locomo.SOURCE_SHA256 if str(p)==str(source) else digest(p))
+    with pytest.raises(ValueError,match='identity or turn'):
+        prepare_locomo_probe(workspace,source)
 
 
 def test_document_formation_and_production_source_reader_do_not_create_personal_claim(environment):
