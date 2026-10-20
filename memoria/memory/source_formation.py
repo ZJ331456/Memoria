@@ -18,7 +18,7 @@ from .library import LibraryError
 from .lexical import token_sequence
 from .source_support import digest
 
-POLICY = 'source-formation-v4-entity-feedback'
+POLICY = 'source-formation-v5-entity-cohort'
 
 
 class Strict(BaseModel):
@@ -322,9 +322,17 @@ class SourceFormation:
                 group = {'lane':lane,'subject':subject,'category':category,'topic':normalized(item.topic),
                     'conditions':normalized(item.conditions),'epistemic':item.epistemic,
                     'scope':source['scope'],'session_id':source['session_id']}
-                key = digest(json.dumps(group,sort_keys=True,ensure_ascii=False))
                 cid, oid = uuid.uuid4().hex, uuid.uuid4().hex
                 at = start + payload['source'].index(item.quote)
+                catalog=getattr(self.store,'entity_catalog',None)
+                if catalog and status=='approved':
+                    from .entities import Anchor
+                    catalog.bind('library_observation',oid,revision['id'],Anchor(domain='library',source_id=source['id'],
+                        revision_id=revision['id'],start=at,end=at+len(item.quote),quote=item.quote,sha256=revision['sha']),
+                        session_id=source['session_id'])
+                    ids=catalog.cohort('library_observation',oid,revision['id'])
+                    if ids:group['entity_ids']=ids
+                key = digest(json.dumps(group,sort_keys=True,ensure_ascii=False))
                 applicability = item.applicability
                 if start or end<len(revision['content']): applicability=f'仅依据原文片段{start}:{end}；'+applicability
                 self.store.db.execute('INSERT INTO library_cards VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',(
@@ -374,6 +382,9 @@ class SourceFormation:
     def _live(self, observation, *, complete=True):
         try:
             source, revision, feedback = self._snapshot(observation['source_id'])
+            catalog=getattr(self.store,'entity_catalog',None)
+            if catalog and catalog.cohort('library_observation',observation['id'],revision['id'])!=catalog.signature(
+                'library_observation',observation['id'],revision['id'],session_id=source['session_id']):return False
             return (observation['status']=='approved' and revision['id']==observation['revision_id']
                 and revision['sha']==observation['source_sha'] and revision['created_at']>=self._cutoff()
                 and (feedback['id'] if feedback else None)==observation['feedback_id']

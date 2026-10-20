@@ -5,8 +5,9 @@ import json
 import sqlite3
 from ..store import now
 from .source_support import digest
+from ..claims import canonical
 
-POLICY = 'formation-v3-source-conditions'
+POLICY = 'formation-v4-entity-cohort'
 
 
 def install(store):
@@ -76,6 +77,10 @@ def live_observation(store, row, *, allow_archived=False):
         raise ValueError('Observation source version changed')
     if source['content'][row['start']:row['end']] != row['quote']:
         raise ValueError('Observation span no longer matches')
+    catalog=getattr(store,'entity_catalog',None)
+    if catalog and catalog.cohort('observation',row['id'],row['source_sha'])!=catalog.signature(
+        'observation',row['id'],row['source_sha'],session_id=row['session_id']):
+        raise ValueError('Observation entity identity changed')
     return source
 
 
@@ -90,7 +95,18 @@ def pattern_sources(store, pattern):
 
 
 def bucket(row):
-    return digest(json.dumps([row['category'], row['topic'], row['scope'], row['polarity']], ensure_ascii=False))
+    row=dict(row)
+    fields=[row['category'], row['topic'], row['scope'], row['polarity']]
+    if row.get('entity_signature'):fields.append(row['entity_signature'])
+    return digest(json.dumps(fields, ensure_ascii=False))
+
+
+def with_entities(store,row):
+    row=dict(row);catalog=getattr(store,'entity_catalog',None)
+    if catalog:
+        ids=catalog.cohort('observation',row['id'],row['source_sha'])
+        if ids:row['entity_signature']=canonical(ids)
+    return row
 
 
 def stage(store, job, receipt, reviews):
@@ -115,6 +131,11 @@ def stage(store, job, receipt, reviews):
             (oid, rid, source['id'], receipt['source_sha'], source['session_id'], source['created_at'],
              item['category'], item['topic'], item['scope'], item['polarity'], item['content'], quote,
              start, start+len(quote), int(item['asserted']), int(item['durable']), item['importance']))
+        catalog=getattr(store,'entity_catalog',None)
+        if catalog:
+            from .entities import Anchor
+            catalog.bind('observation',oid,receipt['source_sha'],Anchor(domain='conversation',source_id=source['id'],
+                start=start,end=start+len(quote),quote=quote,sha256=receipt['source_sha']),session_id=source['session_id'])
         if item['asserted'] and item['durable']:
             direct.append(oid)
     for row, oid in zip(reviews, direct, strict=True):

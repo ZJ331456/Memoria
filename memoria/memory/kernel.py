@@ -35,6 +35,9 @@ class MemoryKernel:
         formation = getattr(settings, 'memory_formation', None)
         self.formation = MemoryFormation(store, llm, formation, self.auto_review) if llm and formation and formation.enabled else None
         self.library = EvidenceLibrary(store, llm, settings)
+        from .entities import EntityCatalog
+        self.entities = EntityCatalog(store,self.library)
+        store.entity_catalog = self.entities
         self.readers = SourceReaders(store, self.library)
         self.personal_access = MemoryAccessOrchestrator(self.claims, self.memory, llm)
         self.memory_worker = MemoryJobWorker(store, llm, self.memory, lease_seconds=settings.memory_job_lease_seconds,

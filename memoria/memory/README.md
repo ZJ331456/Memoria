@@ -10,6 +10,8 @@ Kernel.answer将个人Claim/View Reader与library来源Reader接入同一核心�
 
 2026-10-16新增[形成、巩固与演化](../../docs/implemented/记忆形成巩固与演化.md)：[formation.py](formation.py)负责观察、跨会话归纳和核心投影，[formation_store.py](formation_store.py)保存来源版本与操作，[formation_settings.py](formation_settings.py)验证参数。单次行为不直接成为永久偏好；完整支持组经独立模型审核后进入原普通记忆，只允许同组自动模式受约束演化。
 
+[entities.py](entities.py)提供来源约束实体目录、别名/同名消歧、原文关联及巩固身份检查；[分阶段实现与验收](../../docs/implemented/实体身份与实体召回.md)区分实体登记、模型事实审核及后续召回实验。
+
 ## 文件映射
 
 | 文件 | 职责 |

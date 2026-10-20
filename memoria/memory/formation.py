@@ -163,12 +163,19 @@ class MemoryFormation:
         with self.store.lock:
             topics = self.store.db.execute("SELECT * FROM memory_observations WHERE message_id=? AND state='active' ORDER BY rowid", (source_ref,)).fetchall()
             for topic in topics:
+                topic=records.with_entities(self.store,topic)
+                entity_filter=''
+                params=[topic['category'],topic['topic'],topic['scope'],topic['polarity'],cutoff]
+                if getattr(self.store,'entity_catalog',None):
+                    entity_filter=" AND COALESCE((SELECT identity_json FROM memory_entity_cohorts c WHERE c.domain='observation' AND c.target_id=memory_observations.id AND c.target_revision=memory_observations.source_sha),'[]')=?"
+                    params.append(topic.get('entity_signature','[]'))
                 rows = self.store.db.execute('''SELECT * FROM memory_observations
                     WHERE category=? AND topic=? AND scope=? AND polarity=? AND state='active' AND observed_at>=?
-                    ORDER BY observed_at DESC,id LIMIT ?''',
-                    (topic['category'], topic['topic'], topic['scope'], topic['polarity'], cutoff, self.settings.max_observations)).fetchall()
+                    '''+entity_filter+' ORDER BY observed_at DESC,id LIMIT ?',params+[self.settings.max_observations]).fetchall()
                 unique, seen, input_chars = [], set(), 0
                 for row in rows:
+                    row=records.with_entities(self.store,row)
+                    if records.bucket(row)!=records.bucket(topic):continue
                     try:
                         records.live_observation(self.store, row)
                     except ValueError:

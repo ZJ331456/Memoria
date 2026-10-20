@@ -3,10 +3,23 @@ from fastapi import APIRouter, Query
 
 from ..memory.library import SourceInput
 from ..memory.records import Domain, MemorySearch,KnowledgeAnswer
+from ..memory.entities import EntityInput,AliasInput,EntityDecision
 
 
 def memory_kernel_router(kernel):
     router = APIRouter(prefix='/api/memory-kernel', tags=['memory kernel'])
+
+    @router.post('/entities',status_code=201)
+    def entity(body:EntityInput):return kernel.entities.create(body)
+
+    @router.get('/entities/{entity_id}')
+    def entity_read(entity_id:str,session_id:str|None=None):return kernel.entities.get(entity_id,session_id=session_id)
+
+    @router.post('/entities/{entity_id}/aliases')
+    def alias(entity_id:str,body:AliasInput):return kernel.entities.alias(entity_id,body)
+
+    @router.post('/entities/{entity_id}/revoke')
+    def revoke_entity(entity_id:str,body:EntityDecision):return kernel.entities.revoke(entity_id,body.expected_revision)
 
     @router.post('/sources', status_code=201)
     def ingest(body: SourceInput):

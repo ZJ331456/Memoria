@@ -250,6 +250,16 @@ class AutoMemoryReviewer:
                     from .formation_store import bind_support, published
                     bind_support(self.store, memory['id'], formation_context, before_groups)
                     published(self.store, row['id'], memory['id'])
+                    catalog=getattr(self.store,'entity_catalog',None)
+                    if catalog:
+                        from .entities import Anchor
+                        anchors=formation_context['observations'] if formation_context else [
+                            {'message_id':row['source_ref'],'start':evidence['start'],'end':evidence['end'],'quote':evidence['quote']}]
+                        for observation in anchors:
+                            origin=self.store.message_source(observation['message_id'])
+                            catalog.bind('memory',memory['id'],sha(memory['content']),Anchor(domain='conversation',
+                                source_id=observation['message_id'],start=observation['start'],end=observation['end'],
+                                quote=observation['quote'],sha256=sha(origin['content'])),session_id=origin['session_id'])
                     claim_id=existing_claim['id'] if existing_claim else None
                     if draft and existing_claim:
                         # Publish a new independent support group in the same
