@@ -198,6 +198,7 @@ class Settings:
     reader_local_count: bool = False
     memory_approval_mode: str = 'llm'
     memory_formation: object | None = None
+    entity_retrieval_enabled: bool = False
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Settings":
@@ -335,6 +336,8 @@ class Settings:
         settings.memory_layers = MemoryLayerSettings.from_dict(memory_section.get("layers", {}))
         from .memory.formation_settings import FormationSettings
         settings.memory_formation = FormationSettings.from_dict(memory_section.get('formation', {}))
+        settings.entity_retrieval_enabled=retrieval.get('entity_enabled',False)
+        if type(settings.entity_retrieval_enabled) is not bool:raise ValueError('entity_enabled must be boolean')
         settings.data_root = db.parent.resolve()
         from .config_store import read_document
         example = source.name.endswith('.example.toml')

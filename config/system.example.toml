@@ -58,6 +58,7 @@ directory = "data/markdown"
 # auto 会优先使用可选 sqlite-vec，未安装时回退 JSON 向量扫描。
 vector_backend = "auto"
 vector_scan_limit = 2000
+entity_enabled = false # opt-in实体候选；需已有有效目录/原文关联，保留三路基线
 
 [memory.worker]
 approval_mode = "llm" # 低风险候选经模型证据审核自动入库；manual保留全部人工审核

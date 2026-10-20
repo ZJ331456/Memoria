@@ -56,6 +56,7 @@ class MemoryEngine:
         self.decider = decider
         self.vector_scan_limit = max(100, vector_scan_limit)
         self.markdown = markdown
+        self.entity_enabled = False
 
     @staticmethod
     def organize(content: str, kind: str) -> dict[str, Any]:
@@ -87,10 +88,19 @@ class MemoryEngine:
             self.store.record_evolution(updated["id"], f"由 {memory_id} 演化: {reason or new_info[:120]}")
         return updated
 
-    async def retrieve(self, query: str, limit: int = 8, kinds: set[str] | None = None, as_of: str | None = None, expand_graph: bool = True, *, timings: StageTimings | None = None, mode: str = "rrf", diagnostics: dict | None = None) -> list[dict]:
+    async def retrieve(self, query: str, limit: int = 8, kinds: set[str] | None = None, as_of: str | None = None, expand_graph: bool = True, *, timings: StageTimings | None = None, mode: str = "rrf", diagnostics: dict | None = None, use_entities: bool | None = None, session_id: str | None = None, entity_type: str | None = None) -> list[dict]:
         if mode not in {"keyword", "bm25", "dense", "rrf"}:
             raise ValueError("unsupported retrieval mode")
         timers = timings or StageTimings()
+        catalog=getattr(self.store,'entity_catalog',None)
+        enabled=(self.entity_enabled if use_entities is None else use_entities) and mode=='rrf' and not as_of and catalog is not None
+        entity_rows,entity_lookup=(catalog.candidates('memory',query,session_id=session_id,entity_type=entity_type) if enabled else ([],None))
+        if enabled:
+            if entity_rows:expand_graph=False
+            if diagnostics is not None:diagnostics['entity_resolution']=entity_lookup['resolution']
+            if entity_lookup['resolution']['ambiguous']:
+                if diagnostics is not None:diagnostics['entity_blocked']='ambiguous_identity'
+                return []
         candidate_started = time.perf_counter()
         embedder = self.embedder
         embedding_namespace = self.store.embedding_namespace
@@ -98,6 +108,7 @@ class MemoryEngine:
         lexical_seed = self.store.keyword_memory_candidates(lexical_query, limit=200, as_of=as_of) if lexical_query else []
         indexed = self.store.vector_index_status["enabled"] and not as_of
         items = self.store.retrieval_memories(limit=200 if indexed else self.vector_scan_limit, as_of=as_of)
+        items += [item for r in entity_rows if (item:=self.store.memory(r['id']))]
         if kinds:
             items = [item for item in items if item.get("kind") in kinds]
             lexical_seed = [item for item in lexical_seed if item.get("kind") in kinds]
@@ -164,6 +175,9 @@ class MemoryEngine:
         active_lanes = {"keyword": [(lexical, 0.8)], "dense": [(semantic, 1.0)],
                         "bm25": [([by_id[m] for m in bm25_ranked if m in by_id], 0.9)],
                         "rrf": [(lexical, 0.8), (semantic, 1.0), ([by_id[m] for m in bm25_ranked if m in by_id], 0.9)]}
+        if enabled:
+            lanes['entity']=[r['id'] for r in entity_rows if r['id'] in by_id]
+            active_lanes['rrf'].append(([by_id[mid] for mid in lanes['entity']],0.8))
         if diagnostics is not None:
             diagnostics.update({"mode": mode, "candidate_count": len(items), "embedding_namespace": embedding_namespace,
                                 "dense_available": query_vector is not None, "graph_expansion": expand_graph,
@@ -200,6 +214,11 @@ class MemoryEngine:
         # Embedding/model I/O yielded the event loop. Revalidate before publishing snapshots.
         with self.store.lock:
             stale = [mid for mid in ranked_ids if not self.store.memory_dependency_valid(self.store.memory_dependency(by_id[mid]), as_of=as_of)]
+            if enabled and not catalog.lookup_valid(entity_lookup):stale=list(ranked_ids)
+            if enabled:
+                entity_by_id={r['id']:r for r in entity_rows}
+                stale+= [mid for mid in ranked_ids if mid in entity_by_id and not catalog.dependency_valid(
+                    catalog.dependency(entity_lookup,'memory',mid,entity_by_id[mid]['revision'],entity_by_id[mid]['entity_ids']))]
             ranked_ids = [mid for mid in ranked_ids if mid not in stale]
         if diagnostics is not None:
             diagnostics['stale_candidate_ids'] = stale
@@ -218,6 +237,11 @@ class MemoryEngine:
                 "vector_rank": self._rank(lanes["vector"], memory_id),
                 "vector_similarity": round(vector_scores[memory_id], 4) if memory_id in vector_scores else None,
             }
+            if enabled:
+                item['retrieval']['entity_rank']=self._rank(lanes['entity'],memory_id)
+                if memory_id in entity_by_id:
+                    r=entity_by_id[memory_id]
+                    item['retrieval']['entity_dependency']=catalog.dependency(entity_lookup,'memory',memory_id,r['revision'],r['entity_ids'])
             if memory_id in chunk_matches:
                 matched = chunk_matches[memory_id]
                 chunk = {k:v for k,v in matched.items() if k != "matches"}
@@ -238,6 +262,7 @@ class MemoryEngine:
 
     async def remember(self, content: str, kind: str, importance: int, source: str, source_ref: str | None = None, *, require_source: bool = False, timings: StageTimings | None = None) -> MemoryWriteResult:
         result = await self._remember(content, kind, importance, source, source_ref, require_source=require_source, timings=timings)
+        if result.memory and (catalog:=getattr(self.store,'entity_catalog',None)):catalog.index_memory(result.memory)
         self._sync_markdown_layer(result, content=content, kind=kind, source_ref=source_ref)
         return result
 
@@ -406,6 +431,7 @@ class MemoryEngine:
                 logger.warning("纠正记忆向量化不可用，使用关键词检索: %s", type(exc).__name__)
         corrected = self.store.correct_memory(memory_id, content, kind, importance, reason, vector, embedding_namespace=embedding_namespace, embedding_chunks=chunks or None)
         if corrected:
+            if catalog:=getattr(self.store,'entity_catalog',None):catalog.index_memory(corrected)
             self.refresh_markdown()
         return corrected
 

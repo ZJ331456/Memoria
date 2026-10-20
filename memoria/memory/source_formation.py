@@ -18,7 +18,7 @@ from .library import LibraryError
 from .lexical import token_sequence
 from .source_support import digest
 
-POLICY = 'source-formation-v5-entity-cohort'
+POLICY = 'source-formation-v6-entity-subject'
 
 
 class Strict(BaseModel):
@@ -331,7 +331,10 @@ class SourceFormation:
                         revision_id=revision['id'],start=at,end=at+len(item.quote),quote=item.quote,sha256=revision['sha']),
                         session_id=source['session_id'])
                     ids=catalog.cohort('library_observation',oid,revision['id'])
-                    if ids:group['entity_ids']=ids
+                    if ids:
+                        group['entity_ids']=ids
+                        subject_ids={m['entity_id'] for m in catalog.match(item.subject,session_id=source['session_id'])['matches']}
+                        if len(subject_ids)==1 and subject_ids.issubset(ids):group['subject']='entity:'+next(iter(subject_ids))
                 key = digest(json.dumps(group,sort_keys=True,ensure_ascii=False))
                 applicability = item.applicability
                 if start or end<len(revision['content']): applicability=f'仅依据原文片段{start}:{end}；'+applicability

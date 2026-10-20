@@ -66,6 +66,8 @@ class QueryRequest(Strict):
     use_answer_risk: bool = Field(default=False, strict=True)
     include_experiences: bool = Field(default=True, strict=True)
     experience_mode: Literal["bm25", "dense", "rrf"] = "bm25"
+    use_entities: bool | None = None
+    entity_type: Literal['person','project','organization','place','concept'] | None = None
 
     _conditions = field_validator("context")(conditions)
     _times = field_validator("fact_as_of", "recorded_as_of")(timestamp)
@@ -158,6 +160,10 @@ class MemoryAccessOrchestrator:
         except ValueError as exc:
             raise ClaimError(422, str(exc)) from exc
         parsed = TemporalQueryParser().parse(request.query)
+        catalog=getattr(self.claims.store,'entity_catalog',None)
+        entities_enabled=request.use_entities if request.use_entities is not None else getattr(self.engine,'entity_enabled',False)
+        if catalog and entities_enabled and catalog.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type)['resolution']['ambiguous']:
+            parsed.update(requires_clarification=True,subject_requires_clarification=True,reason='ambiguous_entity_identity')
         routing = {"origin":"rules", "model_calls":0}
         if request.use_query_model:
             from .query_router import route_slots
@@ -226,7 +232,8 @@ class MemoryAccessOrchestrator:
                 with timings.measure("access.semantic"):
                     memories = await self.engine.retrieve(request.query, limit=request.candidate_limit, as_of=request.fact_as_of,
                                                           expand_graph=False, mode="rrf" if request.mode == "unified" else request.mode,
-                                                          diagnostics=diag, timings=timings)
+                                                          diagnostics=diag, timings=timings,use_entities=request.use_entities,
+                                                          session_id=request.session_id,entity_type=request.entity_type)
                 # Model I/O may have permitted a correction/revocation; take a fresh consistent snapshot.
                 with self.claims.store._memory_transaction():
                     if state:
@@ -260,6 +267,8 @@ class MemoryAccessOrchestrator:
                                                "memory_dependency": self.claims.store.memory_dependency(current),
                                                "unverified_retrieval_hint": item.get("retrieval_excerpt", item["content"]),
                                                "evidence": {**evidence, "quote": text}, "retrieval": item["retrieval"],
+                                               "entity_identity": catalog.evidence(item["retrieval"]["entity_dependency"])
+                                                   if catalog and item["retrieval"].get("entity_dependency") else [],
                                                "approved_personal_state": False, "semantic_support_verified": False}})
                 reason += ("; source supplement does not resolve missing/conflicting Claim state" if state else "; source candidates remain unapproved")
             else:

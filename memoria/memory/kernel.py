@@ -38,6 +38,10 @@ class MemoryKernel:
         from .entities import EntityCatalog
         self.entities = EntityCatalog(store,self.library)
         store.entity_catalog = self.entities
+        self.memory.entity_enabled=settings.entity_retrieval_enabled
+        from ..observability.memory_trace import install
+        install(store)
+        store.db.commit()
         self.readers = SourceReaders(store, self.library)
         self.personal_access = MemoryAccessOrchestrator(self.claims, self.memory, llm)
         self.memory_worker = MemoryJobWorker(store, llm, self.memory, lease_seconds=settings.memory_job_lease_seconds,
@@ -125,6 +129,8 @@ class MemoryKernel:
         if not isinstance(dependency, dict) or not dependency.get('id'):
             return False
         try:
+            if dependency.get('entity_lookup') and not self.entities.dependency_valid(dependency['entity_lookup']):return False
+            dependency={k:v for k,v in dependency.items() if k!='entity_lookup'}
             kind = dependency.get('dependency_type', 'memory')
             if kind == 'library_consolidation':
                 return self.library.formation.dependency_valid(dependency,session_id=session_id)
@@ -180,10 +186,20 @@ class MemoryKernel:
     async def search(self, request: MemorySearch, *, capture=None):
         """Interleave source ranks, rather than comparing incomparable BM25/cosine scores."""
         self._check_session(request.session_id)
+        entity_enabled=self.memory.entity_enabled if request.use_entities is None else request.use_entities
+        if entity_enabled and self.entities.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type)['resolution']['ambiguous']:
+            if capture is not None:capture.update(candidates=[],candidate_dependencies=[])
+            packet={'evidence':[],'dependencies':[],'policy':READ_POLICY,
+                'selection':{'strategy':'source_rank_round_robin','candidate_count':0,'selected_count':0,'skipped_budget':0,'skipped_stale':0,'reason':'ambiguous_entity_identity'},
+                'budget':{'unit':'serialized_json_chars','limit':request.budget_chars,'used':0}}
+            for _ in range(4):packet['budget']['used']=len(json.dumps(packet,ensure_ascii=False))
+            if packet['budget']['used']>request.budget_chars:raise LibraryError(413,'实体澄清元数据超过预算')
+            return packet
         lanes = {}
         for domain in request.domains:
             if domain == 'memory':
-                items = await self.memory.retrieve(request.query, request.limit, mode=request.memory_mode)
+                items = await self.memory.retrieve(request.query, request.limit, mode=request.memory_mode,
+                    use_entities=entity_enabled,session_id=request.session_id,entity_type=request.entity_type)
                 lanes[domain] = [self.readers.memory(item, request.query) for item in items]
             elif domain == 'conversation':
                 items = self.store.search_messages(request.query, request.limit)
@@ -191,6 +207,8 @@ class MemoryKernel:
             else:
                 items = self.library.search(request.query, session_id=request.session_id,
                     limit=min(8, request.limit), budget=8000, chunks_per_source=2)
+                if entity_enabled:items=self.library.entity_supplement(request.query,items,session_id=request.session_id,
+                    entity_type=request.entity_type,limit=min(8,request.limit))
                 consolidated = self.library.formation.search(request.query,session_id=request.session_id,limit=min(4,request.limit))
                 mixed=[]
                 for rank in range(max(len(items),len(consolidated))):

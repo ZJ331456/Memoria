@@ -17,6 +17,8 @@ class MemorySearch(BaseModel):
     limit: int = Field(default=8, ge=1, le=16)
     budget_chars: int = Field(default=8000, ge=800, le=16000)
     memory_mode: Literal['keyword', 'bm25', 'dense', 'rrf'] = 'rrf'
+    use_entities: bool | None = None
+    entity_type: Literal['person','project','organization','place','concept'] | None = None
 
     @field_validator('query')
     @classmethod
@@ -101,6 +103,8 @@ class SourceReaders:
              'recorded_at': source['created_at'], 'fact_time': None}, self.store.message_dependency(source))
 
     def memory(self, item: dict, query: str = '', *, full=False):
+        dependency=self.store.memory_dependency(item)
+        if lookup:=item.get('retrieval',{}).get('entity_dependency'):dependency['entity_lookup']=lookup
         chunk = item.get('retrieval', {}).get('chunk', {})
         if full:
             start, end, content = 0, len(item['content']), item['content']
@@ -115,8 +119,9 @@ class SourceReaders:
             {'kind': item['kind'], 'source': item.get('source'), 'source_ref': item.get('source_ref'),
              'recorded_at': item.get('created_at'), 'valid_at': item.get('valid_at'),
              'retrieval': {k: v for k, v in item.get('retrieval', {}).items() if k in (
-                 'score', 'keyword_rank', 'bm25_rank', 'vector_rank', 'vector_similarity')}},
-            self.store.memory_dependency(item))
+                 'score', 'keyword_rank', 'bm25_rank', 'vector_rank', 'vector_similarity','entity_rank')},
+             'entity_identity':self.store.entity_catalog.evidence(lookup) if dependency.get('entity_lookup') else []},
+            dependency)
 
     @staticmethod
     def library_hit(item: dict):
@@ -127,4 +132,5 @@ class SourceReaders:
         return EvidenceRecord('library', item['source_id'], 'source_quote', item['quote'], item['start'], item['end'],
             item['citation'], {'kind': item['kind'], 'title': item['title'], 'authorship': item['authorship'],
                 'scope': item['scope'], 'revision_id': item['revision_id'], 'sha': item['sha'],
-                'knowledge_cards': item['knowledge_cards'], 'file_location': item.get('file_location')}, item['dependency'])
+                'knowledge_cards': item['knowledge_cards'], 'file_location': item.get('file_location'),
+                'entity_identity':item.get('entity_identity',[])}, item['dependency'])

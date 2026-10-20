@@ -164,6 +164,7 @@ class EvidenceLibrary:
             self.store.db.execute('INSERT INTO library_fts(rowid,terms) VALUES(?,?)',
                 (rowid, ' '.join(token_sequence(title+' '+quote))))
         self.store.db.execute('UPDATE library_sources SET head_id=? WHERE id=?', (rid, sid))
+        if catalog:=getattr(self.store,'entity_catalog',None):catalog.index_source(sid)
         return rid
 
     def create(self, body: SourceInput):
@@ -283,6 +284,49 @@ class EvidenceLibrary:
                 result.append(item)
                 if len(result)>=limit:break
             return result
+
+    def entity_supplement(self,query,lexical,*,session_id=None,entity_type=None,limit=8):
+        catalog=self.store.entity_catalog
+        rows,lookup=catalog.candidates('library',query,session_id=session_id,entity_type=entity_type,limit=limit)
+        if lookup['resolution']['ambiguous']:return []
+        if not rows:return lexical
+        from .records import excerpt
+        hits=[]
+        for row in rows:
+            source=self._source(row['id']);revision=self._revision(source['head_id']);feedback=self._feedback(revision['id'])
+            mentions=self.store.db.execute("SELECT anchor_json FROM memory_entity_mentions WHERE domain='library' AND target_id=? AND target_revision=? ORDER BY rowid",(row['id'],revision['id'])).fetchall()
+            position=json.loads(mentions[0][0])['start'] if mentions else 0
+            start,end,quote=excerpt(revision['content'],query,start=max(0,position-100))
+            dependency={'dependency_type':'library','id':row['id'],'revision_id':revision['id'],'sha':revision['sha'],
+                'feedback_id':feedback['id'] if feedback else None,
+                'entity_lookup':catalog.dependency(lookup,'library',row['id'],revision['id'],row['entity_ids'])}
+            hits.append({'source_id':row['id'],'revision_id':revision['id'],'sha':revision['sha'],'title':revision['title'],
+                'kind':source['kind'],'authorship':source['authorship'],'scope':source['scope'],
+                'start':start,'end':end,'quote':quote,'knowledge_cards':[],
+                'citation':f"[library:{revision['id']}:{start}:{end}]",'dependency':dependency,
+                'file_location':self.files.locations(revision['id'],start,end)})
+        # Rank fusion within the library domain; original cross-domain RR stays intact.
+        by_id={};scores={}
+        for lane,weight in ((lexical,1.0),(hits,0.8)):
+            seen=set()
+            for rank,item in enumerate(lane,1):
+                mid=item['source_id']
+                if mid in seen:continue
+                seen.add(mid);scores[mid]=scores.get(mid,0)+weight/(60+rank)
+                by_id.setdefault(mid,[])
+                if not by_id[mid]:by_id[mid].append(item)
+        # Keep complementary lexical spans together; one RRF vote per parent.
+        for item in lexical:
+            group=by_id[item['source_id']]
+            if not any((r['start'],r['end'])==(item['start'],item['end']) for r in group):group.append(item)
+        for item in hits:
+            group=by_id[item['source_id']]
+            by_id[item['source_id']]=[{**r,'entity_identity':catalog.evidence(item['dependency']['entity_lookup']),
+                'dependency':{**r['dependency'],'entity_lookup':item['dependency']['entity_lookup']}} for r in group]
+        result=[]
+        for mid in sorted(scores,key=lambda mid:(-scores[mid],mid)):
+            if len(result)+len(by_id[mid])<=limit:result.extend(by_id[mid])
+        return result
 
     def dependency_valid(self, dependency):
         with self.store.lock:

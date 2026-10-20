@@ -131,6 +131,8 @@ class EntityCatalog:
 
     def create(self,body):
         with self.store._memory_transaction():
+            from .auto_review import SECRET
+            if SECRET.search(body.canonical_name):raise LibraryError(422,'凭据不能登记为实体')
             self._scope(body.scope,body.session_id);self._anchor_scope(body.evidence,body.scope,body.session_id)
             if key(body.evidence.quote)!=key(body.canonical_name):raise LibraryError(422,'规范名必须绑定同名原样片段')
             if self.store.db.execute('SELECT count(*) FROM memory_entities').fetchone()[0]>=256:
@@ -145,6 +147,8 @@ class EntityCatalog:
 
     def alias(self,eid,body):
         with self.store._memory_transaction():
+            from .auto_review import SECRET
+            if SECRET.search(body.name+' '+body.evidence.quote):raise LibraryError(422,'凭据不能登记为别名')
             entity=self._entity(eid)
             if entity['revision']!=body.expected_revision:raise LibraryError(409,'实体版本已变化')
             if not self.live(entity,session_id=body.session_id):raise LibraryError(409,'实体已失效或不适用')
@@ -221,13 +225,96 @@ class EntityCatalog:
             (domain,target_id,target_revision)).fetchone()
         return json.loads(row[0]) if row else []
 
-    def signature(self,domain,target_id,target_revision,*,session_id=None):
+    def signature(self,domain,target_id,target_revision,*,session_id=None,entity_type=None):
         ids=set()
         for row in self.store.db.execute('SELECT * FROM memory_entity_mentions WHERE domain=? AND target_id=? AND target_revision=?',(domain,target_id,target_revision)):
             entity=self._entity(row['entity_id']);alias=self.store.db.execute('SELECT * FROM memory_entity_aliases WHERE id=?',(row['alias_id'],)).fetchone()
             try:self.source(json.loads(row['anchor_json']))
             except LibraryError:continue
             if alias and self.live(entity,dict(alias),session_id=session_id):
-                resolution=self.match(json.loads(row['anchor_json'])['quote'],session_id=session_id)
+                resolution=self.match(json.loads(row['anchor_json'])['quote'],session_id=session_id,entity_type=entity_type)
                 if not resolution['ambiguous'] and entity['id'] in {h['entity_id'] for h in resolution['matches']}:ids.add(entity['id'])
         return sorted(ids)
+
+    def lookup(self,query,*,session_id=None,entity_type=None):
+        found=self.match(query,session_id=session_id,entity_type=entity_type)
+        value={'entity_ids':sorted({m['entity_id'] for m in found['matches']}),'ambiguous':found['ambiguous']}
+        return {'query':query,'session_id':session_id,'entity_type':entity_type,'resolution':value,'sha256':sha(canonical(value))}
+
+    def lookup_valid(self,snapshot):
+        current=self.lookup(snapshot['query'],session_id=snapshot['session_id'],entity_type=snapshot['entity_type'])
+        return current['sha256']==snapshot['sha256']
+
+    def candidates(self,domain,query,*,session_id=None,entity_type=None,limit=64):
+        with self.store.lock:
+            lookup=self.lookup(query,session_id=session_id,entity_type=entity_type)
+            resolved=lookup['resolution']
+            if resolved['ambiguous'] or not resolved['entity_ids']:return [],lookup
+            marks=','.join('?' for _ in resolved['entity_ids'])
+            rows=self.store.db.execute(f'''SELECT DISTINCT target_id,target_revision FROM memory_entity_mentions
+                WHERE domain=? AND entity_id IN ({marks}) ORDER BY target_id,target_revision''',
+                [domain,*resolved['entity_ids']]).fetchall()
+            found=[]
+            for row in rows:
+                matched=sorted(set(resolved['entity_ids']) & set(self.signature(domain,row['target_id'],row['target_revision'],session_id=session_id,entity_type=entity_type)))
+                if not matched:continue
+                if domain=='memory':
+                    item=self.store.memory(row['target_id'])
+                    if not item or sha(item['content'])!=row['target_revision'] or not self.store.memory_dependency_valid(self.store.memory_dependency(item)):continue
+                elif domain=='library':
+                    try:
+                        item=self.library._source(row['target_id'])
+                        if item['head_id']!=row['target_revision'] or item['scope']=='working' and item['session_id']!=session_id:continue
+                    except LibraryError:continue
+                else:continue
+                found.append({'id':row['target_id'],'revision':row['target_revision'],'entity_ids':matched})
+            found.sort(key=lambda x:(-len(x['entity_ids']),x['id']))
+            return found[:limit],lookup
+
+    def dependency(self,lookup,domain,target_id,revision,entity_ids):
+        return {'lookup':lookup,'domain':domain,'target_id':target_id,'revision':revision,'entity_ids':entity_ids}
+
+    def evidence(self,snapshot):
+        """Bundle the literal identity bridge with its target, never a generated fact."""
+        if not self.dependency_valid(snapshot):return []
+        lookup=snapshot['lookup'];session=lookup['session_id']
+        matches=self.match(lookup['query'],session_id=session,entity_type=lookup['entity_type'])['matches']
+        result=[]
+        for eid in snapshot['entity_ids']:
+            entity=self._entity(eid);alias_ids={m['alias_id'] for m in matches if m['entity_id']==eid}
+            alias_ids.update(r[0] for r in self.store.db.execute('''SELECT alias_id FROM memory_entity_mentions
+                WHERE domain=? AND target_id=? AND target_revision=? AND entity_id=?''',
+                (snapshot['domain'],snapshot['target_id'],snapshot['revision'],eid)))
+            anchors={entity['anchor_json']}
+            for aid in sorted(alias_ids):
+                row=self.store.db.execute('SELECT * FROM memory_entity_aliases WHERE id=?',(aid,)).fetchone()
+                if row and self.live(entity,dict(row),session_id=session):anchors.add(row['anchor_json'])
+            result.append({'entity_id':eid,'canonical_name':entity['canonical_name'],
+                'entity_type':entity['entity_type'],'basis':'literal_identity_only_not_answer_support',
+                'evidence':[json.loads(a) for a in sorted(anchors)]})
+        return result
+
+    def dependency_valid(self,snapshot):
+        try:
+            return (self.lookup_valid(snapshot['lookup']) and not snapshot['lookup']['resolution']['ambiguous'] and
+                set(snapshot['entity_ids']).issubset(self.signature(snapshot['domain'],snapshot['target_id'],snapshot['revision'],
+                    session_id=snapshot['lookup']['session_id'],entity_type=snapshot['lookup']['entity_type'])) and bool(snapshot['entity_ids']))
+        except (KeyError,LibraryError):return False
+
+    def index_memory(self,item):
+        source=self.store.memory_source(item['id'])
+        if not source:return
+        text=source['content']
+        try:
+            for start in range(0,len(text),3880):
+                end=min(len(text),start+4000)
+                self.bind('memory',item['id'],sha(item['content']),Anchor(domain='conversation',source_id=source['message_id'],
+                    start=start,end=end,quote=text[start:end],sha256=sha(text)),session_id=source['session_id'])
+        except LibraryError:return  # Non-personal/manual source stays outside entity inference.
+
+    def index_source(self,sid):
+        source=self.library._source(sid);revision=self.library._revision(source['head_id']);text=revision['content']
+        for start in range(0,len(text),3880):
+            end=min(len(text),start+4000)
+            self.bind('library',sid,revision['id'],Anchor(domain='library',source_id=sid,revision_id=revision['id'],
+                start=start,end=end,quote=text[start:end],sha256=revision['sha']),session_id=source['session_id'])

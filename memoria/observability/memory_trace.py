@@ -38,6 +38,7 @@ def read_visibility(messages):
     return result
 
 STAGES = {
+    'entity':('memory_entities','memory_entity_aliases','memory_entity_mentions','memory_entity_cohorts','memory_entity_events'),
     "source": ("messages", "memory_source_revocations", "dataset_imports"),
     "extraction": ("memory_jobs",),
     "formation": ("memory_formation_runs", "memory_observations", "memory_pattern_versions", "memory_formation_candidates","memory_formation_calls"),
