@@ -1,5 +1,7 @@
 # API：登录网关、记忆与治理
 
+memory-answer现复用Kernel.answer；新增memory-kernel/knowledge-answer（仅library）及lineage/{domain}/{id}，来源/候选/选择/版本与Reader引用可关联。全部走原登录网关；[生产闭环与逐题归因](../../docs/implemented/生产记忆闭环与逐题归因.md)说明协议、预算及尚未知的语义效果。
+
 [核心包](../README.md) · [完整接口](../../docs/implemented/API接口文档.md) · [用户隔离](../../docs/implemented/用户登录与数据隔离.md)
 
 正式入口 `main.py` 调用本包导出的 `create_app`。`gateway.py` 验证用户登录后，以服务器账号 UUID 路由到独立租户应用；不要直接暴露 `_create_tenant_app` 作为业务入口。

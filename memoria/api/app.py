@@ -375,7 +375,7 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     app.state.settings, app.state.store, app.state.service, app.state.metrics = settings, store, service, metrics
     app.state.governance = governance
     app.include_router(claims_router(service.claims if service else None,service.llm if service else None,
-                                     service.runtime.memory if service else None))
+                                     service.runtime.memory if service else None,service.kernel if service else None))
     app.include_router(studio_router(store,service.claims if service else None,service))
     experiment_owner = settings.database.parent.parent
     app.include_router(research_runs_router(experiment_owner / "experiments" if experiment_owner.name == tenant_user_id else None,

@@ -109,6 +109,63 @@ def test_conflicting_current_state_rolls_back_everything(env):
     result=asyncio.run(service.auto_review.review(new['id']))
     assert result['status']=='pending' and result['assessment']['reason_codes']==['existing_state_requires_revision']
     assert len(store.memories())==1 and len(service.claims.list())==1
+    proposal=result['assessment']['structured_proposal']
+    assert not proposal['automatic_approval'] and proposal['value']=='英文'
+    from memoria.memory.access import QueryRequest
+    request=QueryRequest(query='我的回答语言是什么？')
+    access=asyncio.run(service.kernel.access(request))
+    assert access['path']=='clarify' and access['pending_revisions'][0]['review_id']==new['id']
+    answer=asyncio.run(service.kernel.answer(request))
+    assert answer['reader_called'] is False and answer['status']=='clarify'
+    assert service.claims.get(proposal['target_claim_id'])['revision_id']==proposal['expected_revision_id']
+    from memoria.claims import AccessRequest
+    raw_request=AccessRequest(predicates=['response_language'])
+    raw=service.claims.access(raw_request)
+    dependency=service.claims.access_dependency(raw_request,raw['payload'])
+    assert not service.kernel.dependency_valid(dependency)
+    store.reject_memory_review(new['id'])
+    assert not asyncio.run(service.kernel.access(request)).get('pending_revisions')
+    assert service.kernel.dependency_valid(dependency)
+
+
+def test_conflict_proposal_arriving_during_reader_blocks_old_answer(env):
+    _,_,store,service=env
+    source,first=candidate(store);model(service,source['content'])
+    asyncio.run(service.auto_review.review(first['id']))
+    source,new=candidate(store,'我平时喜欢用英文回答。','用户偏好英文回答')
+    model(service,source['content'],changes={'claim':{'predicate':'response_language','value':'英文','polarity':'positive'}})
+    reviewer=service.llm.chat
+    from memoria.prompting.assembler import _parse_frame
+    from memoria.memory.access import QueryRequest
+    async def reader(messages,**kwargs):
+        _,sections=_parse_frame(messages[1]['content'])
+        packet=json.loads(next(s.content for s in sections if s.name=='Structured State').rsplit('\n',1)[-1])
+        service.llm.chat=reviewer
+        await service.auto_review.review(new['id'])
+        return ChatResult(content=json.dumps({'status':'answer','answer':'中文','evidence_ids':packet['allowed_evidence_ids']}))
+    service.llm.chat=reader
+    result=asyncio.run(service.kernel.answer(QueryRequest(query='我的回答语言是什么？')))
+    assert result['status']=='abstain' and result['reader_called']
+    assert result['validation']['reason']=='unresolved_revision_proposal'
+    assert result['closed_loop']['pending_revisions'][0]['source_ref']==source['id']
+    store.undo_memory_sources([source['id']])
+    assert not asyncio.run(service.kernel.access(QueryRequest(query='我的回答语言是什么？'))).get('pending_revisions')
+
+
+def test_approving_only_ordinary_memory_does_not_resolve_a_structured_revision(env):
+    _,client,store,service=env
+    source,first=candidate(store);model(service,source['content'])
+    asyncio.run(service.auto_review.review(first['id']))
+    source,new=candidate(store,'我平时喜欢用英文回答。','用户偏好英文回答')
+    model(service,source['content'],changes={'claim':{'predicate':'response_language','value':'英文','polarity':'positive'}})
+    asyncio.run(service.auto_review.review(new['id']))
+    service.runtime.memory.decider=None
+    response=client.post('/api/memory-reviews/'+new['id']+'/approve',json={
+        'content':new['content'],'kind':new['kind'],'importance':new['importance']})
+    assert response.status_code==200 and response.json()['status']=='approved'
+    from memoria.memory.access import QueryRequest
+    access=asyncio.run(service.kernel.access(QueryRequest(query='我的回答语言是什么？')))
+    assert access['path']=='clarify' and access['pending_revisions']
 
 
 def test_same_state_does_not_require_human_or_create_duplicate_claim(env):

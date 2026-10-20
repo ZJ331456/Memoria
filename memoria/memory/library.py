@@ -129,6 +129,8 @@ class EvidenceLibrary:
         self.files = FileSources(self)
         from .source_formation import SourceFormation
         self.formation = SourceFormation(self)
+        from ..observability.memory_trace import install
+        with self.store._memory_transaction():install(self.store)
 
     def _source(self, sid, *, active=True):
         row = self.store.db.execute('SELECT * FROM library_sources WHERE id=?', (sid,)).fetchone()

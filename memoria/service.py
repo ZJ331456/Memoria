@@ -48,6 +48,7 @@ class AgentService:
             http_allowed_hosts=settings.http_allowed_hosts,
             episodes=self.episodes,
             claims=self.claims,
+            kernel=self.kernel,
         )
         from .tools.knowledge import register_knowledge_tools
         register_knowledge_tools(tools, self.kernel)

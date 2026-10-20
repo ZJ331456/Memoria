@@ -29,6 +29,10 @@
 
 ## Git 行为
 
+生产闭环使用原Kernel/worker/审核/Reader，closed-loop只在新的账号私有隔离实验库按来源前缀执行，默认仅验证；不复制旧个人库、不补人工批准、不把未来来源或gold塞入路由。原LoCoMo依旧独立PrefixRetriever成绩；归因标签后验读取，ID覆盖和工程替身不作为语义或长期效果。说明见docs/implemented/生产记忆闭环与逐题归因.md。
+
+当前状态的最终回答通过Kernel.answer/access及pending revision检查，不能用底层已批准Claim快照绕过仍有效的冲突提案。提案需要实际目标版本、来源/候选SHA；不自动批准修订。新LLM批准按实际revision记录来源，旧元数据不冒充独立真人。
+
 遵循用户最新授权。本项目当前约定在 `main` 工作，未经用户要求不新建分支、不强推。身份为 `ZJ331456 <ZJ331456@users.noreply.github.com>`，远程应为 `https://github.com/ZJ331456/Memoria.git`。
 
 用户要求提交/更新远程时，在完成验证、审查 diff 和确认无凭据后执行提交与普通推送；只读分析或尚未授权的发布不得因本文件自动触发推送。发现远程更新先 fetch 并判断分歧，不能用 reset/force 覆盖其他工作。提交格式与最终核验步骤以提交规范为准。

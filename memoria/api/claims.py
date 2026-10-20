@@ -9,7 +9,7 @@ from ..memory.claim_analysis import AnalysisRequest, analyze_claim
 from ..memory.reader import read_memory_answer
 
 
-def claims_router(memory: ClaimMemory | None, llm=None, engine=None) -> APIRouter:
+def claims_router(memory: ClaimMemory | None, llm=None, engine=None, kernel=None) -> APIRouter:
     router = APIRouter(tags=["claims and views"])
 
     @router.get("/api/claim-slots")
@@ -90,11 +90,12 @@ def claims_router(memory: ClaimMemory | None, llm=None, engine=None) -> APIRoute
 
     @router.post("/api/memory-access")
     def access(body: AccessRequest):
-        return memory.access(body)
+        result=memory.access(body)
+        return kernel.guard_pending_revisions(result,body) if kernel else result
 
     @router.post("/api/memory-query")
     async def query(body: QueryRequest):
-        return await MemoryAccessOrchestrator(memory, engine, llm).access(body)
+        return await kernel.access(body) if kernel else await MemoryAccessOrchestrator(memory, engine, llm).access(body)
 
     @router.post("/api/claims/{claim_id}/analyze")
     async def analyze(claim_id: str, body: AnalysisRequest):
@@ -102,6 +103,6 @@ def claims_router(memory: ClaimMemory | None, llm=None, engine=None) -> APIRoute
 
     @router.post("/api/memory-answer")
     async def answer(body: QueryRequest):
-        return await read_memory_answer(memory,engine,llm,body)
+        return await kernel.answer(body) if kernel else await read_memory_answer(memory,engine,llm,body)
 
     return router

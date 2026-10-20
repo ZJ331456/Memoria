@@ -112,11 +112,13 @@ class AgentRuntime:
         context.metadata["turn_kind"] = turn_kind
         user_message: dict[str, Any] | None = None
         memory_dependencies = {}
+        claim_access=claim_request=None
         memory_budget = (
             TurnMemoryBudget(self.layers.retrieval_max_calls, self.layers.retrieval_max_chars)
             if self.layers and self.layers.enabled else None
         )
-        with RequestContext(session_id=session_id, turn_id=turn_id, request_id=request_id):
+        from ..observability.memory_trace import observe_reads
+        with RequestContext(session_id=session_id, turn_id=turn_id, request_id=request_id),observe_reads() as memory_reads:
             try:
                 await self.pipeline.run(Phase.BEFORE_TURN, context)
                 await self.event_bus.emit("turn.before", {"session_id": session_id, "turn_id": turn_id})
@@ -163,6 +165,10 @@ class AgentRuntime:
                     "top_score": context.memories[0].get("retrieval", {}).get("score") if context.memories else None,
                     "sufficient": bool(context.memories and context.memories[0].get("retrieval", {}).get("score", 0) > 0),
                 }
+                if kernel and context.memories:
+                    from ..observability.memory_trace import record_read
+                    records=[kernel.readers.memory(m,user_text).public() for m in context.memories]
+                    record_read({'query':plan.query,'route':'dialogue_initial_memory'},records,records)
                 memory_dependencies.update({'memory:'+m['id']:m['retrieval']['dependency'] for m in context.memories if m.get('retrieval',{}).get('dependency')})
 
                 episodes = (
@@ -185,7 +191,8 @@ class AgentRuntime:
                 last_reader_result = None
                 citation_safe_answer = None
                 if claim_access:
-                    citation_guard = CitationGuard(self.claims,claim_access,claim_request)
+                    citation_guard = CitationGuard(self.claims,claim_access,claim_request,
+                        access_policy=(lambda:bool(kernel.guard_pending_revisions(dict(claim_access),claim_request).get('pending_revisions'))) if kernel else None)
                     context.metadata["claim_access"] = {
                         "production_trace": claim_access["production_trace"],
                         "path": claim_access["path"], "reason": claim_access["reason"], "parsed": claim_access["parsed"],
@@ -194,6 +201,10 @@ class AgentRuntime:
                         "cost_chars": claim_access["selection"]["cost_chars"], "timings": claim_access["timings"],
                         "rejected": claim_access["rejected"], "dropped": claim_access["selection"]["dropped"]}
                     extra_sections.append(citation_guard.section())
+                    if kernel:
+                        from ..observability.memory_trace import answer_trace
+                        context.metadata['memory_closed_loop']=answer_trace(kernel,claim_request.model_dump(mode='json'),
+                            {'access':claim_access,'reader_called':False,'status':'pending'})
                 if episodes:
                     lines = []
                     for episode in episodes:
@@ -372,13 +383,13 @@ class AgentRuntime:
                                 await on_event({"type": "delta", "content": text})
 
                             with tracer.timings.measure("llm.reader"):
-                                result = await self.llm.chat_stream(
-                                    context.messages, tools=prepared.tools, on_delta=stream_delta,
+                                result = await self._reader_chat(context,
+                                    context.messages, tools=prepared.tools, on_delta=stream_delta,stream=True,
                                     model=prepared.model,max_tokens=prepared.max_tokens,
                                 )
                         else:
                             with tracer.timings.measure("llm.reader"):
-                                result = await self.llm.chat(context.messages, tools=prepared.tools,
+                                result = await self._reader_chat(context,context.messages, tools=prepared.tools,
                                                              model=prepared.model,max_tokens=prepared.max_tokens)
                     except ContextLengthError:
                         emergency = self.context_budget.emergency(context.messages)
@@ -411,9 +422,8 @@ class AgentRuntime:
                             context.metadata['citations']=[]
                             break
                         with tracer.timings.measure("llm.reader_emergency"):
-                            result = await self.llm.chat(context.messages, tools=prepared.tools,
+                            result = await self._reader_chat(context,context.messages, tools=prepared.tools,stage='reader_emergency',
                                                          model=prepared.model,max_tokens=prepared.max_tokens)
-                    self._record_llm(context, result)
                     if citation_guard:
                         last_reader_result=result
                         with self.store._memory_transaction():
@@ -457,8 +467,8 @@ class AgentRuntime:
                         final_prepared=await self.reader_budget.prepare(final_budget.messages)
                         context.metadata['reader_budget']=final_prepared.report
                         with tracer.timings.measure("llm.reader_loop_guard"):
-                            summary = await self.llm.chat(final_prepared.messages,model=final_prepared.model,max_tokens=final_prepared.max_tokens)
-                        self._record_llm(context, summary)
+                            summary = await self._reader_chat(context,final_prepared.messages,model=final_prepared.model,
+                                max_tokens=final_prepared.max_tokens,stage='reader_loop_guard')
                         context.response = summary.content or "检测到重复工具调用，已安全停止。"
                         break
 
@@ -511,6 +521,8 @@ class AgentRuntime:
                 if (citation_guard or memory_dependencies) and on_event:
                     tracer.mark_visible_text(context.response)
                     await on_event({'type':'delta','content':context.response})
+                self._audit_memory_path(context,claim_access,claim_request,memory_reads,
+                    verdict.get('status') if citation_guard and last_reader_result else 'clarify' if citation_guard else 'dialogue')
                 if not skip_memory_enqueue:
                     memory_job=self.store.enqueue_memory_job(user_message["id"], user_text, context.response)
                     context.metadata['memory_job']={'id':memory_job['id'],'source_ref':user_message['id'],'status_at_enqueue':memory_job['status']}
@@ -533,6 +545,7 @@ class AgentRuntime:
                 )
                 return assistant_message, created, trace
             except asyncio.CancelledError:
+                self._audit_memory_path(context,claim_access,claim_request,memory_reads,'cancelled')
                 note = f"上一轮在处理「{user_text[:80]}」时被中断；已完成 {len(context.tool_chain)} 个工具步骤。"
                 self.store.set_interrupt_note(session_id, note)
                 await self.event_bus.emit("turn.cancelled", {"session_id": session_id, "turn_id": turn_id})
@@ -550,6 +563,7 @@ class AgentRuntime:
                 )
                 raise
             except Exception as exc:
+                self._audit_memory_path(context,claim_access,claim_request,memory_reads,'execution_failure')
                 await self.event_bus.emit(
                     "turn.failed",
                     {"session_id": session_id, "turn_id": turn_id, "error": f"{type(exc).__name__}: {exc}"},
@@ -682,11 +696,46 @@ class AgentRuntime:
         except Exception:
             logger.exception("failed to record task episode for trace %s", trace_id)
 
-    @staticmethod
-    def _record_llm(context: TurnContext, result) -> None:
-        calls = context.metadata.setdefault("llm_calls", [])
-        calls.append({"duration_ms": result.duration_ms, "retries": result.retries, "usage": result.usage,
-                      'budget':getattr(result,'budget',{})})
+    async def _reader_chat(self,context,messages,*,stream=False,stage='reader',**kwargs):
+        import time
+        from ..observability.memory_trace import fingerprint,read_visibility
+        attempt={'stage':stage,'status':'started','usage':None,'retries':0,
+            'request_sha256':fingerprint(messages),'memory_read_visibility':read_visibility(messages),
+            'budget':context.metadata.get('reader_budget'),
+            'scope':'LLM client request attempt; provider/network acceptance unknown on failure'}
+        context.metadata.setdefault('llm_calls',[]).append(attempt)
+        started=time.perf_counter()
+        try:
+            result=await (self.llm.chat_stream(messages,**kwargs) if stream else self.llm.chat(messages,**kwargs))
+            attempt.update(status='returned',usage=result.usage or None,retries=result.retries,finish_reason=result.finish_reason)
+            return result
+        except BaseException as exc:
+            attempt.update(status='failed',error_type=type(exc).__name__)
+            raise
+        finally:attempt['duration_ms']=round((time.perf_counter()-started)*1000,3)
+
+    def _audit_memory_path(self,context,access,request,reads,status):
+        kernel=getattr(self,'kernel',None)
+        if not kernel:return
+        from ..observability.memory_trace import answer_trace
+        if access is None:
+            access={'path':'dialogue','candidates':[c for r in reads for c in r['candidates']],
+                'selection':{'payload':{'evidence':[c for r in reads for c in r['selected']]}}}
+        elif request:
+            access=kernel.guard_pending_revisions(dict(access),request)
+        try:
+            trace=answer_trace(kernel,request.model_dump(mode='json') if request else {'query':context.user_text},
+                {'access':access,'reader_called':bool(context.metadata.get('llm_calls')),'status':status,
+                 'answer':context.response,'reader_budget':context.metadata.get('reader_budget'),
+                 'validation':context.metadata.get('citation_validation',{'valid':None,'reason':'dialogue_has_no_strict_citation_contract'}),
+                 'citations':context.metadata.get('citations',[])},calls=context.metadata.get('llm_calls',[]))
+            if not request:
+                trace['selection_scope']='retrieval/tool selection; actual request fragment visibility is in reader.calls'
+                from ..observability.memory_trace import fingerprint
+                trace['trace_sha256']=fingerprint({k:v for k,v in trace.items() if k!='trace_sha256'})
+            context.metadata['memory_closed_loop']=trace
+        except Exception as exc:
+            context.metadata['memory_closed_loop_error']=type(exc).__name__
 
 
 class _FastSummarizer:

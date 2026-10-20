@@ -33,6 +33,16 @@ class MemorySearch(BaseModel):
         return value
 
 
+class KnowledgeAnswer(MemorySearch):
+    domains: list[Domain]=Field(default_factory=lambda:['library'],min_length=1,max_length=1)
+
+    @field_validator('domains')
+    @classmethod
+    def source_domain(cls,value):
+        if value!=['library']:raise ValueError('Source Reader uses library only; personal state uses QueryRequest, other domains use search')
+        return value
+
+
 @dataclass(frozen=True, slots=True)
 class EvidenceRecord:
     domain: Domain

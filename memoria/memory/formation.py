@@ -81,6 +81,9 @@ class MemoryFormation:
         call_id = uuid.uuid4().hex
         try:
             result = await self.llm.chat(messages, model=selected, temperature=0, top_p=1, max_tokens=max_tokens)
+            if result.finish_reason not in {None,'stop'} or result.tool_calls:
+                from ..llm.types import IncompleteResponseError
+                raise IncompleteResponseError(result.finish_reason or 'tool_calls')
             return result, call_id
         except BaseException as exc:
             failure = type(exc).__name__
@@ -90,7 +93,7 @@ class MemoryFormation:
                 self.store.db.execute('INSERT INTO memory_formation_calls VALUES(?,?,?,?,?,?,?,?,?)',
                     (call_id, stage, fingerprint, selected.model,
                      json.dumps(result.usage) if result and result.usage else None,
-                     'provider_failed' if failure else 'returned', failure,
+                     'incomplete_output' if result and failure else 'provider_failed' if failure else 'returned', failure,
                      round((time.monotonic()-started)*1000), now()))
 
     def invalid_output(self, call_id):

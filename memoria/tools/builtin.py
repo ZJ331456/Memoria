@@ -26,6 +26,7 @@ def build_registry(
     http_allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS,
     episodes: EpisodicMemory | None = None,
     claims: ClaimMemory | None = None,
+    kernel=None,
 ) -> ToolRegistry:
     registry = ToolRegistry()
     async def recall(a):
@@ -51,6 +52,7 @@ def build_registry(
         request = AccessRequest.model_validate(a)
         with store._memory_transaction():
             result = claims.access(request)
+            if kernel:result=kernel.guard_pending_revisions(result,request)
             return ToolValue(result, [claims.access_dependency(request, result['payload'])])
     async def recall_episodes(a):
         if not episodes:

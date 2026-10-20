@@ -82,6 +82,8 @@ The current asset set retains three result families: complete LoCoMo, registered
 
 ## Repository
 
+[Production closed-loop diagnostics](docs/implemented/生产记忆闭环与逐题归因.md) now re-execute the real formation, admission, Claim/View or source Reader on an isolated chronological prefix. Cases preserve source/version lineage, candidates, selection, citations, usage and failures; labels are read only afterward. Existing LoCoMo scores still describe its separate PrefixRetriever protocol.
+
 - `assets/`: project diagrams, retained result summaries and source manifests.
 - `docs/implemented/`: current behavior, operations, evidence and limitations.
 - `docs/plans/`: research and readiness work awaiting verification.

@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Query
 
 from ..memory.library import SourceInput
-from ..memory.records import Domain, MemorySearch
+from ..memory.records import Domain, MemorySearch,KnowledgeAnswer
 
 
 def memory_kernel_router(kernel):
@@ -15,6 +15,14 @@ def memory_kernel_router(kernel):
     @router.post('/search')
     async def search(body: MemorySearch):
         return await kernel.search(body)
+
+    @router.post('/knowledge-answer')
+    async def answer(body: KnowledgeAnswer):
+        return await kernel.answer(body)
+
+    @router.get('/lineage/{domain}/{source_id}')
+    def lineage(domain: Domain,source_id: str):
+        return kernel.lineage([{'domain':domain,'id':source_id}])[0]
 
     @router.get('/sources/{domain}/{source_id}')
     def read(domain: Domain, source_id: str,

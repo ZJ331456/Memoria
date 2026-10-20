@@ -135,6 +135,10 @@ class AutoMemoryReviewer:
                     model=selected,temperature=0,top_p=1,max_tokens=700)
                 raw=re.sub(r'^```(?:json)?\s*|\s*```$','',result.content.strip())
                 report['usage']=result.usage or None
+                report['finish_reason']=result.finish_reason
+                if result.finish_reason not in {None,'stop'} or result.tool_calls:
+                    from ..llm.types import IncompleteResponseError
+                    raise IncompleteResponseError(result.finish_reason or 'tool_calls')
                 verdict=Verdict.model_validate_json(raw)
                 report.update(assessment=verdict.assessment)
                 if verdict.decision=='reject' or verdict.assessment=='Contradicted' or not verdict.durable:
@@ -191,7 +195,14 @@ class AutoMemoryReviewer:
                             if old['status']=='approved' and old.get('source_available'):
                                 same=bool(set(aliases(draft.predicate,draft.value))&set(aliases(draft.predicate,old['value']))) and draft.polarity==old['polarity']
                                 if same:existing_claim=old['id']
-                                elif not SLOTS[draft.predicate]:raise ClaimError(409,'existing_state_requires_revision')
+                                elif not SLOTS[draft.predicate]:
+                                    report['structured_proposal']={'action':'revision_review','automatic_approval':False,
+                                        'target_claim_id':old['id'],'expected_revision':old['revision'],
+                                        'expected_revision_id':old['revision_id'],'subject_id':draft.subject_id,
+                                        'predicate':draft.predicate,'scope':draft.scope,'value':draft.value,
+                                        'polarity':draft.polarity,'evidence':[evidence],
+                                        'candidate_sha256':sha(row['content']),'fact_time':'unknown'}
+                                    raise ClaimError(409,'existing_state_requires_revision')
                     before_groups = {r[0] for r in self.store.db.execute('''SELECT g.id FROM memory_support_groups g
                         JOIN memories m ON m.id=g.memory_id WHERE m.kind=? AND m.content_key=?''',
                         (row['kind'],self.store.memory_content_key(row['content'])))}
@@ -212,7 +223,9 @@ class AutoMemoryReviewer:
                         candidate=self.claims.create(ClaimDraft(**{**draft.model_dump(),'memory_id':memory['id']}))
                         checks=EvidenceVerifier().verify(self.claims,candidate)
                         if any(b!=ALIAS_BLOCKER for b in checks['blockers']):raise ClaimError(409,'claim_constraints_changed')
-                        claim_id=self.claims.approve(candidate['id'],ClaimDecision(expected_revision=candidate['revision'],reason=draft.reason))['id']
+                        approved=self.claims.approve(candidate['id'],ClaimDecision(expected_revision=candidate['revision'],reason=draft.reason))
+                        claim_id=approved['id']
+                        report['applied_claim_revision_id']=approved['revision_id']
                     report['structured_action']='reuse_existing_state' if existing_claim else 'create' if claim_id else 'none'
                     self.store.db.execute("UPDATE memory_reviews SET status='approved',applied_memory_id=?,applied_action=?,applied_claim_id=?,updated_at=? WHERE id=?",
                         (memory['id'],action,claim_id,now(),row['id']))
@@ -223,7 +236,9 @@ class AutoMemoryReviewer:
             except asyncio.CancelledError:
                 self.store.reset_memory_review(row['id']);raise
             except Exception as exc:
-                report.update(decision='review',reason_codes=['existing_state_requires_revision' if isinstance(exc,ClaimError) and 'existing_state_requires_revision' in str(exc)
+                from ..llm.types import IncompleteResponseError
+                report.update(decision='review',reason_codes=['review_incomplete_output' if isinstance(exc,IncompleteResponseError) else
+                    'existing_state_requires_revision' if isinstance(exc,ClaimError) and 'existing_state_requires_revision' in str(exc)
                     else 'source_or_candidate_changed' if isinstance(exc,ClaimError) else 'model_or_publish_failed'])
                 return self.finish(row,report,key,allow_changed=True)
 

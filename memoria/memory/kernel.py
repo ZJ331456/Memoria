@@ -58,7 +58,65 @@ class MemoryKernel:
 
     async def access(self, request):
         """Current/historical personal state keeps the existing Claim/time/condition authority."""
-        return await self.personal_access.access(request)
+        result=await self.personal_access.access(request)
+        return self.guard_pending_revisions(result,request)
+
+    def guard_pending_revisions(self,result,request):
+        # A validated conflicting assertion cannot overwrite a Claim, nor silently let
+        # the final Reader present the old state as uncontested current knowledge.
+        if request.fact_as_of or request.recorded_as_of or getattr(request,'intent',None)=='history' or result['path']=='history':return result
+        state=result.get('state',result if 'payload' in result else None)
+        claims={c['id']:c for c in state['payload']['claims']} if state else {}
+        pending=[]
+        if claims:
+            from ..claims import sha,ClaimError
+            with self.store.lock:
+                rows=self.store.db.execute('''SELECT r.*,a.data_json FROM memory_reviews r
+                    JOIN memory_review_assessments a ON a.id=(SELECT MAX(id) FROM memory_review_assessments WHERE review_id=r.id)
+                    WHERE r.status IN('pending','approved') AND json_extract(a.data_json,'$.structured_proposal.target_claim_id')
+                    IN(SELECT value FROM json_each(?)) ORDER BY r.rowid DESC LIMIT 64''',(json.dumps(list(claims)),)).fetchall()
+                for row in rows:
+                    report=json.loads(row['data_json']);proposal=report.get('structured_proposal') or {}
+                    target=claims.get(proposal.get('target_claim_id'))
+                    if (not target or target['revision_id']!=proposal.get('expected_revision_id')
+                        or sha(row['content'])!=proposal.get('candidate_sha256')):continue
+                    try:self.claims._evidence({'evidence':proposal['evidence']})
+                    except (ClaimError,KeyError):continue
+                    pending.append({'review_id':row['id'],'claim_id':target['id'],'revision_id':target['revision_id'],
+                        'source_ref':row['source_ref'],
+                        'reason':'supported_conflicting_assertion_awaits_revision_review'})
+        if pending:
+            reason=result['reason']
+            if 'unresolved revision proposal' not in reason:reason+='; unresolved revision proposal'
+            result.update(path='clarify',reason=reason,pending_revisions=pending)
+            if result.get('production_trace'):
+                from ..observability.memory_trace import fingerprint
+                trace={**result['production_trace'],'publication_gate':{'path':'clarify','pending_revisions':pending}}
+                trace['trace_sha256']=fingerprint({k:v for k,v in trace.items() if k!='trace_sha256'})
+                result['production_trace']=trace
+        return result
+
+    def lineage(self, references):
+        from ..observability.memory_trace import source_lineage
+        return source_lineage(self,references)
+
+    async def answer(self, request):
+        """Production Reader, never an alternate benchmark extractor or automatic Claim promotion."""
+        from .access import QueryRequest
+        from .reader import read_memory_answer, read_knowledge_answer
+        from ..observability.memory_trace import answer_trace
+        if self.llm is None:raise LibraryError(503,'未配置Reader模型')
+        if isinstance(request,QueryRequest):
+            result=await read_memory_answer(self.claims,self.memory,self.llm,request,accessor=self.access,
+                policy_guard=lambda access:bool(self.guard_pending_revisions(dict(access),request).get('pending_revisions')))
+            result['access']['pending_revisions']=self.guard_pending_revisions(dict(result['access']),request).get('pending_revisions',[])
+        elif isinstance(request,MemorySearch):
+            if request.domains!=['library']:
+                raise LibraryError(422,'资料Reader仅接受library域；个人状态使用QueryRequest，其他来源使用search')
+            result=await read_knowledge_answer(self,request)
+        else:raise TypeError('Use QueryRequest for personal state or MemorySearch for source knowledge')
+        result['closed_loop']=answer_trace(self,request.model_dump(mode='json'),result)
+        return result
 
     def dependency_valid(self, dependency: dict, *, session_id: str | None = None):
         if not isinstance(dependency, dict) or not dependency.get('id'):
@@ -74,7 +132,12 @@ class MemoryKernel:
                         return False
                     return self.library.dependency_valid(dependency)
             if kind == 'claim_access':
-                return self.claims.access_dependency_valid(dependency)
+                if not self.claims.access_dependency_valid(dependency):return False
+                from ..claims import AccessRequest
+                request=AccessRequest.model_validate(dependency['request'])
+                with self.store.lock:
+                    current={'path':'retrieve','reason':'dependency_check','payload':self.claims._select(request)}
+                return not self.guard_pending_revisions(current,request).get('pending_revisions')
             if kind not in {'memory', 'message'}:
                 return False
             return self.store.memory_dependency_valid(dependency)
@@ -111,7 +174,7 @@ class MemoryKernel:
         if session_id is not None and not self.store.session(session_id):
             raise LibraryError(404, '会话不存在')
 
-    async def search(self, request: MemorySearch):
+    async def search(self, request: MemorySearch, *, capture=None):
         """Interleave source ranks, rather than comparing incomparable BM25/cosine scores."""
         self._check_session(request.session_id)
         lanes = {}
@@ -143,6 +206,9 @@ class MemoryKernel:
             return response['budget']['used']
 
         seen = set()
+        if capture is not None:
+            capture['candidates']=[r.public() for lane in lanes.values() for r in lane]
+            capture['candidate_dependencies']=[r.dependency for lane in lanes.values() for r in lane]
         with self.store.lock:
             self._check_session(request.session_id)  # Vector calls may have yielded while a session was deleted.
             for rank in range(max(map(len, lanes.values()), default=0)):
@@ -170,4 +236,6 @@ class MemoryKernel:
                         response['selection']['skipped_budget'] += 1
             response['selection']['selected_count'] = len(response['evidence'])
             size()
+        from ..observability.memory_trace import record_read
+        record_read(request.model_dump(mode='json'),[r.public() for lane in lanes.values() for r in lane],response['evidence'])
         return response

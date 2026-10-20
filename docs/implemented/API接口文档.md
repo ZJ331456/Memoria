@@ -432,6 +432,8 @@ memory-access、claim-views、memory-query、memory-answer接受可选session_id
 
 2026-10-15：QueryRequest新增experience_mode=bm25|dense|rrf，默认bm25，仅unified原话补检使用；局部来源/知识截止和审批边界保持。返回production_trace及实际经历lane/积压/向量诊断，不把缺失Dense伪装为成功。[重放、预算与本机条件](生产重放与普通来源支持.md)。
 
+2026-10-20：原`POST /api/memory-answer`复用Kernel.answer并返回closed_loop；新增`POST /api/memory-kernel/knowledge-answer`（KnowledgeAnswer，默认且仅library域）和`GET /api/memory-kernel/lineage/{domain}/{id}`（当前来源元数据链，0模型调用）。两个回答入口分别保留个人状态/资料知识边界；不批准新事实，引用通过仍不等于逐句语义正确。[协议、逐题重执行及后验归因](生产记忆闭环与逐题归因.md)。
+
 ## Studio处理状态与手动候选（2026-10-15）
 
 - `GET /api/studio/pipeline`：当前账号历史/导入/原话计数、任务状态与最近50条、候选/Claim状态、当前命名空间索引库存、模型配置就绪和MCP连接摘要。只读、model_called=false，不返回密钥、端点或原始任务文本；旧NULL抽取计数保留未知。

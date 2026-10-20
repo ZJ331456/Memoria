@@ -77,6 +77,16 @@ def main():
     sub = subs.add_parser("replay-production", help="Compare four selectors on a private production capture; zero model calls")
     sub.add_argument("--input", required=True)
     sub.add_argument("--budgets", type=int, nargs="+")
+    sub = subs.add_parser('closed-loop',help='Bounded chronological production formation/review/access/Reader; validate only by default')
+    sub.add_argument('--input',required=True)
+    sub.add_argument('--execute',action='store_true')
+    sub.add_argument('--allow-remote',action='store_true')
+    sub.add_argument('--max-calls',type=int,default=12)
+    sub.add_argument('--max-input-chars',type=int,default=120000)
+    sub.add_argument('--local-embeddings',action='store_true')
+    sub = subs.add_parser('attribute-closed-loop',help='Post-hoc structural/label attribution on a frozen closed-loop run; no models')
+    sub.add_argument('--source-run',required=True)
+    sub.add_argument('--judgments',required=True)
     sub = subs.add_parser("budget-micro", help="Two public questions; zero inference by default, at most four Reader calls")
     sub.add_argument("--input", required=True)
     sub.add_argument("--with-reader", action="store_true")
@@ -176,6 +186,14 @@ def main():
     elif args.command == "replay-production":
         from memoria.experiments.production_replay import replay_file
         result = replay_file(workspace,Settings.load(args.config),private_input(args.input,directory),budgets=args.budgets)
+    elif args.command == 'closed-loop':
+        from memoria.experiments.production_replay import execute_closed_loop
+        result=asyncio.run(execute_closed_loop(workspace,Settings.load(args.config),private_input(args.input,directory),
+            execute=args.execute,allow_remote=args.allow_remote,max_calls=args.max_calls,
+            max_input_chars=args.max_input_chars,local_embeddings=args.local_embeddings))
+    elif args.command == 'attribute-closed-loop':
+        from memoria.experiments.production_replay import attribute_closed_loop_file
+        result=attribute_closed_loop_file(workspace,Settings.load(args.config),args.source_run,private_input(args.judgments,directory))
     elif args.command == "budget-micro":
         from memoria.experiments.micro_budget import run_micro
         result = asyncio.run(run_micro(workspace,Settings.load(args.config),private_input(args.input,directory),

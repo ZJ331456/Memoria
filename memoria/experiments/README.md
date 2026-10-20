@@ -1,5 +1,7 @@
 # Experiments：来源、标注、runner 与评分
 
+[production_replay.py](production_replay.py)新增closed-loop：按来源前缀调用实际Kernel/形成/审核/Claim/View/Reader，默认仅验证，显式执行受调用上限约束。attribute-closed-loop只在预测冻结后读标签，保留失败及未知阶段；[完整格式与限制](../../docs/implemented/生产记忆闭环与逐题归因.md)。原LoCoMo入口和成绩不变。
+
 [核心包](../README.md) · [研究操作](../../docs/implemented/真实历史标注与评测.md) · [研究计划](../../docs/plans/长期陪伴记忆研究与实验计划书.md)
 
 本包在账号私有实验目录保存真实来源与不可覆盖产物。研究读取/标注/评分不修改生产记忆；公开匿名对话不得虚构稳定人物/日期或转为账号本人画像。

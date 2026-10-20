@@ -1,5 +1,7 @@
 # Memory：记忆版本、统一访问与证据选择
 
+Kernel.answer将个人Claim/View Reader与library来源Reader接入同一核心；来源lineage、实际选择/引用/调用和逐题归因见[生产闭环](../../docs/implemented/生产记忆闭环与逐题归因.md)。不把全部Observation转成Claim，不用原LoCoMo成绩验证未经过的机制。
+
 [EvidenceLibrary](library.py)保存原生笔记/文档/任务结果与不可变修订，结合反馈提炼有限知识观察；不写个人Claim，search_library遵守原预算与来源版本复核。见[实现边界](../../docs/implemented/多来源资料与任务反馈记忆.md)。
 
 [核心包](../README.md) · [运行时](../runtime/README.md) · [分层说明](../../docs/implemented/记忆分层与配置.md) · [Studio/统一访问](../../docs/implemented/MemoryStudio与统一记忆访问.md)
