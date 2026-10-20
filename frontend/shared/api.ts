@@ -32,8 +32,10 @@ export class API {
     const changed = () => epoch !== this.epoch || (channel && this.channels.get(channel) !== controller)
     this.requests.add(controller)
     try {
+      const binary = typeof Blob !== 'undefined' && body instanceof Blob
       const response = await fetch('/api' + path, {method, credentials: 'same-origin', signal: controller.signal,
-        headers: body === undefined ? {} : {'Content-Type': 'application/json'}, body: body === undefined ? undefined : JSON.stringify(body)})
+        headers: body === undefined ? {} : {'Content-Type': binary ? 'application/octet-stream' : 'application/json'},
+        body: body === undefined ? undefined : binary ? body : JSON.stringify(body)})
       if (changed()) throw new SessionChanged()
       const owner=response.headers.get('X-Memoria-User')
       if (this.owner && owner && owner !== this.owner) { this.onUnauthorized(); throw new SessionChanged() }

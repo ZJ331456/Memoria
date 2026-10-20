@@ -432,6 +432,8 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
     app.include_router(library_router(service.library if service else None, service.kernel if service else None))
     from .memory_kernel import memory_kernel_router
     app.include_router(memory_kernel_router(service.kernel if service else None))
+    from .document_import import document_import_router
+    app.include_router(document_import_router(service.kernel if service else None))
 
     @app.get("/api/health", response_model=HealthResponse, tags=["system"], summary="存活检查")
     def health() -> HealthResponse:

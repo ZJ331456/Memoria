@@ -14,6 +14,8 @@ The current scope is a local research prototype and a controlled-pilot foundatio
 
 The [MemoryKernel](docs/implemented/独立记忆核心与多来源接口.md) can be used without a chat runtime or web server. Conversation quotes, derived memories, documents and task results share a bounded evidence interface while retaining their authorship, scope and revision rules. Chat and task applications are clients of this core; documents do not automatically become personal facts.
 
+[Text ingestion and source-aware formation](docs/implemented/文本解析与跨资料记忆形成.md) now support TXT, Markdown, CSV, JSON/JSONL and Word DOCX text. Bounded observation/review stages feed conditional cross-document consolidation and immutable revisions with complete source groups. No PDF/image recognition or OCR is included; quality and longitudinal benefits remain unverified.
+
 ![How Memoria works — identity, memory runtime, models and storage](assets/images/memoria-architecture.png)
 
 Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Sufficiency and risk verification require an explicit option. See [implementation and limits](docs/implemented/系统架构与实现说明.md). [Poster PNG](assets/images/memoria-overview.png) · [Vector architecture SVG](assets/images/memoria-architecture.svg).
@@ -86,7 +88,7 @@ The current asset set retains three result families: complete LoCoMo, registered
 - `frontend/`, `memoria/`, `scripts/`, `tests/`: interfaces, implementation, tools and engineering checks.
 - Ignored `data/` and `model/`: per-account SQLite/WAL, private evidence, credentials, run ledgers and model weights.
 
-Next algorithm work: source support groups and retraction, progressive retrieval of original experiences, constrained updates and temporary conditions, then matched-budget answer/refusal calibration and valid-view maintenance. These are planned or awaiting verification; current engineering mechanisms do not establish algorithmic superiority. [Code and seven-project comparison (Chinese)](docs/implemented/算法现状与同类项目对照.md) · [Deliverables and ablations (Chinese)](docs/plans/下一阶段算法路线与对照实验.md)
+Algorithm focus: source-aware formation, cross-session/document consolidation, constrained evolution, then matched-budget quality and cost evaluation. Text ingestion, observations, complete support groups and revision controls are implemented; real support/counterevidence, false merges, false replacement, retraction leakage and task reuse still need evaluation. Stored counts and engineering tests do not establish longitudinal benefit or algorithmic superiority. [Code and seven-project comparison (Chinese)](docs/implemented/算法现状与同类项目对照.md) · [Deliverables and ablations (Chinese)](docs/plans/下一阶段算法路线与对照实验.md)
 
 Continuous personal-history effects remain unverified. Backup/restore, migrations, account lifecycle and monitoring remain on the readiness plan. [Plan](docs/plans/长期陪伴记忆研究与实验计划书.md) · [Sources and licensing](assets/data-sources/README.md) · [AI instructions](AGENTS.md)
 

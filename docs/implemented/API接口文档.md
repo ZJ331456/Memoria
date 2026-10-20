@@ -450,3 +450,6 @@ memory-access、claim-views、memory-query、memory-answer接受可选session_id
 ## 独立记忆核心（2026-10-20）
 
 `POST /api/memory-kernel/sources`原生保存note/document/task_result，`GET /api/memory-kernel/sources/{domain}/{source_id}`按conversation/memory/library读取有效来源，`POST /api/memory-kernel/search`有界检索并返回类型、原文span、引用、依赖及完整JSON字符预算。个人状态仍使用既有Claim/双时间访问；三者均由正式登录选择账号，不允许请求体指定user_id。参数、独立Python用法和边界见[独立核心](独立记忆核心与多来源接口.md)。
+## 文本文件与跨资料形成（2026-10-20）
+
+新增`POST /api/library/import`（同`/api/memory-kernel/import`），原始二进制body、filename等query；支持TXT/Markdown/CSV/JSON/JSONL及Word DOCX文本，单文件1 MiB。新增原件下载、来源`/form`和`/observations`、观察`/consolidate`及`/consolidations`列表/停用。form接收start/max_chars/expected_revision_id，最多四条观察、一次独立核验，并在门槛满足时尝试一组巩固；状态和费用分阶段，不作免费或成功效果承诺。正式账号网关、同账号/工作范围、完整预算及发布前依赖继续生效。[完整参数、步骤与边界](文本解析与跨资料记忆形成.md)。

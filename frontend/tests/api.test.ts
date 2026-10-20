@@ -110,3 +110,13 @@ test('Markdown export follows owner checks and never releases a response after a
     assert.equal(cleared,true)
   } finally {globalThis.fetch=previous}
 })
+test('binary document uploads preserve bytes and reuse tenant response guards',async()=>{
+  const previous=globalThis.fetch
+  const file=new Blob(['工程原始文件'],{type:'text/plain'})
+  globalThis.fetch=async(_input,init)=>{
+    assert.equal(init?.body,file)
+    assert.deepEqual(init?.headers,{'Content-Type':'application/octet-stream'})
+    return new Response('{"id":"source"}',{status:201,headers:{'X-Memoria-User':'current-owner'}})
+  }
+  try{const api=new API();api.bindUser('current-owner');assert.deepEqual(await api.request('/library/import?filename=notes.txt',file,'POST'),{id:'source'})}finally{globalThis.fetch=previous}
+})

@@ -75,6 +75,7 @@ max_observations = 24
 retention_days = 90
 core_half_life_days = 45
 core_chars = 1200
+document_min_sources = 3 # 跨资料巩固的不同来源门槛（3–8），不把副本计作新增支持
 
 # 分层预算是字符上限（不是精确 token），适合本地单用户运行的调优起点。
 # 说明与来源：docs/implemented/记忆分层与配置.md。共享记忆仍独立使用空间权限。

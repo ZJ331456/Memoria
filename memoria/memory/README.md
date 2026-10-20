@@ -12,6 +12,9 @@
 
 | 文件 | 职责 |
 | --- | --- |
+| [document_parser.py](document_parser.py) | 有界TXT/Markdown/CSV/JSON/JSONL/DOCX文本解析、编码、行/段落/表格位置与明确限制 |
+| [file_source.py](file_source.py) | 当前账号原件BLOB/manifest/SHA、修订归属、下载与字符位置查询 |
+| [source_formation.py](source_formation.py) | 来源角色、分段观察/主体绑定/独立审核、跨资料完整支持组、期望版本演化与检索；[操作说明](../../docs/implemented/文本解析与跨资料记忆形成.md) |
 | [kernel.py](kernel.py) | 独立账号记忆核心、组件组装、原生资料/消息存取、跨来源预算读出与依赖复核；[契约](../../docs/implemented/独立记忆核心与多来源接口.md) |
 | [records.py](records.py) | MemorySearch/EvidenceRecord与类型/来源适配器，保留精确字符span |
 | [engine.py](engine.py) | 普通记忆写入、强化/替代/纠正、有效区间、词面/BM25/Dense/RRF 和图扩展 |

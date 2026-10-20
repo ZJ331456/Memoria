@@ -11,6 +11,7 @@ class FormationSettings:
     retention_days: int = 90
     core_half_life_days: int = 45
     core_chars: int = 1200
+    document_min_sources: int = 3
 
     @classmethod
     def from_dict(cls, data):
@@ -18,7 +19,7 @@ class FormationSettings:
             raise ValueError('Invalid memory.formation settings')
         limits = {'min_sources': (3, 16), 'min_sessions': (2, 16),
                   'max_observations': (3, 32), 'retention_days': (1, 3650),
-                  'core_half_life_days': (1, 3650), 'core_chars': (0, 4000)}
+                  'core_half_life_days': (1, 3650), 'core_chars': (0, 4000), 'document_min_sources': (3,8)}
         for key, value in data.items():
             if key == 'enabled':
                 if type(value) is not bool:

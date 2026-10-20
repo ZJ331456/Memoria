@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..memory.library import SourceInput, RevisionInput, FeedbackInput
+from ..memory.source_formation import FormRequest
 
 
 class SearchInput(BaseModel):
@@ -52,4 +53,33 @@ def library_router(library, kernel=None):
     async def distill(sid: str):
         return await library.distill(sid)
 
+    @router.post('/sources/{sid}/form')
+    async def form(sid: str,body: FormRequest):
+        return await library.formation.form(sid,body)
+
+    @router.get('/sources/{sid}/observations')
+    def observations(sid: str):
+        return library.formation.observations(sid)
+
+    @router.post('/observations/{oid}/consolidate')
+    async def consolidate(oid: str):
+        return await library.formation.consolidate(oid)
+
+    @router.get('/consolidations')
+    def consolidations(session_id: str | None=Query(default=None,min_length=1,max_length=64)):
+        if session_id is not None and not library.store.session(session_id):
+            from ..memory.library import LibraryError
+            raise LibraryError(404,'会话不存在')
+        return library.formation.list(session_id=session_id)
+
+    @router.post('/consolidations/{key}/retire')
+    def retire(key: str,body: Retirement):
+        return library.formation.retire(key,body.expected_revision_id,session_id=body.session_id)
+
     return router
+
+
+class Retirement(BaseModel):
+    model_config=ConfigDict(extra='forbid',strict=True)
+    expected_revision_id: str=Field(min_length=1,max_length=64)
+    session_id: str | None=Field(default=None,min_length=1,max_length=64)

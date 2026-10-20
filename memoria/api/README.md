@@ -8,6 +8,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
+| [document_import.py](document_import.py) | 账号网关后的二进制文本文件上传、原件下载与OpenAPI binary体说明，不按HTTP请求读取服务器路径 |
 | [memory_kernel.py](memory_kernel.py) | `/api/memory-kernel`原生资料保存、按类型读出与有界检索，不要求先发起Chat |
 | [library.py](library.py) | `/api/library`修订/历史/反馈/提炼/撤回；创建与核心共用实现 |
 | [gateway.py](gateway.py) | 注册/登录/退出、Cookie 或 Bearer 认证、按账号运行时、请求隐私边界、OpenAPI 和 `/studio/` 托管 |

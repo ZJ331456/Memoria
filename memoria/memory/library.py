@@ -125,6 +125,10 @@ class EvidenceLibrary:
                 statement += line
                 if sqlite3.complete_statement(statement):
                     store.db.execute(statement); statement = ''
+        from .file_source import FileSources
+        self.files = FileSources(self)
+        from .source_formation import SourceFormation
+        self.formation = SourceFormation(self)
 
     def _source(self, sid, *, active=True):
         row = self.store.db.execute('SELECT * FROM library_sources WHERE id=?', (sid,)).fetchone()
@@ -200,6 +204,8 @@ class EvidenceLibrary:
             if source['head_id'] != body.expected_revision_id:
                 raise LibraryError(409, '反馈必须绑定当前资料版本')
             if not body.content.strip(): raise LibraryError(422,'反馈不能为空')
+            current=self._feedback(source['head_id'])
+            if current and (current['outcome'],current['content'])==(body.outcome,body.content):return current
             fid=uuid.uuid4().hex
             self.store.db.execute('INSERT INTO library_feedback VALUES(?,?,?,?,?)',
                 (fid,source['head_id'],body.outcome,body.content,now()))
@@ -219,15 +225,17 @@ class EvidenceLibrary:
             cards=[dict(r) for r in self.store.db.execute('SELECT * FROM library_cards WHERE revision_id=?',(source['head_id'],))]
             feedback=self._feedback(source['head_id'])
             for card in cards:
-                card['available']=card['status']=='approved' and card['feedback_id']==(feedback['id'] if feedback else None)
-            return {**source,'revision':self._revision(source['head_id']),'versions':versions,'feedback':feedback,'cards':cards}
+                card['available']=card['status']=='approved' and card['feedback_id']==(feedback['id'] if feedback else None) and self.formation.card_available(card['id'])
+                card.update(self.formation.card_provenance(card['id']))
+            return {**source,'revision':self._revision(source['head_id']),'versions':versions,'feedback':feedback,'cards':cards,
+                    'file':self.files.manifest(source['head_id'])}
 
     def version(self, sid, rid):
         with self.store.lock:
             source=self._source(sid)
             revision=self._revision(rid)
             if revision['source_id']!=sid:raise LibraryError(404,'版本不属于该资料')
-            return {**revision,'is_current':source['head_id']==rid}
+            return {**revision,'is_current':source['head_id']==rid,'file':self.files.manifest(rid)}
 
     def search(self, query, *, session_id=None, limit=5, budget=4000, chunks_per_source=1):
         if not 1<=limit<=8 or not 800<=budget<=8000 or not 1<=len(query)<=2000:
@@ -250,17 +258,26 @@ class EvidenceLibrary:
                 if seen.get(item['source_id'],0)>=chunks_per_source or digest(self._revision(item['revision_id'])['content'])!=item['sha']:continue
                 feedback=self._feedback(item['revision_id'])
                 fid=feedback['id'] if feedback else None
-                cards=[dict(c) for c in self.store.db.execute('''SELECT content,applicability,quote,feedback_quote
-                    FROM library_cards WHERE revision_id=? AND feedback_id IS ? AND status='approved' LIMIT 2''',(item['revision_id'],fid))]
+                cards=[dict(c) for c in self.store.db.execute('''SELECT id,content,applicability,quote,start,end,feedback_quote
+                    FROM library_cards WHERE revision_id=? AND feedback_id IS ? AND status='approved' ORDER BY rowid DESC LIMIT 16''',(item['revision_id'],fid))]
+                cards=[c for c in cards if self.formation.card_available(c['id'])]
+                query_terms=set(tokens)
+                cards.sort(key=lambda c:len(query_terms & set(token_sequence(c['content']+' '+c['quote']))),reverse=True)
+                cards=cards[:2]
                 # Preserve both sides of a task lesson, rather than presenting a recommendation alone.
-                for card in cards:card['reported_outcome']=feedback['outcome'] if feedback else None
+                for card in cards:
+                    card['reported_outcome']=feedback['outcome'] if feedback else None
+                    card['citation']=f"[library:{item['revision_id']}:{card['start']}:{card['end']}]"
+                    card.update(self.formation.card_provenance(card['id']))
                 cost=len(item['quote'])+len(json.dumps(cards,ensure_ascii=False))
                 if used+cost>budget:cards=[];cost=len(item['quote'])
                 if used+cost>budget:continue
                 seen[item['source_id']]=seen.get(item['source_id'],0)+1;used+=cost
                 item['knowledge_cards']=cards
+                item['file_location']=self.files.locations(item['revision_id'],item['start'],item['end'])
                 item['citation']='[library:'+item['revision_id']+':'+str(item['start'])+':'+str(item['end'])+']'
                 item['dependency']={'dependency_type':'library','id':item['source_id'],'revision_id':item['revision_id'],'sha':item['sha'],'feedback_id':fid}
+                if cards:item['dependency']['card_ids']=[c['id'] for c in cards]
                 result.append(item)
                 if len(result)>=limit:break
             return result
@@ -270,8 +287,16 @@ class EvidenceLibrary:
             try:
                 source=self._source(dependency['id'])
                 feedback=self._feedback(source['head_id'])
-                return (source['head_id']==dependency['revision_id'] and self._revision(source['head_id'])['sha']==dependency['sha']
-                    and (feedback['id'] if feedback else None)==dependency.get('feedback_id'))
+                if not (source['head_id']==dependency['revision_id'] and self._revision(source['head_id'])['sha']==dependency['sha']
+                    and (feedback['id'] if feedback else None)==dependency.get('feedback_id')):return False
+                ids=dependency.get('card_ids',[])
+                if not isinstance(ids,list) or len(ids)>2 or any(not isinstance(cid,str) for cid in ids):return False
+                for cid in ids:
+                    card=self.store.db.execute('SELECT * FROM library_cards WHERE id=?',(cid,)).fetchone()
+                    if (not card or card['status']!='approved' or card['revision_id']!=source['head_id']
+                        or card['feedback_id']!=(feedback['id'] if feedback else None)
+                        or not self.formation.card_available(cid)):return False
+                return True
             except (LibraryError,KeyError):return False
 
     async def _call(self, rid, stage, messages, maximum):

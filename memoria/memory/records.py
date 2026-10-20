@@ -110,7 +110,11 @@ class SourceReaders:
 
     @staticmethod
     def library_hit(item: dict):
+        if item.get('representation')=='consolidated_memory':
+            return EvidenceRecord('library',item['source_id'],'consolidated_memory',item['quote'],0,len(item['quote']),
+                item['citation'],{'group':item['group'],'applicability':item['applicability'],
+                    'support':item['support'],'independence':item['independence'],'revision_id':item['revision_id']},item['dependency'])
         return EvidenceRecord('library', item['source_id'], 'source_quote', item['quote'], item['start'], item['end'],
             item['citation'], {'kind': item['kind'], 'title': item['title'], 'authorship': item['authorship'],
                 'scope': item['scope'], 'revision_id': item['revision_id'], 'sha': item['sha'],
-                'knowledge_cards': item['knowledge_cards']}, item['dependency'])
+                'knowledge_cards': item['knowledge_cards'], 'file_location': item.get('file_location')}, item['dependency'])
