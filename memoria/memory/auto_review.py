@@ -13,7 +13,7 @@ from ..store import now
 from .evidence_verifier import EvidenceVerifier, THIRD_PARTY, CONDITIONAL, PLAN, NEGATIVE
 from .claim_normalizer import preference_desire, aliases
 
-VERSION = 'memory-auto-review-v2'
+VERSION = 'memory-auto-review-v3'
 ALIAS_BLOCKER = 'value_not_literal; semantic_or_alias_review_required'
 SECRET = re.compile(r'sk-[A-Za-z0-9_-]{16,}|(?:app[_ ]?secret|api[_ ]?key|密码|口令|验证码|私钥)\s*[:：=]\s*\S+',re.I)
 SENSITIVE = re.compile(r'病史|确诊|诊断|便秘|抑郁|过敏|药物|服药|身份证|银行卡|手机号|家庭住址|投资账户|medical|diagnos|password|secret|private key',re.I)
@@ -52,6 +52,7 @@ Supported必须同时支持候选全文及可选claim的主体、属性和值；
 claim可选，仅在原话明确表达一个简单的本人无条件当前状态时填写{"predicate":"槽位","value":"短值","polarity":"positive|negative"}。
 槽位限residence,occupation,school,response_language,response_detail,diet,work_habit,hobby,learning_goal,project_goal,time_preference,budget。
 英文语言名称等可以规范化；不要把整句话塞入value。需要条件/时间或多个值时claim=null并review，绝不补造事件日期。
+polarity=negative时value只写被否定的对象，如“不喝咖啡”应为value="咖啡",polarity="negative"，不要把否定动词重复放入value。
 没有合适的12类槽位仍可保存普通记忆，claim=null不代表记忆无效。
 输入如有formation=pattern，source是多个带message_id的原话；仅可核验有“近期多次/这些对话中”等边界的推断，不能批准永久爱好/人格或疾病推断。
 模式必须claim=null；evidence_quote可为空，另返回supporting_quotes:[{"message_id":"提供的原话ID","quote":"该原话中唯一的原样证据"}]，覆盖每一条提供的原话。不能仅凭重复次数自动accept。'''
@@ -165,7 +166,12 @@ class AutoMemoryReviewer:
                         reasons.append('complete_pattern_evidence_not_verified')
                     if verdict.claim is not None:reasons.append('inferred_pattern_cannot_become_claim')
                 elif not quote or source['content'].count(quote)!=1:reasons.append('quote_not_unique_or_missing')
-                if reasons:
+                # A review decision may be Supported precisely because an old state
+                # conflicts. Record a hold, never approve it or keep serving the old
+                # state as uncontested merely because the model declined acceptance.
+                supported_review = (verdict.decision=='review' and verdict.assessment=='Supported'
+                    and reasons==['insufficient_support'] and verdict.claim is not None)
+                if reasons and not supported_review:
                     report['reason_codes']=reasons;return self.finish(row,report,key)
                 at=source['content'].index(quote) if quote else 0
                 evidence={'message_id':row['source_ref'],'start':at,'end':at+len(quote),'quote':quote,'content_sha256':sha(source['content'])}
@@ -178,6 +184,12 @@ class AutoMemoryReviewer:
                     hard=[b for b in rules['blockers'] if b!=ALIAS_BLOCKER]
                     if hard:
                         report['reason_codes']=hard;return self.finish(row,report,key)
+                if supported_review:
+                    with self.store._memory_transaction():
+                        self.assert_current(row,key)
+                        self.conflict_proposal(row,report,draft,evidence)
+                    report['reason_codes']=['existing_state_requires_revision' if report.get('structured_proposal') else 'model_requested_review']
+                    return self.finish(row,report,key)
                 report.update(decision='accept',reason_codes=['model_supported_low_risk'],semantic_judgment='model_NLI_not_world_verification')
                 vector=chunks=None
                 namespace=self.store.embedding_namespace
@@ -241,6 +253,19 @@ class AutoMemoryReviewer:
                     'existing_state_requires_revision' if isinstance(exc,ClaimError) and 'existing_state_requires_revision' in str(exc)
                     else 'source_or_candidate_changed' if isinstance(exc,ClaimError) else 'model_or_publish_failed'])
                 return self.finish(row,report,key,allow_changed=True)
+
+    def conflict_proposal(self,row,report,draft,evidence):
+        if draft is None or SLOTS[draft.predicate]:return
+        for root in self.store.db.execute('SELECT id FROM claim_roots WHERE user_id=? AND subject_id=? AND predicate=? AND scope_json=?',
+            (self.claims.user_id,draft.subject_id,draft.predicate,canonical(draft.scope))).fetchall():
+            old=self.claims.get(root['id'])
+            same=bool(set(aliases(draft.predicate,draft.value))&set(aliases(draft.predicate,old['value']))) and draft.polarity==old['polarity']
+            if old['status']=='approved' and old.get('source_available') and not same:
+                report['structured_proposal']={'action':'revision_review','automatic_approval':False,
+                    'target_claim_id':old['id'],'expected_revision':old['revision'],'expected_revision_id':old['revision_id'],
+                    'subject_id':draft.subject_id,'predicate':draft.predicate,'scope':draft.scope,'value':draft.value,
+                    'polarity':draft.polarity,'evidence':[evidence],'candidate_sha256':sha(row['content']),'fact_time':'unknown'}
+                return
 
     def assert_current(self,row,key):
         current=self.store.memory_review(row['id'])

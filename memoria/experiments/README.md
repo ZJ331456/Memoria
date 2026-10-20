@@ -85,3 +85,5 @@ v3工程协议单独登记[配置](../../eval/protocols/research-locomo-risk-v3-
 [micro_budget.py](micro_budget.py)提供budget-micro：固定官方前两题，默认四策略×三字节预算零推理，显式Reader最多4次、输出512/请求12000字节、0重试/回退；失败保留分母和未知usage。[实际诊断与边界](../../docs/implemented/生产重放与普通来源支持.md#5-两题同预算诊断与硬调用上限)。
 
 production_replay的`prepare-memory-probe`准备固定单角色LoCoMo原文，接原closed-loop实际执行形成/审核/Claim/View/Reader与撤回；默认准备/验证0调用，显式执行另受调用预算约束。v1普通记忆与v2 Claim两轮共6次真模型调用/4829 tokens，原始记录和后验AI标注留私有空间，不是新的LoCoMo评分。统计区分状态查询尝试、选入Claim修订、编译View与热命中；合理非回答只有显式后验标签才标正确。[命令、结果与限制](../../docs/implemented/生产记忆闭环与逐题归因.md#claim与view真实调用补测2026-10-20)。
+
+[simulation.py](simulation.py)提供用户授权的虚构功能验收，复用production_replay原生产组件，显式synthetic_functional及专用输出隔离、全调用上限、后验断言/失败分母、冻结SHA与跨版本累计报告；真实LLM、离线BGE和工程替身分层，不进入正式研究成绩。[输入与命令](../../simulation/README.md)。

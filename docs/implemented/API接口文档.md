@@ -455,3 +455,5 @@ memory-access、claim-views、memory-query、memory-answer接受可选session_id
 ## 文本文件与跨资料形成（2026-10-20）
 
 新增`POST /api/library/import`（同`/api/memory-kernel/import`），原始二进制body、filename等query；支持TXT/Markdown/CSV/JSON/JSONL及Word DOCX文本，单文件1 MiB。新增原件下载、来源`/form`和`/observations`、观察`/consolidate`及`/consolidations`列表/停用。form接收start/max_chars/expected_revision_id，最多四条观察、一次独立核验，并在门槛满足时尝试一组巩固；状态和费用分阶段，不作免费或成功效果承诺。正式账号网关、同账号/工作范围、完整预算及发布前依赖继续生效。[完整参数、步骤与边界](文本解析与跨资料记忆形成.md)。
+
+2026-10-20：原结构化AccessRequest新增可选`constraints_only: bool=false`，用于明确读取负向约束；例如`{"predicates":["diet"],"constraints_only":true}`。自然语言统一入口按“忌口”等明确问法推导，不允许用仅有否定事实回答未知肯定状态；Reader重验保持同一意图，详见[条件视图](Claim条件视图与访问路由.md#显式否定约束查询2026-10-20)。

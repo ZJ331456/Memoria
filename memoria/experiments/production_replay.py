@@ -254,10 +254,12 @@ def attribute_closed_loop_file(workspace,settings,source_run,judgments_path):
 
 
 async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allow_remote=False,
-                              max_calls=12,max_input_chars=120000,local_embeddings=False,client_factory=None):
+                              max_calls=12,max_input_chars=120000,local_embeddings=False,client_factory=None,
+                              synthetic=False,output_root=None):
     """Re-execute actual Kernel/worker/admission/Reader on a new DB, never copy production history.
 
-    No gold, manual approval, invented personas, fabricated dates or alternate PrefixRetriever.
+    No gold, manual approval or alternate PrefixRetriever. Explicit synthetic functional
+    diagnostics use a labelled, separate output root and never become research scores.
     Model-dependent runs retain errors and unexecuted questions in the denominator.
     """
     import copy,time
@@ -270,6 +272,15 @@ async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allo
     input_path=Path(input_path)
     if input_path.stat().st_size>1048576:raise ValueError('Closed-loop input exceeds 1 MiB')
     document=ClosedLoopInput.model_validate_json(input_path.read_text(encoding='utf-8-sig'))
+    if type(synthetic) is not bool:raise ValueError('Synthetic marker must be boolean')
+    if synthetic:
+        if not document.provenance.startswith('[SYNTHETIC]') or (document.subject_key and not document.subject_key.startswith('synthetic:')):
+            raise ValueError('Synthetic diagnostics require explicit provenance and synthetic subject binding')
+        output_root=Path(output_root or settings.root/'simulation/runs').resolve()
+        expected_root=settings.root.resolve()/'simulation/runs'
+        if (settings.root/'simulation/runs').resolve()!=expected_root or not output_root.is_relative_to(expected_root):
+            raise ValueError('Synthetic outputs must stay in simulation/runs')
+    elif output_root is not None:raise ValueError('Custom output is only permitted for isolated synthetic diagnostics')
     if type(max_calls) is not int or not 1<=max_calls<=32:raise ValueError('Use 1..32 model calls')
     if type(max_input_chars) is not int or not 1000<=max_input_chars<=500000:raise ValueError('Input ceiling must be 1000..500000 characters')
     if not execute:return {'status':'validated_not_executed','model_calls':0,'questions':sum(isinstance(s,QuestionStep) for s in document.events)}
@@ -286,11 +297,12 @@ async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allo
     else:
         from ..config import ModelConfig
         configured.embedding=ModelConfig(model='',api_key='',base_url='')
-    recorder=RunRecorder(workspace.path('experiments'),settings.root,datasets=[input_path],models={
+    recorder=RunRecorder(output_root if synthetic else workspace.path('experiments'),settings.root,datasets=[input_path],models={
         'main':{'model':configured.main.model,'thinking':configured.main.thinking,'max_tokens':1800},
         'fast':{'model':configured.fast.model,'thinking':configured.fast.thinking,'max_tokens':1800},
         'embedding':{'model':configured.embedding.model if local_embeddings else None}},
-        protocol={'owner_user_id':workspace.owner,'mode':'production_closed_loop_v1','max_calls':max_calls,
+        protocol={'owner_user_id':workspace.owner,'mode':'synthetic_functional_v1' if synthetic else 'production_closed_loop_v1','max_calls':max_calls,
+            'data_kind':'synthetic_functional' if synthetic else 'declared_source',
             'max_input_chars':max_input_chars,'max_output_tokens_per_call':1800,'max_retries':0,
             'retrieval_profile':'configured_local_embedding' if local_embeddings else 'explicit_lexical_no_embedding',
             'source_binding':'declared isolated subject; not independently verified','subject_key':document.subject_key,
@@ -427,7 +439,7 @@ async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allo
             'errors':len(failure_events),'source_event_errors':event_errors,
             'failed_model_calls':len(failed_calls),'incomplete_model_calls':len(incomplete_calls),
             'model_calls':len(calls),'known_total_tokens_lower_bound':known,'unknown_usage_calls':sum(n is None for n in totals),
-            'input_chars':used_chars,'blocked_call_attempts':len(blocked),'quality':'unscored','gold_read':False,'production_writes':0,
+            'input_chars':used_chars,'blocked_call_attempts':len(blocked),'quality':'synthetic_functional_not_research' if synthetic else 'unscored','gold_read':False,'production_writes':0,
             'structured_state_attempts':sum(c.get('result',{}).get('access',{}).get('state') is not None for c in cases),
             'claim_view_questions':sum(any(item.get('claim_revisions') for item in
                 c.get('result',{}).get('closed_loop',{}).get('selected',[])) for c in cases),

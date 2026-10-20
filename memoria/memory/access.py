@@ -17,6 +17,10 @@ from .evidence import EvidenceBudget, requirements_for
 from .evidence.requirements import coverage
 
 
+def is_constraint_query(query):
+    return bool(re.search(r'忌口|饮食禁忌|不(?:吃|喝|喜欢|爱)什么|不能吃什么',query))
+
+
 def infer_query(text: str) -> QueryRequest | None:
     """Route recall of personal facts, not advice merely mentioning a known slot.
 
@@ -205,6 +209,7 @@ class MemoryAccessOrchestrator:
             if parsed["predicates"] and state_mode:
                 args = AccessRequest(subject_id=request.subject_id, predicates=parsed["predicates"], context=parsed["context"],
                                      session_id=request.session_id,
+                                     constraints_only=is_constraint_query(request.query),
                                      scope_mode=parsed["scope_mode"],
                                      fact_as_of=request.fact_as_of, recorded_as_of=request.recorded_as_of,
                                      intent="history" if explicit_time else "current",

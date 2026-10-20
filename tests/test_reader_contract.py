@@ -74,6 +74,18 @@ def valid_response(guard):
     return ChatResult(content=json.dumps({'status':'answer','answer':'临时工程回答','evidence_ids':[k for k,v in guard.catalog.items() if v['eligible']]},ensure_ascii=False))
 
 
+def test_negative_constraint_read_keeps_the_same_intent_during_reader_revalidation(core):
+    approved(core,value='咖啡',predicate='diet',polarity='negative')
+    guard,messages=guard_for(core,query='我的饮食忌口是什么？')
+    assert guard.access['path']=='retrieve' and guard.access['state']['payload']['complete']
+    assert guard.freshness() is None
+    answer=guard.validate(valid_response(guard),messages)
+    assert answer['validation']['valid'] and answer['status']=='answer'
+    _,service,_,_=core
+    positive=asyncio.run(service.kernel.access(QueryRequest(query='我的饮食是什么？')))
+    assert positive['path']=='clarify'
+
+
 @pytest.mark.parametrize('reject_at',[None,'gate','support','revoked','provider'])
 def test_opt_in_quoted_risk_keeps_approval_freshness_and_no_rejected_answer(core,reject_at):
     claim=approved(core)

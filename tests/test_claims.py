@@ -341,6 +341,16 @@ def test_negative_constraint_does_not_answer_unknown_positive_value(core):
     assert result["payload"]["claims"][0]["polarity"]=="negative"
 
 
+def test_explicit_constraint_query_can_read_negative_diet_without_answering_positive_state(core):
+    approve(core,create(core,'咖啡',predicate='diet',polarity='negative'))
+    result=core[1].access(AccessRequest(predicates=['diet'],constraints_only=True))
+    assert result['payload']['complete'] and result['path']=='retrieve'
+    hot=core[1].access(AccessRequest(predicates=['diet'],constraints_only=True))
+    assert hot['path']=='view'
+    unknown_positive=core[1].access(AccessRequest(predicates=['diet']))
+    assert unknown_positive['path']=='clarify'
+
+
 def test_extraction_creates_only_pending_source_located_candidates(core):
     from memoria.llm import ChatResult
     store,memory,sid=core

@@ -178,6 +178,25 @@ def test_same_state_does_not_require_human_or_create_duplicate_claim(env):
     assert len(store.memories())==1 and len(service.claims.list())==1
 
 
+@pytest.mark.parametrize('assessment',['Supported','Insufficient'])
+def test_model_review_of_new_state_holds_only_verified_conflict(env,assessment):
+    from memoria.memory.access import QueryRequest
+    _,_,store,service=env
+    source,first=candidate(store);model(service,source['content'])
+    asyncio.run(service.auto_review.review(first['id']))
+    source,row=candidate(store,'我通常用英文交流。','用户通常用英文交流')
+    model(service,source['content'],changes={'decision':'review','assessment':assessment,
+        'claim':{'predicate':'response_language','value':'English','polarity':'positive'}})
+    reviewed=asyncio.run(service.auto_review.review(row['id']))
+    access=asyncio.run(service.kernel.access(QueryRequest(query='我的回答语言是什么？')))
+    assert reviewed['status']=='pending' and len(store.memories())==1
+    if assessment=='Supported':
+        assert reviewed['assessment']['structured_proposal']['automatic_approval'] is False
+        assert access['path']=='clarify' and access['pending_revisions'][0]['source_ref']==source['id']
+    else:
+        assert 'structured_proposal' not in reviewed['assessment'] and not access.get('pending_revisions')
+
+
 def test_historical_extraction_retries_empty_once_preserving_receipt(env):
     _,client,store,_=env
     source,_=candidate(store)

@@ -159,6 +159,7 @@ class AccessRequest(Strict):
     fact_as_of: str | None = None
     recorded_as_of: str | None = None
     budget_chars: int = Field(default=6000, ge=256, le=16000, strict=True)
+    constraints_only: bool = Field(default=False, strict=True)
 
     _conditions = field_validator("context")(conditions)
     _times = field_validator("fact_as_of", "recorded_as_of")(timestamp)
@@ -772,7 +773,12 @@ class ClaimMemory:
             if conflict:
                 missing.append({"predicate":predicate,"reason":"conflicting_assertions"})
                 continue
-            if all(item["polarity"]=="negative" for item in items):
+            if request.constraints_only:
+                items = [item for item in items if item['polarity']=='negative']
+                if not items:
+                    missing.append({'predicate':predicate,'reason':'no_approved_negative_constraint'})
+                    continue
+            if not request.constraints_only and all(item["polarity"]=="negative" for item in items):
                 missing.append({"predicate":predicate,"reason":"negative_constraints_only"})
             selected.extend(items)
         payload = {"claims":selected,"missing":missing,"complete":not missing,"evidence_unit":"source_message_span",

@@ -95,3 +95,5 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 `render_project_diagrams.py`重绘根assets/images内的英文架构PNG/字体轮廓化SVG，保留已选定的ImageGen海报PNG并封装嵌入位图的SVG，更新四幅产物、提示词和实现来源的指纹；`--check`核对指纹。它不会重新调用ImageGen或覆盖海报PNG。`render_locomo_risk_chart.py --check`校验当前全量聚合与图表，`render_eval_charts.py --check`校验LCCC保留图。三个本地渲染器不读取私有原话或调用模型；海报的独立创意生成与素材类型见[assets](../assets/README.md)。旧基线单独绘图脚本随重复结果移除。
 
 [config](../config/README.md)按system/models/feishu/mcp各自统一，实际文件忽略、example公开，无local目录；冻结研究登记在eval/protocols。protect_local_data.ps1默认保护data及config，其他自定义私密路径需显式-Directory。详见[配置目录与模型后端](../docs/implemented/配置目录与模型后端.md)。
+
+`test_memory_scenarios.py --user USER`默认0调用验证用户授权的[模拟场景](../simulation/README.md)；显式执行受总调用/字符上限约束，支持指定场景复测、仅进程直连、真实离线BGE和零调用累计清单。全部输出在忽略的simulation/runs，不写生产库、不作为研究成绩。
