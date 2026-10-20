@@ -35,7 +35,7 @@ def main():
         print(json.dumps(summarize_runs(settings.root),ensure_ascii=False));return
     if args.offline_retrieval:
         result=asyncio.run(offline_retrieval(workspace,settings)) if args.execute else {'status':'validated_not_executed','model_calls':0}
-        print(json.dumps(result,ensure_ascii=False));return
+        print(json.dumps(result,ensure_ascii=False));return 0 if not args.execute or result.get('passed') else 1
     previous={k:os.environ.get(k) for k in ('NO_PROXY','no_proxy')}
     hosts=[]
     try:
@@ -54,7 +54,11 @@ def main():
             if value is None:os.environ.pop(key,None)
             else:os.environ[key]=value
     print(json.dumps(result, ensure_ascii=False))
+    if args.execute:
+        return 0 if (result.get('acceptance_passed') if args.only is None else
+            result.get('question_outcomes')=={'passed':result.get('questions')} and not result.get('blocked_calls')) else 1
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

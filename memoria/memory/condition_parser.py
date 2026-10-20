@@ -10,7 +10,7 @@ RULES = [(r"面试模拟|模拟面试|面试时|面试的时候|面试中", {"ac
          (r"在家时|在家期间", {"location": "home"}),
          (r"在办公室时|在办公室期间", {"location": "office"})]
 DEFAULT = re.compile(r"平时|默认|通常情况下|一般情况下")
-UNSUPPORTED = re.compile(r"如果|除非|只要|只有|当.{1,20}时|期间|的时候|\b(?:if|unless|only when|when)\b", re.I)
+UNSUPPORTED = re.compile(r"如果|假如|假设|倘若|要是|一旦|除非|只要|只有|仅在|周末|工作日|平日|早上|晚上|周[一二三四五六日天]|当.{1,20}时|期间|的时候|\b(?:if|unless|only when|when|weekends?|weekdays?|at night)\b", re.I)
 
 
 @dataclass
@@ -23,6 +23,13 @@ class Clause:
 
 
 class ConditionParser:
+    def context(self, text, spans=None):
+        """Source-only finite hints; neither labels nor independently verified truth."""
+        return [{'quote':text[c.start:c.end], 'start':c.start, 'end':c.end,
+                 'scope':c.scope, 'ambiguous':c.ambiguous,
+                 'condition_quote':text[c.binding[0]:c.binding[1]] if c.binding else ''}
+                for c in self.clauses(text) if spans is None or any(a<c.end and c.start<b for a,b in spans)]
+
     def clauses(self, text):
         active, binding, ambiguous, result = {}, None, False, []
         for match in re.finditer(r"[^，,。；;！？!?\n]+", text):
@@ -31,9 +38,14 @@ class ConditionParser:
             default = DEFAULT.search(part)
             if markers or default:
                 active = {}
-                ambiguous = bool(default and markers)
+                # A known scene does not discharge an earlier unknown premise:
+                # "if the client agrees, during the interview ..." still has IF.
+                # Only a sentence boundary ends that unresolved conjunction.
+                ambiguous = ambiguous or bool(default and markers)
                 positions = []
                 for marker, scope in markers:
+                    if re.search(r'(?:不|非)(?:在|是|处于)?$', part[:marker.start()]):
+                        ambiguous = True  # A negated scene is not the positive scene.
                     for key, value in scope.items():
                         if key in active and active[key] != value:
                             ambiguous = True

@@ -63,6 +63,19 @@ def test_functional_assertions_reject_unknown_operators():
         simulation.check_observation({}, {'python_expression':'not executable'})
 
 
+@pytest.mark.parametrize('change',[
+    {'acceptance_scope':'partial_diagnostic'}, {'core_unchanged':False},
+    {'question_outcomes':{'passed':1,'capability_gap':1}},
+    {'case_execution_errors':1}, {'blocked_calls':1}, {'questions':0},
+])
+def test_full_acceptance_rejects_incomplete_or_different_code(change):
+    result={'acceptance_scope':'complete_current_suite','core_unchanged':True,'questions':2,
+        'question_outcomes':{'passed':2},'case_execution_errors':0,'blocked_calls':0}
+    assert simulation.acceptance_passed(result)
+    result.update(change)
+    assert not simulation.acceptance_passed(result)
+
+
 def test_full_synthetic_suite_uses_isolated_root_and_posthoc_assertions(environment,monkeypatch):
     workspace,settings,tmp=environment;settings.root=tmp
     folder=tmp/'simulation';folder.mkdir()

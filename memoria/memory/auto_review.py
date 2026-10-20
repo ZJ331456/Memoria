@@ -8,12 +8,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..claims import ClaimDraft, ClaimDecision, ClaimError, SLOTS, canonical, sha
+from ..claims import ClaimDraft, ClaimDecision, ClaimRevision, ClaimError, SLOTS, canonical, sha
 from ..store import now
 from .evidence_verifier import EvidenceVerifier, THIRD_PARTY, CONDITIONAL, PLAN, NEGATIVE
 from .claim_normalizer import preference_desire, aliases
 
-VERSION = 'memory-auto-review-v3'
+VERSION = 'memory-auto-review-v4-conditions-support'
 ALIAS_BLOCKER = 'value_not_literal; semantic_or_alias_review_required'
 SECRET = re.compile(r'sk-[A-Za-z0-9_-]{16,}|(?:app[_ ]?secret|api[_ ]?key|密码|口令|验证码|私钥)\s*[:：=]\s*\S+',re.I)
 SENSITIVE = re.compile(r'病史|确诊|诊断|便秘|抑郁|过敏|药物|服药|身份证|银行卡|手机号|家庭住址|投资账户|medical|diagnos|password|secret|private key',re.I)
@@ -26,6 +26,7 @@ class TypedState(BaseModel):
     predicate: str
     value: str = Field(min_length=1,max_length=500)
     polarity: Literal['positive','negative'] = 'positive'
+    scope: dict = Field(default_factory=dict)
 
 
 class Verdict(BaseModel):
@@ -49,9 +50,13 @@ PROMPT = '''你是长期记忆的证据审核员。输入原话、候选和既�
 只返回JSON，字段必须齐全：
 {"decision":"accept|review|reject","assessment":"Supported|Contradicted|Insufficient","durable":true,"self_related":true,"conditions_preserved":true,"time_supported":true,"sensitive":false,"evidence_quote":"原话中唯一出现的原样片段","claim":null}
 Supported必须同时支持候选全文及可选claim的主体、属性和值；不是可信度打分，也不是现实核验。
-claim可选，仅在原话明确表达一个简单的本人无条件当前状态时填写{"predicate":"槽位","value":"短值","polarity":"positive|negative"}。
+claim可选，原话明确表达本人当前状态时填写{"predicate":"槽位","value":"短值","polarity":"positive|negative","scope":{}}。
 槽位限residence,occupation,school,response_language,response_detail,diet,work_habit,hobby,learning_goal,project_goal,time_preference,budget。
-英文语言名称等可以规范化；不要把整句话塞入value。需要条件/时间或多个值时claim=null并review，绝不补造事件日期。
+英文语言名称等可以规范化；不要把整句话塞入value。一次只核对candidate及其observation，不把同一原话中其他事实填入本候选。
+可自动批准的条件限：面试activity=interview、工作work、学习study、旅行travel=true、在家location=home、在办公室location=office；可组合，默认/平时scope={}。
+逗号、而且后的省略句继承前一分句条件，平时/默认重置，句号结束继承。必须将适用条件准确写入claim.scope并核对candidate；例如“平时中文，面试英文，而且简洁”分别是默认中文、面试英文、面试简洁。
+本次会话的临时条件还需temporary=true，只有明确“本次会话/这次对话”才能自动发布；不得为“暂时/这次面试”补造会话或TTL。未知条件、事实时间或多个无法拆分的值仍review，绝不补造事件日期。
+同值的独立自述是支持强化，可以accept；不同值的单值状态冲突才review。
 polarity=negative时value只写被否定的对象，如“不喝咖啡”应为value="咖啡",polarity="negative"，不要把否定动词重复放入value。
 没有合适的12类槽位仍可保存普通记忆，claim=null不代表记忆无效。
 输入如有formation=pattern，source是多个带message_id的原话；仅可核验有“近期多次/这些对话中”等边界的推断，不能批准永久爱好/人格或疾病推断。
@@ -127,8 +132,13 @@ class AutoMemoryReviewer:
                 existing=self.store.keyword_memory_candidates(row['content'],limit=8)
                 formation_context = source.get('formation_context')
                 is_pattern = bool(formation_context and formation_context['pattern'])
+                from .condition_parser import ConditionParser
                 payload={'source':source['content'],'candidate':{k:row[k] for k in ('content','kind','importance')},
                          'formation': 'pattern' if is_pattern else 'direct_assertion',
+                         'observations': [{k:o[k] for k in ('content','quote','scope','polarity')}
+                             for o in (formation_context or {}).get('observations',[])],
+                         'condition_clauses': [] if is_pattern else ConditionParser().context(source['content'],
+                             [(o['start'],o['end']) for o in formation_context['observations']] if formation_context else None),
                          'existing':[{'content':m['content'],'kind':m['kind']} for m in existing]}
                 report['model_called']=True
                 report['reviewer']='llm'
@@ -151,8 +161,11 @@ class AutoMemoryReviewer:
                 if not verdict.time_supported:reasons.append('time_uncertain')
                 if verdict.sensitive or SENSITIVE.search(text):reasons.append('sensitive_personal_fact')
                 if THIRD_PARTY.search(source['content']):reasons.append('third_party_or_mixed_subject')
-                if CONDITIONAL.search(source['content']):reasons.append('complex_condition')
-                if CONTEXT.search(source['content']):reasons.append('complex_condition')
+                # Conditional admission is source-bound per candidate below. A
+                # whole-message flag must not suppress an independently verified
+                # default preference just because another clause has an exception.
+                if verdict.claim is None and (CONDITIONAL.search(source['content']) or CONTEXT.search(source['content'])):
+                    reasons.append('complex_condition')
                 if TEMPORAL.search(source['content']):reasons.append('temporal_or_transition_requires_review')
                 if PLAN.search(source['content']) and not preference_desire(verdict.claim.predicate if verdict.claim else '',source['content']):reasons.append('plan_or_hypothesis')
                 if NEGATIVE.search(source['content']) and verdict.claim is None:reasons.append('unbound_negation')
@@ -166,6 +179,13 @@ class AutoMemoryReviewer:
                         reasons.append('complete_pattern_evidence_not_verified')
                     if verdict.claim is not None:reasons.append('inferred_pattern_cannot_become_claim')
                 elif not quote or source['content'].count(quote)!=1:reasons.append('quote_not_unique_or_missing')
+                draft=None
+                if verdict.claim and quote and source['content'].count(quote)==1:
+                    try:
+                        draft, binding = self.bind_assertion(row, source, verdict, selected.model)
+                        report['condition_binding'] = binding
+                    except (ValueError, ClaimError):
+                        reasons.append('complex_condition_or_candidate_binding')
                 # A review decision may be Supported precisely because an old state
                 # conflicts. Record a hold, never approve it or keep serving the old
                 # state as uncontested merely because the model declined acceptance.
@@ -175,10 +195,7 @@ class AutoMemoryReviewer:
                     report['reason_codes']=reasons;return self.finish(row,report,key)
                 at=source['content'].index(quote) if quote else 0
                 evidence={'message_id':row['source_ref'],'start':at,'end':at+len(quote),'quote':quote,'content_sha256':sha(source['content'])}
-                draft=None
-                if verdict.claim:
-                    draft=ClaimDraft(**verdict.claim.model_dump(),evidence=[evidence],proposal_origin='model',
-                        extraction_model_revision=selected.model,reason='LLM证据审核通过，受约束自动入库')
+                if draft:
                     preview={**draft.model_dump(),'source_available':True}
                     rules=EvidenceVerifier().verify(self.claims,preview)
                     hard=[b for b in rules['blockers'] if b!=ALIAS_BLOCKER]
@@ -206,7 +223,10 @@ class AutoMemoryReviewer:
                             old=self.claims.get(root['id'])
                             if old['status']=='approved' and old.get('source_available'):
                                 same=bool(set(aliases(draft.predicate,draft.value))&set(aliases(draft.predicate,old['value']))) and draft.polarity==old['polarity']
-                                if same:existing_claim=old['id']
+                                if same:
+                                    if old.get('fact_start') or old.get('fact_end') or old.get('event_time') or old['modality']!='statement':
+                                        raise ClaimError(409,'existing_state_requires_revision')
+                                    existing_claim=old
                                 elif not SLOTS[draft.predicate]:
                                     report['structured_proposal']={'action':'revision_review','automatic_approval':False,
                                         'target_claim_id':old['id'],'expected_revision':old['revision'],
@@ -230,7 +250,20 @@ class AutoMemoryReviewer:
                     from .formation_store import bind_support, published
                     bind_support(self.store, memory['id'], formation_context, before_groups)
                     published(self.store, row['id'], memory['id'])
-                    claim_id=existing_claim
+                    claim_id=existing_claim['id'] if existing_claim else None
+                    if draft and existing_claim:
+                        # Publish a new independent support group in the same
+                        # transaction, with THIS ordinary memory's dependency.
+                        # Same meaning, scope and time; no free-form state update.
+                        fields={k:existing_claim[k] for k in ('value','polarity','modality','fact_start','fact_end','time_precision')}
+                        pending=self.claims.revise(existing_claim['id'],ClaimRevision(**fields,
+                            event_time=existing_claim.get('event_time'),memory_id=memory['id'],
+                            evidence=draft.evidence,condition_evidence=draft.condition_evidence,
+                            expected_revision=existing_claim['revision'],action='reinforce',
+                            proposal_origin='model',extraction_model_revision=selected.model,reason=draft.reason))
+                        approved=self.claims.approve(pending['id'],ClaimDecision(expected_revision=pending['revision'],reason=draft.reason))
+                        report['applied_claim_revision_id']=approved['revision_id']
+                        report['support_groups']=len(approved['support_groups'])
                     if draft and not existing_claim:
                         candidate=self.claims.create(ClaimDraft(**{**draft.model_dump(),'memory_id':memory['id']}))
                         checks=EvidenceVerifier().verify(self.claims,candidate)
@@ -238,7 +271,7 @@ class AutoMemoryReviewer:
                         approved=self.claims.approve(candidate['id'],ClaimDecision(expected_revision=candidate['revision'],reason=draft.reason))
                         claim_id=approved['id']
                         report['applied_claim_revision_id']=approved['revision_id']
-                    report['structured_action']='reuse_existing_state' if existing_claim else 'create' if claim_id else 'none'
+                    report['structured_action']='reinforce' if existing_claim else 'create' if claim_id else 'none'
                     self.store.db.execute("UPDATE memory_reviews SET status='approved',applied_memory_id=?,applied_action=?,applied_claim_id=?,updated_at=? WHERE id=?",
                         (memory['id'],action,claim_id,now(),row['id']))
                     report['applied_action']=action
@@ -253,6 +286,48 @@ class AutoMemoryReviewer:
                     'existing_state_requires_revision' if isinstance(exc,ClaimError) and 'existing_state_requires_revision' in str(exc)
                     else 'source_or_candidate_changed' if isinstance(exc,ClaimError) else 'model_or_publish_failed'])
                 return self.finish(row,report,key,allow_changed=True)
+
+    def bind_assertion(self, row, source, verdict, model):
+        """LLM semantic acceptance + finite independent source/condition binding."""
+        from .condition_parser import ConditionParser
+        parser=ConditionParser()
+        text=source['content']; start=text.index(verdict.evidence_quote); end=start+len(verdict.evidence_quote)
+        context=source.get('formation_context') or {}
+        observations=context.get('observations',[])
+        resolution=None
+        # A trailing "if ..." may qualify the preceding assertion too. With no
+        # general logical parser, never drop an unresolved premise elsewhere in
+        # this source, even if the value's local clause names a known activity.
+        if any(c.ambiguous for c in parser.clauses(text)):
+            raise ValueError('Source contains an unresolved premise')
+        try:
+            resolution=parser.resolve(text,start,end,verdict.claim.predicate,verdict.claim.value)
+        except ValueError:
+            # Nonliteral aliases may be accepted by independent semantic review,
+            # but never use that exception to erase a source condition.
+            if verdict.claim.scope or any(c.scope or c.ambiguous for c in parser.clauses(text)):
+                raise
+        condition_evidence=[]
+        if resolution:
+            if canonical(verdict.claim.scope)!=canonical(resolution['scope']):
+                raise ValueError('Model and source conditions disagree')
+            start,end=resolution['clause_start'],resolution['clause_end']
+            if observations and not any(o['start']<end and start<o['end'] for o in observations):
+                raise ValueError('Claim points to another observation')
+            if resolution['binding']:
+                a,b=resolution['binding']
+                condition_evidence=[dict(message_id=row['source_ref'],start=a,end=b,quote=text[a:b],content_sha256=sha(text))]
+        elif observations and not any(o['start']<=start and end<=o['end'] for o in observations):
+            raise ValueError('Claim quote is outside its observation')
+        local=text[start:end]
+        if CONTEXT.search(local) and not (resolution and resolution['scope']):
+            raise ValueError('Unmapped source condition')
+        if verdict.claim.scope.get('temporary') and not re.search(r'(?:本次|这次|当前)(?:会话|对话)',text):
+            raise ValueError('Temporary scope has no session binding')
+        evidence=dict(message_id=row['source_ref'],start=start,end=end,quote=local,content_sha256=sha(text))
+        draft=ClaimDraft(**verdict.claim.model_dump(),evidence=[evidence],condition_evidence=condition_evidence,
+            proposal_origin='model',extraction_model_revision=model,reason='LLM证据审核通过，受约束自动入库')
+        return draft, resolution
 
     def conflict_proposal(self,row,report,draft,evidence):
         if draft is None or SLOTS[draft.predicate]:return

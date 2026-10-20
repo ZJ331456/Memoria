@@ -316,6 +316,34 @@
             "英语"
           ]
         }
+      },
+      "q2": {
+        "safety": {},
+        "capability": {
+          "status_in": [
+            "answer"
+          ],
+          "min_active_claims": 3,
+          "answer_any": [
+            "中文",
+            "汉语"
+          ],
+          "min_citations": 1
+        }
+      },
+      "q3": {
+        "safety": {},
+        "capability": {
+          "status_in": [
+            "answer"
+          ],
+          "min_active_claims": 3,
+          "answer_any": [
+            "简洁",
+            "简短"
+          ],
+          "min_citations": 1
+        }
       }
     },
     "reinforce_support": {
@@ -341,6 +369,21 @@
             "骑行"
           ]
         }
+      },
+      "q3": {
+        "safety": {
+          "status_in": [
+            "clarify",
+            "abstain"
+          ],
+          "reader_called": false,
+          "max_active_claims": 0,
+          "source_available": {
+            "m1": false,
+            "m2": false
+          }
+        },
+        "capability": {}
       }
     },
     "pending_conflict": {
@@ -478,5 +521,5 @@
       }
     }
   },
-  "fixture_revision": 2
+  "fixture_revision": 3
 }

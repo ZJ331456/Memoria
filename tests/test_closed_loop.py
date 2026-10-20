@@ -222,7 +222,7 @@ def test_retraction_stops_old_claim_view_before_reader_and_keeps_history(environ
     assert rows[1]['prefix']['m1']['lineage']['published']  # Audit versions remain; they are not reusable evidence.
 
 
-@pytest.mark.parametrize('fault',['invented_citation','incomplete','revoked'])
+@pytest.mark.parametrize('fault',['invented_citation','incomplete','revoked','malformed_json'])
 def test_source_reader_rejects_unseen_citations_incomplete_output_and_inflight_retraction(environment,fault,monkeypatch):
     from memoria.memory.kernel import MemoryKernel
     original=MemoryKernel.__init__
@@ -233,8 +233,10 @@ def test_source_reader_rejects_unseen_citations_incomplete_output_and_inflight_r
         async def chat(self,messages,**kwargs):
             result=await super().chat(messages,**kwargs)
             if messages[0]['content'].startswith('这是来源资料阅读'):
+                assert kwargs['temperature']==0 and kwargs['top_p']==1
                 if fault=='invented_citation':result.content=json.dumps({'status':'answer','answer':'bad','evidence_ids':['[library:invented]']})
                 elif fault=='incomplete':result.finish_reason='length'
+                elif fault=='malformed_json':result.content='{"status":"answer","answer":"bad",evidence_ids":[]}'
                 else:
                     kernel=live['kernel'];sid=kernel.library.list()[0]['id'];kernel.library.retract(sid)
             return result

@@ -6,7 +6,7 @@ import sqlite3
 from ..store import now
 from .source_support import digest
 
-POLICY = 'formation-v2-topic-context'
+POLICY = 'formation-v3-source-conditions'
 
 
 def install(store):

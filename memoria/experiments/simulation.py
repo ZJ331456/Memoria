@@ -15,6 +15,21 @@ from .production_replay import ClosedLoopInput, CallCeiling, execute_closed_loop
 from .records import code_identity, digest_file
 
 
+def core_fingerprint(root):
+    """Freeze executable core/tests/fixtures, allowing later result documentation."""
+    import hashlib
+    files=sorted({*root.glob('memoria/**/*.py'), *root.glob('tests/**/*.py'),
+        *root.glob('scripts/*.py'), *root.glob('simulation/*.json')})
+    return hashlib.sha256(canonical({p.relative_to(root).as_posix():digest_file(p) for p in files}).encode()).hexdigest()
+
+
+def acceptance_passed(result):
+    return (result.get('acceptance_scope')=='complete_current_suite'
+        and result.get('core_unchanged') is True and result.get('questions',0)>0
+        and result.get('question_outcomes')=={'passed':result['questions']}
+        and result.get('case_execution_errors')==0 and result.get('blocked_calls')==0)
+
+
 def load_suite(root):
     path = root / 'simulation/scenarios.json'
     suite = json.loads(path.read_text(encoding='utf-8'))
@@ -184,7 +199,9 @@ async def offline_retrieval(workspace, settings):
                 'returned':len(found),'diagnostics':diagnostic})
         receipt={'data_kind':'synthetic_functional','scope':'direct engine fixture admission, not LLM automatic approval',
             'code':code_identity(settings.root),'embedding_model':Path(configured.embedding.model).name,
-            'model_calls':0,'production_writes':0,'modes':rows}
+            'model_calls':0,'production_writes':0,'modes':rows,'core_sha256':core_fingerprint(settings.root),
+            'passed':all(r['target_recalled'] and (r['mode'] not in {'dense','rrf'} or
+                (r['diagnostics'].get('embedding_attempted') is True and r['diagnostics'].get('dense_available') is True)) for r in rows)}
         write_json(directory/'receipt.json',receipt)
         return {'directory':str(directory),**receipt}
     finally:store.close()
@@ -258,6 +275,7 @@ async def run_suite(workspace, settings, *, execute=False, allow_remote=False, m
     (directory / 'expectations.snapshot.json').write_bytes(expected_bytes)
     write_json(directory / 'suite.snapshot.json', suite)
     manifest = {'data_kind': 'synthetic_functional', 'quality': 'functional_only_not_research',
+        'core_sha256':core_fingerprint(root),
         'started_at_ns':time.time_ns(),
         'code': code_identity(root), 'source_sha256': digest_file(root / 'simulation/scenarios.json'),
         'expectations_sha256': digest_file(directory / 'expectations.snapshot.json'),
@@ -298,6 +316,9 @@ async def run_suite(workspace, settings, *, execute=False, allow_remote=False, m
         'case_execution_errors': sum('error' in c for c in executed),
         'elapsed_seconds': round(time.monotonic() - started, 3), 'production_writes': 0,
         'data_kind': 'synthetic_functional', 'quality': 'functional_assertions_not_semantic_accuracy'}
+    totals.update(acceptance_scope='complete_current_suite' if only is None else 'partial_diagnostic',
+        core_sha256=manifest['core_sha256'],core_unchanged=manifest['core_sha256']==core_fingerprint(root))
+    totals['acceptance_passed']=acceptance_passed(totals)
     write_json(directory / 'results.json', {'summary': totals, 'cases': executed})
     render_report(directory)
     manifest.update(status='finished', artifacts={p.name: digest_file(p) for p in directory.iterdir() if p.is_file() and p.name != 'manifest.json'})

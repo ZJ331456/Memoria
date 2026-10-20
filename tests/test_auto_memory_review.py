@@ -178,6 +178,107 @@ def test_same_state_does_not_require_human_or_create_duplicate_claim(env):
     assert len(store.memories())==1 and len(service.claims.list())==1
 
 
+def test_three_default_and_inherited_conditional_claims_publish_independently(env):
+    from memoria.claims import AccessRequest
+    _,_,store,service=env
+    text='我平时用中文交流，面试模拟时用英文，而且回答尽量简洁。'
+    source=store.add_message(store.create_session()['id'],'user',text)
+    cases=[('中文','response_language',{},'我平时用中文交流'),
+           ('英文','response_language',{'activity':'interview'},'面试模拟时用英文'),
+           ('简洁','response_detail',{'activity':'interview'},'而且回答尽量简洁')]
+    for value,predicate,scope,quote in cases:
+        row=store.propose_memory_review(source['id'],quote,'preference',3)
+        model(service,quote,changes={'claim':{'predicate':predicate,'value':value,'scope':scope}})
+        result=asyncio.run(service.auto_review.review(row['id']))
+        assert result['status']=='approved',result['assessment']
+        claim=service.claims.get(result['applied_claim_id'])
+        assert claim['scope']==scope and claim['value']==value
+        assert bool(claim['condition_evidence'])==bool(scope)
+    default=service.claims.access(AccessRequest(predicates=['response_language'],scope_mode='default'))
+    interview=service.claims.access(AccessRequest(predicates=['response_language','response_detail'],context={'activity':'interview'}))
+    assert [c['value'] for c in default['payload']['claims']]==['中文']
+    assert {c['value'] for c in interview['payload']['claims']}=={'英文','简洁'}
+
+
+@pytest.mark.parametrize('text,scope',[
+    ('如果客户同意，面试模拟时用英文。',{'activity':'interview'}),
+    ('只有拿到offer，面试模拟时用英文。',{'activity':'interview'}),
+    ('面试模拟时用英文。',{}),
+    ('我平时用英文。',{'activity':'interview'}),
+    ('这次面试模拟时用英文。',{'activity':'interview','temporary':True}),
+    ('我周末用英文。',{}),
+    ('面试模拟时周末用英文。',{'activity':'interview'}),
+    ('面试模拟时用英文，如果客户同意。',{'activity':'interview'}),
+    ('假如面试模拟时用英文。',{'activity':'interview'}),
+    ('非面试模拟时用英文。',{'activity':'interview'}),
+])
+def test_conditional_model_accept_cannot_erase_or_invent_conditions(env,text,scope):
+    _,_,store,service=env
+    source,row=candidate(store,text)
+    model(service,text,changes={'claim':{'predicate':'response_language','value':'英文','scope':scope}})
+    result=asyncio.run(service.auto_review.review(row['id']))
+    assert result['status']=='pending' and not store.memories() and not service.claims.list()
+
+
+def test_new_approved_self_report_reinforces_claim_and_survives_first_parent_revocation(env):
+    from memoria.claims import AccessRequest,ViewRequest
+    _,_,store,service=env
+    source,one=candidate(store,'我用中文交流。','用户用中文交流')
+    model(service,source['content']);one=asyncio.run(service.auto_review.review(one['id']))
+    first=service.claims.get(one['applied_claim_id'])
+    source2,two=candidate(store,'我的回复语言是汉语。','用户回复语言为汉语')
+    model(service,source2['content']);two=asyncio.run(service.auto_review.review(two['id']))
+    assert two['status']=='approved' and two['applied_claim_id']==first['id']
+    current=service.claims.get(first['id'])
+    assert len(current['support_groups'])==2 and len(service.claims.list())==1
+    assert two['assessment']['structured_action']=='reinforce'
+    assert two['assessment']['applied_claim_revision_id']==current['revision_id']
+    assert {g['memory_id'] for g in current['support_groups']}=={one['applied_memory_id'],two['applied_memory_id']}
+    view=service.claims.compile(ViewRequest(predicates=['response_language']))
+    store.undo_memory_sources([source['id']])
+    assert not service.claims.view(view['id'])['valid']
+    state=service.claims.access(AccessRequest(predicates=['response_language']))
+    assert state['payload']['complete']
+    assert state['payload']['claims'][0]['support_group_ids']==[source2['id']]
+    store.undo_memory_sources([source2['id']])
+    assert service.claims.access(AccessRequest(predicates=['response_language']))['path']=='clarify'
+
+
+def test_temporary_conditional_admission_binds_only_its_source_session(env):
+    from memoria.claims import AccessRequest
+    _,_,store,service=env
+    text='本次会话面试模拟时用英文。'
+    source,row=candidate(store,text,'本次会话面试模拟时使用英文')
+    model(service,text,changes={'claim':{'predicate':'response_language','value':'英文',
+        'scope':{'activity':'interview','temporary':True}}})
+    result=asyncio.run(service.auto_review.review(row['id']))
+    assert result['status']=='approved',result['assessment']
+    claim=service.claims.get(result['applied_claim_id'])
+    assert claim['lifecycle']['session_id']==source['session_id']
+    same=AccessRequest(predicates=['response_language'],context={'activity':'interview'},session_id=source['session_id'])
+    other=AccessRequest(predicates=['response_language'],context={'activity':'interview'},session_id=store.create_session()['id'])
+    assert service.claims.access(same)['payload']['complete']
+    assert service.claims.access(other)['path']=='clarify'
+
+
+def test_claim_for_another_observation_cannot_be_published(env):
+    _,_,store,service=env
+    text='我平时用中文交流，面试模拟时用英文。'
+    source,row=candidate(store,text,'用户平时用中文')
+    start=0;end=text.index('，')
+    from memoria.memory import formation_store
+    formation_store.install(store)
+    with store._memory_transaction():
+        job=store.enqueue_memory_job(source['id'],text,'')
+        receipt={'source_sha':__import__('memoria.claims',fromlist=['sha']).sha(text),
+            'model':'engineering','usage':None,'observations':[{'category':'preference','topic':'语言','scope':'',
+            'polarity':'positive','content':row['content'],'quote':text[start:end],'asserted':True,'durable':True,'importance':3}]}
+        formation_store.stage(store,job,receipt,[row])
+    model(service,'面试模拟时用英文',changes={'claim':{'predicate':'response_language','value':'英文','scope':{'activity':'interview'}}})
+    result=asyncio.run(service.auto_review.review(row['id']))
+    assert result['status']=='pending' and not service.claims.list()
+
+
 @pytest.mark.parametrize('assessment',['Supported','Insufficient'])
 def test_model_review_of_new_state_holds_only_verified_conflict(env,assessment):
     from memoria.memory.access import QueryRequest

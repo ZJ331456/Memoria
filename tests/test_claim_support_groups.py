@@ -135,3 +135,44 @@ def test_recorded_cutoff_does_not_see_later_support(core):
     core[0].undo_memory_sources(first["support_group_ids"])
     result = core[1].access(AccessRequest(predicates=["response_language"], recorded_as_of=first["recorded_at"]))
     assert result["path"] == "clarify"
+
+
+@pytest.mark.parametrize('mutation',['retire','change','delete'])
+def test_each_support_group_has_its_own_parent_and_cache_dependency(core,mutation):
+    store,claims,_=core
+    e1=source(core,'Engineering first preference: English')
+    p1=store.add_memory('First English preference',source_ref=e1['message_id'],require_source=True)
+    first=approve(core,claims.create(ClaimDraft(predicate='response_language',value='English',evidence=[e1],memory_id=p1['id'])))
+    e2=source(core,'Engineering other preference: English')
+    p2=store.add_memory('Other English preference',source_ref=e2['message_id'],require_source=True)
+    current=approve(core,reinforce(core,first,evidence=[e2],memory_id=p2['id']))
+    view=claims.compile(ViewRequest(predicates=['response_language']))
+    # Invalidating the SECOND parent must invalidate its View even though the
+    # legacy flat memory_id still names the FIRST parent.
+    with store._memory_transaction():
+        if mutation=='retire':store.db.execute("UPDATE memories SET status='retired' WHERE id=?",(p2['id'],))
+        elif mutation=='change':store.db.execute("UPDATE memories SET content='Changed' WHERE id=?",(p2['id'],))
+        else:store.db.execute('DELETE FROM memories WHERE id=?',(p2['id'],))
+    assert not claims.view(view['id'])['valid']
+    request=AccessRequest(predicates=['response_language'])
+    result=claims.access(request)
+    assert result['payload']['complete']
+    assert result['payload']['claims'][0]['support_group_ids']==[e1['message_id']]
+    store.undo_memory_sources([e1['message_id']])
+    assert claims.access(request)['path']=='clarify'
+    if mutation=='retire':
+        # Historical access keeps old parent semantics, but never revoked text.
+        assert claims.get(current['id'])['support_group_ids']==[e2['message_id']]
+
+
+def test_legacy_parent_is_inherited_and_cannot_be_detached_without_new_approval(core):
+    e=source(core,'Engineering linked preference: English')
+    parent=core[0].add_memory('Linked English',source_ref=e['message_id'],require_source=True)
+    first=approve(core,core[1].create(ClaimDraft(predicate='response_language',value='English',memory_id=parent['id'],evidence=[e])))
+    data=json.loads(core[1]._head(first['id'])['data_json'])
+    for group in data['support_groups']:
+        group.pop('memory_id');group.pop('memory_sha256')
+    with core[0]._memory_transaction():
+        core[1]._append(core[1]._root(first['id']),data,'approved','Legacy parent format')
+        core[0].db.execute("UPDATE memories SET status='retired' WHERE id=?",(parent['id'],))
+    assert core[1].access(AccessRequest(predicates=['response_language']))['path']=='clarify'

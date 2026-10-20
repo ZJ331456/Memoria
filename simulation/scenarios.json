@@ -753,9 +753,9 @@
       "areas": [
         "conditions",
         "claim",
-        "automation_gap"
+        "automatic_publication"
       ],
-      "max_calls": 5,
+      "max_calls": 8,
       "input": {
         "schema_version": 1,
         "provenance": "[SYNTHETIC] User-authorized fictional functional fixture, not real person/history/research gold; condition_automation",
@@ -779,6 +779,22 @@
             "target": "personal",
             "request": {
               "query": "面试模拟时我的回答语言是什么？"
+            }
+          },
+          {
+            "id": "q2",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "我平时的回答语言是什么？"
+            }
+          },
+          {
+            "id": "q3",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "面试模拟时我的回答详细度偏好是什么？"
             }
           }
         ]
@@ -833,6 +849,19 @@
           },
           {
             "id": "q2",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "我的爱好是什么？"
+            }
+          },
+          {
+            "id": "undo_second",
+            "kind": "retract",
+            "source": "m2"
+          },
+          {
+            "id": "q3",
             "kind": "question",
             "target": "personal",
             "request": {
@@ -1199,5 +1228,5 @@
       }
     }
   ],
-  "fixture_revision": 2
+  "fixture_revision": 3
 }

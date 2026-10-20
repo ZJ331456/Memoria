@@ -24,7 +24,7 @@ SLOTS = {"residence": False, "occupation": True, "school": True,
          "response_language": False, "response_detail": False, "diet": True,
          "work_habit": True, "hobby": True, "learning_goal": True,
          "project_goal": True, "time_preference": True, "budget": False}
-COMPILER = "deterministic-claims-v6"
+COMPILER = "deterministic-claims-v7-group-parents"
 SESSION_CUE = re.compile(r"(?:本次|这次|当前)(?:会话|对话)|\bthis\s+(?:session|chat|conversation)\b", re.I)
 
 
@@ -212,6 +212,11 @@ CREATE TABLE IF NOT EXISTS claim_sources (
  message_id TEXT NOT NULL, memory_id TEXT, PRIMARY KEY(revision_id,message_id));
 CREATE INDEX IF NOT EXISTS idx_claim_source ON claim_sources(message_id);
 CREATE INDEX IF NOT EXISTS idx_claim_memory ON claim_sources(memory_id);
+CREATE TABLE IF NOT EXISTS claim_support_parents (
+ revision_id TEXT NOT NULL REFERENCES claim_revisions(id) ON DELETE CASCADE,
+ group_id TEXT NOT NULL, memory_id TEXT NOT NULL,
+ PRIMARY KEY(revision_id,group_id));
+CREATE INDEX IF NOT EXISTS idx_claim_support_parent ON claim_support_parents(memory_id);
 CREATE TABLE IF NOT EXISTS claim_source_revocations (message_id TEXT PRIMARY KEY, recorded_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS claim_generations (
  user_id TEXT NOT NULL, subject_id TEXT NOT NULL, predicate TEXT NOT NULL,
@@ -254,6 +259,14 @@ class ClaimMemory:
                 if existing and existing[0]!=user_id:
                     raise ClaimError(403,"Claim库不属于此登录用户")
             self.db.executescript(SCHEMA)
+            for event in ("UPDATE", "DELETE"):
+                self.db.execute(f"""CREATE TRIGGER IF NOT EXISTS claim_support_parent_{event.lower()}
+                    BEFORE {event} ON memories BEGIN
+                    UPDATE claim_generations SET generation=generation+1 WHERE EXISTS
+                    (SELECT 1 FROM claim_roots c JOIN claim_revisions r ON r.claim_id=c.id
+                     JOIN claim_support_parents p ON p.revision_id=r.id WHERE p.memory_id=OLD.id
+                     AND c.user_id=claim_generations.user_id AND c.subject_id=claim_generations.subject_id
+                     AND c.predicate=claim_generations.predicate); END""")
             from .observability.memory_trace import install as install_memory_trace
             install_memory_trace(store)
             # SQL triggers protect caches even if mutations bypass this service.
@@ -292,7 +305,7 @@ class ClaimMemory:
                               " ORDER BY revision DESC LIMIT 1", params).fetchone()
         return dict(row) if row else None
 
-    def _validate_evidence_group(self, assertion: dict) -> dict:
+    def _validate_evidence_group(self, assertion: dict, *, historical=False) -> dict:
         data = dict(assertion)
         evidence, observed, quotes = [], [], []
         imported_ids = set()
@@ -339,7 +352,7 @@ class ClaimMemory:
         mid = data.get("memory_id")
         if mid:
             parent = self.store.memory(mid)
-            if not parent or parent["status"] != "active" or not self.store.memory_support_available(mid):
+            if not parent or (not historical and parent["status"] != "active") or not self.store.memory_support_available(mid):
                 raise ClaimError(422, "关联记忆必须是本账号活动版本")
             fingerprint = sha(parent["content"])
             if data.get("memory_sha256") and data["memory_sha256"] != fingerprint:
@@ -352,8 +365,11 @@ class ClaimMemory:
     @staticmethod
     def _groups(data: dict) -> list[dict]:
         # Legacy flat evidence is ONE conjunction, never independent witnesses.
-        return data.get("support_groups") or [{"evidence":data["evidence"],
+        groups = data.get("support_groups") or [{"evidence":data["evidence"],
             "condition_evidence":data.get("condition_evidence", []), "approved":False}]
+        # Old immutable revisions pinned one parent globally. Inherit it at read
+        # time; only newly approved groups can acquire a different dependency.
+        return [{"memory_id":data.get("memory_id"), "memory_sha256":data.get("memory_sha256"), **g} for g in groups]
 
     @staticmethod
     def _group(data: dict, *, approved=False) -> dict:
@@ -362,14 +378,19 @@ class ClaimMemory:
         # Exact copies of the same original text/spans do not add a lineage.
         lineage = {key:sorted([{k:e[k] for k in ("content_sha256", "start", "end")} for e in value], key=canonical)
                    for key,value in fields.items()}
-        return {**fields, "id":sha(canonical(fields)), "lineage_id":sha(canonical(lineage)),
+        return {**fields, "memory_id":data.get("memory_id"), "memory_sha256":data.get("memory_sha256"),
+                "id":sha(canonical(fields)), "lineage_id":sha(canonical(lineage)),
                 "approved":approved}
 
-    def _usable_groups(self, data: dict) -> list[dict]:
+    def _usable_groups(self, data: dict, *, historical=False) -> list[dict]:
         groups = []
         for group in self._groups(data):
             try:
-                checked = self._validate_evidence_group({**data, **group, "memory_id":None})
+                checked = self._validate_evidence_group({**data, **group}, historical=historical)
+                if not historical and group.get('memory_id') and not any(
+                    i['valid_at'] <= now() and (i['invalid_at'] is None or now() < i['invalid_at'])
+                    for i in self.store.memory_validity(group['memory_id'])):
+                    continue
             except ClaimError:
                 continue
             groups.append(self._group(checked, approved=group.get("approved", False)))
@@ -379,41 +400,30 @@ class ClaimMemory:
         data, groups = dict(assertion), []
         for group in self._groups(data):
             try:
-                checked = self._validate_evidence_group({**data, **group, "memory_id":None})
+                checked = self._validate_evidence_group({**data, **group})
             except ClaimError:
                 if not group.get("approved"):
                     raise  # New support must still pass at explicit approval time.
                 groups.append(group)
                 continue
             groups.append(self._group(checked, approved=group.get("approved", False)))
-        available = self._usable_groups({**data, "support_groups":groups})
+        available = self._usable_groups({**data, "support_groups":groups}, historical=True)
         if not available:
             raise ClaimError(409, "没有完整且仍有效的支持组")
         # Keep immutable withdrawn groups for audit; expose only live spans in _public.
         data["support_groups"] = groups
         for key in ("evidence", "condition_evidence"):
             data[key] = list({canonical(e):e for g in groups for e in g[key]}.values())
-        checked = self._validate_evidence_group({**data, **available[0]})
-        data["memory_sha256"] = checked["memory_sha256"]
-        data["observed_at"] = max(self._validate_evidence_group({**data, **g, "memory_id":None})["observed_at"] for g in available)
+        # Flat association is a summary, not an AND dependency on the first parent.
+        data["memory_id"] = available[0].get("memory_id")
+        data["memory_sha256"] = available[0].get("memory_sha256")
+        data["observed_at"] = max(self._validate_evidence_group({**data, **g}, historical=True)["observed_at"] for g in available)
         data["support_group_ids"] = sorted({e["message_id"] for g in available for e in g["evidence"]+g["condition_evidence"]})
         return data
 
     def _valid(self, data: dict, *, historical=False) -> bool:
         try:
-            if not self._usable_groups(data):
-                return False
-            if data.get("memory_id"):
-                parent = self.store.memory(data["memory_id"])
-                if not parent or sha(parent["content"]) != data.get("memory_sha256") or not self.store.memory_support_available(parent["id"]):
-                    return False
-                if not historical:
-                    moment = now()
-                    if parent["status"]!="active" or not any(
-                        interval["valid_at"]<=moment and (interval["invalid_at"] is None or moment<interval["invalid_at"])
-                        for interval in self.store.memory_validity(parent["id"])):
-                        return False
-            return True
+            return bool(self._usable_groups(data, historical=historical))
         except ClaimError:
             return False
 
@@ -447,19 +457,25 @@ class ClaimMemory:
         rid, recorded = uuid.uuid4().hex, recorded_at or now()
         self.db.execute("INSERT INTO claim_revisions VALUES(?,?,?,?,?,?,?,?)",
                         (rid,root["id"],revision,canonical(data),status,recorded,self.user_id,reason))
-        for mid in {e["message_id"] for e in data["evidence"] + data.get("condition_evidence", [])}:
-            self.db.execute("INSERT INTO claim_sources VALUES(?,?,?)", (rid,mid,data.get("memory_id")))
+        for group in self._groups(data):
+            for mid in {e["message_id"] for e in group["evidence"] + group.get("condition_evidence", [])}:
+                self.db.execute("INSERT OR IGNORE INTO claim_sources VALUES(?,?,?)", (rid,mid,group.get("memory_id")))
+            if group.get('memory_id'):
+                self.db.execute('INSERT INTO claim_support_parents VALUES(?,?,?)',
+                                (rid,self._group(group)['id'],group['memory_id']))
         return self._public(root, self._head(root["id"]))
 
-    def _public(self, root: dict, revision: dict) -> dict:
+    def _public(self, root: dict, revision: dict, *, historical=True) -> dict:
         data = json.loads(revision["data_json"])
-        valid = self._valid(data, historical=True)
+        valid = self._valid(data, historical=historical)
         # A removed source must not be resurrected from a stored quote/cache.
         if not valid:
             data = {"value":None,"evidence":[],"source_available":False}
         else:
-            groups = self._usable_groups(data)
+            groups = self._usable_groups(data, historical=historical)
             data["support_groups"] = groups
+            data['memory_id'] = groups[0].get('memory_id')
+            data['memory_sha256'] = groups[0].get('memory_sha256')
             data["support_semantics"] = "all_spans_within_group; any_complete_group"
             for key in ("evidence", "condition_evidence"):
                 data[key] = list({canonical(e):e for g in groups for e in g[key]}.values())
@@ -603,9 +619,9 @@ class ClaimMemory:
             fields = request.model_dump(exclude={"expected_revision","action"})
             data = self._evidence(fields)
             if request.action == "reinforce":
-                for key in ("value","polarity","modality","fact_start","fact_end","time_precision","memory_id"):
+                for key in ("value","polarity","modality","fact_start","fact_end","time_precision"):
                     if data[key] != previous.get(key):
-                        raise ClaimError(422,"强化不能改变值、时间、条件或关联记忆")
+                        raise ClaimError(422,"强化不能改变值、时间或条件")
                 if canonical(data.get("event_time")) != canonical(previous.get("event_time")):
                     raise ClaimError(422,"强化不能改变事件精度或区间")
                 old_groups = [self._group(g, approved=True) for g in self._groups(previous)]
@@ -716,11 +732,12 @@ class ClaimMemory:
                 if not revision or revision["status"]!="approved":
                     continue
                 data = json.loads(revision["data_json"])
-                if not historical and data.get('memory_id'):
+                if not historical:
                     # Even a currently unavailable exception can become applicable
                     # without a write. Its parent's boundaries must expire the view.
                     boundaries.extend(boundary
-                        for interval in self.store.memory_validity(data['memory_id'])
+                        for group in self._groups(data) if group.get('memory_id')
+                        for interval in self.store.memory_validity(group['memory_id'])
                         for boundary in (interval['valid_at'], interval['invalid_at'])
                         if boundary and boundary > current_time)
                 if not self._valid(data,historical=historical):
@@ -752,7 +769,7 @@ class ClaimMemory:
                 if any(k not in request.context for k in context_scope):
                     unresolved = True
                     continue
-                candidates.append((len(scope),self._public(root,revision)))
+                candidates.append((len(scope),self._public(root,revision,historical=historical)))
             if unresolved:
                 missing.append({"predicate":predicate,"reason":"condition_context_missing"})
                 continue

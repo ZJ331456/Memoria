@@ -297,7 +297,7 @@ async def read_knowledge_answer(kernel,request):
     messages=PromptAssembler().assemble(contract,extra_sections=[section]).as_messages()
     messages.append({'role':'user','content':request.query})
     meter=getattr(kernel.llm,'reader_budget',None) or ReaderBudget(kernel.settings)
-    try:prepared=await meter.prepare(messages)
+    try:prepared=await meter.prepare(messages,temperature=0,top_p=1)
     except ContextLengthError:return reject('reader_budget_exceeded')
     # Preserve the entire evidence object, including all necessary support/subject/feedback.
     rendered=canonical(packet).replace(_SECTION_BOUNDARY,'&lt;!--memoria-section--&gt;')
@@ -307,7 +307,7 @@ async def read_knowledge_answer(kernel,request):
         return all(kernel.dependency_valid(d,session_id=request.session_id) for d in packet['dependencies'])
     if not fresh():return reject('source_changed_before_reader',budget=prepared.report)
     try:
-        result=await kernel.llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens)
+        result=await kernel.llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens,temperature=0,top_p=1)
     except (ProviderError,RuntimeError):return reject('reader_provider_failure',called=True,budget=prepared.report)
     usage=result.usage or None
     if result.finish_reason not in {None,'stop'} or result.tool_calls:
