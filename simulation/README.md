@@ -16,6 +16,8 @@
 
 ## 运行
 
+实体三阶段的同预算对照另有[输入](entity_inputs.json)、[后验断言](entity_expectations.json)和[独立命令](../scripts/evaluate_entity_retrieval.py)：8场景×三路/过滤/实体RRF共24记录，实际本地BGE，最多可选6次生产Reader调用。直接夹具入库不评价抽取；字符预算不冒称Token预算。原始候选/选择/成本与HTML仅保存到runs，详见[协议与边界](../docs/implemented/实体身份与实体召回.md#第三阶段固定预算的实体对照)。
+
 使用项目.venv、已有账号；先验证，默认0模型调用：
 
 ```powershell

@@ -4,6 +4,8 @@
 
 以下命令从仓库根运行，解释器统一为`.\.venv\Scripts\python.exe`。这里是本机管理工具；Web接口不接受任意脚本、文件路径或他人研究输入。--help只显示参数，不代表模型调用成功。
 
+[evaluate_entity_retrieval.py](evaluate_entity_retrieval.py)：`--user YOUR_USER`仅验证；加`--execute`执行本地BGE三方法对照，Reader另需`--reader-cases alias complement --allow-remote --max-calls 6`。虚构直接录入夹具、后验ID诊断、同字符预算及本机HTML详见[实体对照协议](../docs/implemented/实体身份与实体召回.md#第三阶段固定预算的实体对照)，不修改生产、不冒称真实语义质量。
+
 ## 一键业务后台
 
 Windows入口集中在[cmd](cmd/README.md)：双击[start_backend.cmd](cmd/start_backend.cmd)启动，[stop_backend.cmd](cmd/stop_backend.cmd)关闭；从仓库根执行`.\scripts\cmd\start_backend.cmd -Action Status`查看状态。关闭时先校验根进程归属，再结束业务及其MCP子进程树。内部[backend.ps1](backend.ps1)仅用项目venv、私密配置、loopback和隐藏窗口，日志在忽略的data/logs/system，端口占用不另起/误杀。首次依赖及Chat/Studio统一构建先准备（[build_frontend.cmd](cmd/build_frontend.cmd)，内部[frontend.ps1](frontend.ps1)），本地HTTP模型8080仍独立启动。[完整使用及真实验证](../docs/implemented/本机后台启动与停止.md)。

@@ -1,5 +1,7 @@
 # Experiments：来源、标注、runner 与评分
 
+[entity_retrieval.py](entity_retrieval.py)提供隔离的三路RRF/实体过滤/实体RRF对照，复用生产Access/Selector/Reader；[CLI](../../scripts/evaluate_entity_retrieval.py)默认0调用，8场景×3方法，同字符预算并单列实际usage。虚构夹具直接入库不测抽取，后验标签不进预测，原始结果只保存在simulation/runs；[协议与边界](../../docs/implemented/实体身份与实体召回.md#第三阶段固定预算的实体对照)。
+
 [production_replay.py](production_replay.py)新增closed-loop：按来源前缀调用实际Kernel/形成/审核/Claim/View/Reader，默认仅验证，显式执行受调用上限约束。attribute-closed-loop只在预测冻结后读标签，保留失败及未知阶段；[完整格式与限制](../../docs/implemented/生产记忆闭环与逐题归因.md)。原LoCoMo入口和成绩不变。
 
 [核心包](../README.md) · [研究操作](../../docs/implemented/真实历史标注与评测.md) · [研究计划](../../docs/plans/长期陪伴记忆研究与实验计划书.md)
