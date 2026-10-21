@@ -1,3 +1,4 @@
+from tests.kernel_factory import tool_kernel
 from pathlib import Path
 import sqlite3
 
@@ -224,7 +225,7 @@ def test_store_migrates_legacy_memory_schema(tmp_path: Path):
 
 def test_builtin_tools_and_trace(tmp_path: Path):
     store = Store(tmp_path / "tools.db")
-    registry = build_registry(store)
+    registry = build_registry(tool_kernel(store))
     result = asyncio.run(registry.execute("calculate", {"expression": "(2 + 3) * 4"}))
     assert result.ok and result.content == "20"
     rejected = asyncio.run(registry.execute("calculate", {"expression": "__import__('os')"}))

@@ -1,290 +1,81 @@
-from __future__ import annotations
+"""Tenant application composition, middleware and lifecycle; routes live in focused modules."""
 
+from __future__ import annotations
 import asyncio
-import json
 import re
 import time
 import uuid
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from typing import Any, Literal
-
-from fastapi import FastAPI, HTTPException, Query, Request
+from typing import Literal
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-
+from fastapi.responses import JSONResponse
 from ..config import Settings
-from ..claims import ClaimError, ClaimDraft
+from ..claims import ClaimError
 from ..governance import GovernanceError, MemoryGovernance
 from ..llm import LLMClient
-from ..memory import export_memories_markdown
 from ..observability import MetricRegistry, RequestContext
 from ..security import RequestGate
 from ..service import AgentService
-from ..store import MemorySourceUnavailable, MemoryVersionConflict, Store, normalize_time, now
+from ..store import MemoryVersionConflict, Store
 from .governance import governance_router
 from .claims import claims_router
 from .research_runs import research_runs_router
 from .studio import studio_router
-from ..provenance import message_ingress
+from .schemas import (
+    CancelResponse as CancelResponse,
+    ChatBody as ChatBody,
+    ChatResponse as ChatResponse,
+    DriftRunBody as DriftRunBody,
+    EpisodeMaintenanceBody as EpisodeMaintenanceBody,
+    EpisodePatch as EpisodePatch,
+    ErrorResponse as ErrorResponse,
+    EvolveBody as EvolveBody,
+    HealthResponse as HealthResponse,
+    MarkdownWriteBody as MarkdownWriteBody,
+    MemoryBody as MemoryBody,
+    MemoryCorrectionBody as MemoryCorrectionBody,
+    MemoryJobResponse as MemoryJobResponse,
+    MemoryPatch as MemoryPatch,
+    MemoryReindexResponse as MemoryReindexResponse,
+    MemoryReplacementResponse as MemoryReplacementResponse,
+    MemoryResponse as MemoryResponse,
+    MemoryReviewApproval as MemoryReviewApproval,
+    MemoryReviewProposal as MemoryReviewProposal,
+    MemoryReviewResponse as MemoryReviewResponse,
+    MemoryTimelineResponse as MemoryTimelineResponse,
+    MemoryUndoBody as MemoryUndoBody,
+    MemoryUndoResponse as MemoryUndoResponse,
+    MemoryWriteResponse as MemoryWriteResponse,
+    MessageResponse as MessageResponse,
+    MessageSourceResponse as MessageSourceResponse,
+    ModelSlotBody as ModelSlotBody,
+    ModelTestBody as ModelTestBody,
+    ModelsUpdateBody as ModelsUpdateBody,
+    SessionBody as SessionBody,
+    SessionPatch as SessionPatch,
+    SessionResponse as SessionResponse,
+    StrictModel as StrictModel,
+    ToolExecuteBody as ToolExecuteBody,
+    ToolExecuteResponse as ToolExecuteResponse,
+    ToolSearchBody as ToolSearchBody,
+    TraceResponse as TraceResponse,
+)
+from .app_metadata import VERSION
+from .context import TenantApiContext
+from .status import status_router
+from .formation import formation_router
+from .episodes import episodes_router
+from .integrations import integrations_router
+from .conversations import conversations_router
+from .memories import memories_router
+from .versions import versions_router
 
 MemoryKind = Literal["fact", "preference", "profile", "goal", "procedure"]
 
 
-class StrictModel(BaseModel):
-    """Public request bodies reject unknown fields instead of silently ignoring them."""
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ErrorResponse(BaseModel):
-    code: str
-    message: str
-    request_id: str
-
-
-class HealthResponse(BaseModel):
-    status: Literal["ok"] = "ok"
-    version: str
-
-
-class SessionBody(StrictModel):
-    title: str = Field(default="新对话", min_length=1, max_length=80, examples=["Rust 学习计划"])
-
-
-class SessionPatch(StrictModel):
-    title: str = Field(min_length=1, max_length=80)
-
-
-class SessionResponse(BaseModel):
-    id: str
-    title: str
-    created_at: str
-    updated_at: str
-    message_count: int = 0
-
-
-class MessageResponse(BaseModel):
-    id: str
-    session_id: str
-    role: Literal["user", "assistant"]
-    content: str
-    created_at: str
-
-
-class ChatBody(StrictModel):
-    content: str = Field(min_length=1, max_length=20000, examples=["请记住我偏好简洁回答"])
-
-
-class MemoryBody(StrictModel):
-    content: str = Field(min_length=1, max_length=4000)
-    kind: MemoryKind = "fact"
-    importance: int = Field(default=3, ge=1, le=5)
-
-
-class MemoryPatch(StrictModel):
-    content: str | None = Field(default=None, min_length=1, max_length=4000)
-    kind: MemoryKind | None = None
-    importance: int | None = Field(default=None, ge=1, le=5)
-
-
-class MemoryCorrectionBody(StrictModel):
-    content: str = Field(min_length=1, max_length=4000)
-    kind: MemoryKind
-    importance: int = Field(ge=1, le=5)
-    reason: str = Field(min_length=1, max_length=500)
-
-
-class MemoryResponse(BaseModel):
-    id: str
-    content: str
-    kind: MemoryKind
-    importance: int
-    source: str
-    created_at: str
-    updated_at: str
-    status: Literal["active", "superseded"] = "active"
-    reinforcement: int = 1
-    supersedes_id: str | None = None
-    last_reinforced_at: str | None = None
-    source_ref: str | None = None
-    valid_at: str | None = None
-    invalid_at: str | None = None
-    attributes: dict = Field(default_factory=dict)
-    entities: list = Field(default_factory=list)
-    provenance: dict = Field(default_factory=dict)
-
-
-class MemoryReindexResponse(BaseModel):
-    enabled: bool
-    indexed: int
-    remaining: int
-
-
-class MemoryWriteResponse(BaseModel):
-    action: Literal["created", "reinforced", "superseded"]
-    memory: MemoryResponse
-    previous_id: str | None = None
-    reason: str = ""
-
-
-class MemoryReplacementResponse(BaseModel):
-    id: int
-    old_memory_id: str
-    new_memory_id: str
-    old_content: str
-    new_content: str
-    relation: str
-    reason: str
-    created_at: str
-
-
-class MemoryTimelineResponse(MemoryResponse):
-    replacement_reason: str | None = None
-    replacement_relation: str | None = None
-
-
-class TraceResponse(BaseModel):
-    id: str
-    session_id: str
-    status: str
-    steps: int
-    duration_ms: int
-    memories: list[dict[str, Any]]
-    tools: list[dict[str, Any]]
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    error: str | None = None
-    created_at: str
-
-
-class ChatResponse(BaseModel):
-    message: MessageResponse
-    memories_created: list[MemoryResponse]
-    trace: TraceResponse
-
-
-class CancelResponse(BaseModel):
-    status: Literal["cancelled", "idle"]
-    session_id: str
-
-
-class MemoryUndoBody(StrictModel):
-    source_refs: list[str] = Field(min_length=1, max_length=100)
-    dry_run: bool = False
-
-
-class MemoryUndoResponse(BaseModel):
-    affected_ids: list[str]
-    restored_ids: list[str]
-
-
-class MemoryJobResponse(BaseModel):
-    id: str
-    source_ref: str
-    status: str
-    attempts: int
-    error: str | None = None
-    available_at: str | None = None
-    lease_owner: str | None = None
-    lease_expires_at: str | None = None
-    created_at: str
-    updated_at: str
-    extracted_count: int | None = None
-    staged_count: int | None = None
-
-
-class MemoryReviewResponse(BaseModel):
-    id: str
-    job_id: str
-    source_ref: str
-    ordinal: int
-    content: str
-    kind: MemoryKind
-    importance: int
-    status: Literal["pending", "applying", "approved", "rejected"]
-    applied_memory_id: str | None = None
-    applied_action: str | None = None
-    applied_claim_id: str | None = None
-    assessment: dict[str, Any] | None = None
-    created_at: str
-    updated_at: str
-
-
-class MemoryReviewApproval(StrictModel):
-    content: str = Field(min_length=1, max_length=4000)
-    kind: MemoryKind
-    importance: int = Field(ge=1, le=5)
-    claim: ClaimDraft | None = None
-    approve_claim: bool = Field(default=False, strict=True)
-
-    @model_validator(mode='after')
-    def explicit_claim_approval(self):
-        if (self.claim is not None) != self.approve_claim:
-            raise ValueError('结构化状态须同时提交完整Claim和approve_claim=true明确批准')
-        return self
-
-
-class MemoryReviewProposal(StrictModel):
-    message_id: str = Field(min_length=1, max_length=64)
-    content: str = Field(min_length=1, max_length=4000)
-    kind: MemoryKind = 'fact'
-    importance: int = Field(default=3, ge=1, le=5)
-
-
-class EpisodePatch(StrictModel):
-    pin: bool | None = Field(default=None, strict=True)
-    archive: bool | None = Field(default=None, strict=True)
-    reason: str | None = Field(default=None, max_length=300)
-
-    @model_validator(mode="after")
-    def one_action(self):
-        fields = self.model_fields_set
-        if fields == {"pin"} and type(self.pin) is bool:
-            return self
-        if fields in ({"archive"}, {"archive", "reason"}) and self.archive is True:
-            return self
-        raise ValueError("仅可提交 pin 布尔值，或 archive=true 及可选 reason")
-
-
-class EpisodeMaintenanceBody(StrictModel):
-    dry_run: bool = Field(default=True, strict=True)
-
-
-class MessageSourceResponse(BaseModel):
-    message_id: str
-    session_id: str
-    session_title: str
-    role: str
-    content: str
-    created_at: str
-    origin: dict = Field(default_factory=dict)
-
-
-class ToolExecuteBody(StrictModel):
-    arguments: dict[str, Any] = Field(default_factory=dict)
-    confirm_write: bool = False
-
-
-class ToolExecuteResponse(BaseModel):
-    name: str
-    ok: bool
-    content: str
-    elapsed_ms: int
-
-
-class ToolSearchBody(StrictModel):
-    query: str = Field(min_length=1, max_length=200)
-    top_k: int = Field(default=5, ge=1, le=10)
-    allowed_risk: list[Literal["read-only", "write", "external-side-effect"]] | None = None
-
-
-class DriftRunBody(StrictModel):
-    force: bool = False
-
-
-VERSION = "0.12.0"
 TAGS = [
     {"name": "system", "description": "健康检查、运行时能力和脱敏配置。"},
     {"name": "setup", "description": "模型热配置、连通性测试与 Setup 向导。"},
@@ -303,32 +94,23 @@ TAGS = [
 ]
 
 
-class ModelSlotBody(StrictModel):
-    model: str | None = Field(default=None, max_length=200)
-    base_url: str | None = Field(default=None, max_length=500)
-    api_key: str | None = Field(default=None, max_length=500)
-
-
-class ModelsUpdateBody(StrictModel):
-    main: ModelSlotBody | None = None
-    fast: ModelSlotBody | None = None
-    embedding: ModelSlotBody | None = None
-
-
-class ModelTestBody(StrictModel):
-    slot: Literal["main", "fast", "embedding"] = "main"
-
-
-class MarkdownWriteBody(StrictModel):
-    content: str = Field(min_length=1, max_length=200000)
-
-
-def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings: Settings | None = None, schema_only: bool = False, tenant_user_id: str = "local") -> FastAPI:
+def _create_tenant_app(
+    config_path: str | Path | None = None,
+    *,
+    tenant_settings: Settings | None = None,
+    schema_only: bool = False,
+    tenant_user_id: str = "local",
+) -> FastAPI:
     """Internal runtime factory. Network entry points use the authenticated gateway."""
     settings = tenant_settings or Settings.load(config_path)
     store = None if schema_only else Store(settings.database, settings.vector_backend)
     governance = None if schema_only else MemoryGovernance(store)
-    service = None if schema_only else AgentService(settings, store, LLMClient(settings), user_id=tenant_user_id)
+    service = (
+        None
+        if schema_only
+        else AgentService(settings, store, LLMClient(settings), user_id=tenant_user_id)
+    )
+    kernel = service.kernel if service is not None else None
     session_locks: dict[str, asyncio.Lock] = {}
     active_turns: dict[str, asyncio.Task] = {}
     deleting_sessions: set[str] = set()
@@ -346,8 +128,11 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
         app.state.memory_worker_task = memory_task
         drift_task = asyncio.create_task(service.drift.run_loop(), name="memoria-drift-worker")
         forgetting_task = (
-            asyncio.create_task(service.forgetting_worker.run_loop(), name="memoria-forgetting-worker")
-            if service.forgetting_worker else None
+            asyncio.create_task(
+                service.forgetting_worker.run_loop(), name="memoria-forgetting-worker"
+            )
+            if service.forgetting_worker
+            else None
         )
         try:
             yield
@@ -357,30 +142,50 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             drift_task.cancel()
             memory_task.cancel()
             if forgetting_task:
-                with suppress(asyncio.CancelledError): await forgetting_task
-            with suppress(asyncio.CancelledError): await drift_task
-            with suppress(asyncio.CancelledError): await memory_task
-            for task in active_turns.values(): task.cancel()
-            if active_turns: await asyncio.gather(*active_turns.values(), return_exceptions=True)
+                with suppress(asyncio.CancelledError):
+                    await forgetting_task
+            with suppress(asyncio.CancelledError):
+                await drift_task
+            with suppress(asyncio.CancelledError):
+                await memory_task
+            for task in active_turns.values():
+                task.cancel()
+            if active_turns:
+                await asyncio.gather(*active_turns.values(), return_exceptions=True)
             await service.stop_integrations()
             store.close()
 
     app = FastAPI(
-        title="Memoria Agent API", version=VERSION,
+        title="Memoria Agent API",
+        version=VERSION,
         summary="可审核的个人与共享记忆、工具循环和运行追踪 API",
         description="API 默认挂载在 `/api`。交互式文档：`/docs`；OpenAPI JSON：`/openapi.json`。",
-        openapi_tags=TAGS, lifespan=lifespan,
+        openapi_tags=TAGS,
+        lifespan=lifespan,
         responses={422: {"model": ErrorResponse, "description": "请求校验失败"}},
     )
-    app.state.settings, app.state.store, app.state.service, app.state.metrics = settings, store, service, metrics
+    app.state.settings, app.state.store, app.state.service, app.state.metrics = (
+        settings,
+        store,
+        service,
+        metrics,
+    )
     app.state.governance = governance
-    app.include_router(claims_router(service.claims if service else None,service.llm if service else None,
-                                     service.runtime.memory if service else None,service.kernel if service else None))
-    app.include_router(studio_router(store,service.claims if service else None,service))
+    app.include_router(claims_router(kernel))
+    app.include_router(studio_router(store, service.claims if service else None, service))
     experiment_owner = settings.database.parent.parent
-    app.include_router(research_runs_router(experiment_owner / "experiments" if experiment_owner.name == tenant_user_id else None,
-                                            tenant_user_id))
-    app.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"], allow_headers=["Content-Type", "X-Request-ID", "Authorization", "X-API-Key", "X-Agent-Key"])
+    app.include_router(
+        research_runs_router(
+            experiment_owner / "experiments" if experiment_owner.name == tenant_user_id else None,
+            tenant_user_id,
+        )
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.allowed_origins),
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "X-Request-ID", "Authorization", "X-API-Key", "X-Agent-Key"],
+    )
 
     @app.middleware("http")
     async def request_context(request: Request, call_next):
@@ -396,7 +201,9 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
             else:
                 response = await call_next(request)
         duration = time.perf_counter() - started
-        route = getattr(request.scope.get("route"), "path", None) or re.sub(r"/[A-Fa-f0-9-]{16,}(?=/|$)", "/{id}", request.url.path)
+        route = getattr(request.scope.get("route"), "path", None) or re.sub(
+            r"/[A-Fa-f0-9-]{16,}(?=/|$)", "/{id}", request.url.path
+        )
         metrics.observe_http(request.method, route, response.status_code, duration)
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -426,676 +233,120 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
 
     from ..memory.library import LibraryError
     from .library import library_router
+
     @app.exception_handler(LibraryError)
     async def library_error(request: Request, exc: LibraryError):
-        return _error(request,exc.status,_error_code(exc.status),exc.detail)
-    app.include_router(library_router(service.library if service else None, service.kernel if service else None))
+        return _error(request, exc.status, _error_code(exc.status), exc.detail)
+
+    app.include_router(library_router(kernel))
     from .memory_kernel import memory_kernel_router
-    app.include_router(memory_kernel_router(service.kernel if service else None))
+
+    app.include_router(memory_kernel_router(kernel))
     from .document_import import document_import_router
-    app.include_router(document_import_router(service.kernel if service else None))
+
+    app.include_router(document_import_router(kernel))
 
     @app.get("/api/health", response_model=HealthResponse, tags=["system"], summary="存活检查")
     def health() -> HealthResponse:
         return HealthResponse(version=VERSION)
 
-    @app.get("/metrics", include_in_schema=False)
-    def prometheus_metrics():
-        if not settings.metrics_enabled:
-            raise HTTPException(404, "metrics disabled")
-        return Response(metrics.render(store), media_type="text/plain; version=0.0.4")
-
-    @app.get("/api/overview", tags=["system"], summary="获取 Dashboard 总览")
-    def overview() -> dict[str, Any]:
-        skills = [item.public_dict() for item in service.skills.list()] if service.skills else []
-        return {
-            **store.overview(),
-            "models": settings.public_dict(),
-            "vector_index": store.vector_index_status,
-            "tools": service.runtime.tools.catalog(),
-            "tool_search": service.tool_presentation.public_status(),
-            "mcp": service.mcp.status(),
-            "drift": service.drift.status(),
-            "pipeline": service.runtime.pipeline.inspect(),
-            "skills": skills,
-            "markdown": service.markdown.status(),
-            "memory_layers": {
-                "config": settings.memory_layers.public_dict() if settings.memory_layers else {"enabled": False},
-                "episodic": service.episodes.stats() if service.episodes else {"enabled": False},
-            },
-            "setup": service.models_public(),
-        }
-
-    def episode_manager():
-        if not service.episodes:
-            raise HTTPException(409, "任务情节记忆未启用")
-        return service.episodes
-
-    @app.get('/api/memory-formation', tags=['memory layers'], summary='当前账号观察、模式及形成策略（只读）')
-    def formation_status():
-        return service.formation.status() if service.formation else {'enabled':False}
-
-    @app.get('/api/memory-observations', tags=['memory layers'], summary='当前账号有来源支持的观察（不是批准事实）')
-    def formation_observations(limit: int = Query(default=50, ge=1, le=200)):
-        from ..memory.formation_store import live_observation
-        result = []
-        with store.lock:
-            rows = store.db.execute("SELECT * FROM memory_observations WHERE state='active' ORDER BY observed_at DESC LIMIT ?", (limit,)).fetchall()
-            for row in rows:
-                try:
-                    live_observation(store,row)
-                except ValueError:
-                    continue
-                from ..memory.formation_history import visible
-                from ..memory.observation_semantics import load
-                result.append({**dict(row),'history':visible(store,row['id']),'semantics':load(store,'conversation',row['id'])})
-        return result
-
-    @app.get('/api/memory-extraction-diagnostics', tags=['memory layers'],summary='当前有效来源的提取覆盖与逐项失败，不是语义召回率')
-    def extraction_diagnostics(limit: int=Query(default=20,ge=1,le=100),session_id: str|None=None):
-        from ..memory.extraction import visible
-        if session_id and not store.session(session_id):raise HTTPException(404,'会话不存在')
-        with store.lock:return visible(store,session_id=session_id,limit=limit)
-
-    @app.get('/api/memory-patterns', tags=['memory layers'], summary='当前账号可核对的跨会话模式与演化版本')
-    def formation_patterns(limit: int = Query(default=50, ge=1, le=200)):
-        from ..memory.formation_store import pattern_sources
-        result = []
-        with store.lock:
-            for row in store.db.execute('SELECT * FROM memory_pattern_versions ORDER BY created_at DESC LIMIT ?', (limit,)).fetchall():
-                try:
-                    sources = pattern_sources(store,row)
-                except ValueError:
-                    continue
-                result.append({**dict(row),'evidence_message_ids':[s['id'] for s in sources]})
-        return result
-
-    @app.get("/api/memory-layers", tags=["memory layers"], summary="查看五层记忆配置与任务情节记忆统计")
-    def memory_layers():
-        return {
-            "config": settings.memory_layers.public_dict() if settings.memory_layers else {"enabled": False},
-            "episodic": service.episodes.stats() if service.episodes else {"enabled": False},
-        }
-
-    @app.get("/api/episodes", tags=["memory layers"], summary="检索有来源的任务执行记录")
-    def list_episodes(
-        query: str = Query(default="", max_length=300),
-        status: Literal["active", "archive", "all"] = "active",
-        limit: int = Query(default=100, ge=1, le=500),
-    ):
-        episodes = episode_manager()
-        if query.strip():
-            if status != "active":
-                raise HTTPException(422, "关键词检索仅支持 active 记录；归档记录请使用列表")
-            return episodes.search(query, limit)
-        return episodes.list(limit, status)
-
-    @app.post("/api/episodes/maintenance", tags=["memory layers"], summary="预览或执行任务情节记忆软归档")
-    def maintain_episodes(body: EpisodeMaintenanceBody = EpisodeMaintenanceBody()):
-        return episode_manager().maintenance(dry_run=body.dry_run)
-
-    @app.get("/api/episodes/{episode_id}", tags=["memory layers"], summary="查看任务执行记录与来源消息 ID")
-    def episode_detail(episode_id: str):
-        item = episode_manager().detail(episode_id, include_expired=True)
-        if not item:
-            raise HTTPException(404, "任务执行记录不存在或来源已删除")
-        return item
-
-    @app.patch("/api/episodes/{episode_id}", tags=["memory layers"], summary="固定或软归档任务执行记录")
-    def update_episode(episode_id: str, body: EpisodePatch):
-        episodes = episode_manager()
-        item = episodes.pin(episode_id, body.pin) if "pin" in body.model_fields_set else episodes.archive(episode_id, body.reason or "")
-        if not item:
-            raise HTTPException(404, "任务执行记录不存在或已归档")
-        return item
-
-    @app.get("/api/datasets", tags=["sessions"], summary="当前用户的真实语料及来源清单")
-    def list_datasets():
-        with store.lock:
-            rows = store.db.execute("SELECT dataset_id,manifest_json,imported_at FROM dataset_imports ORDER BY imported_at DESC").fetchall()
-        return [{"dataset_id": r["dataset_id"], "manifest": json.loads(r["manifest_json"]), "imported_at": r["imported_at"]} for r in rows]
-
-    @app.get("/api/datasets/{dataset_id}", tags=["sessions"], summary="当前用户语料的原文 ID 与消息映射")
-    def dataset_receipt(dataset_id: str):
-        with store.lock:
-            row = store.db.execute("SELECT receipt_json FROM dataset_imports WHERE dataset_id=?", (dataset_id,)).fetchone()
-        if row is None:
-            raise HTTPException(404, "语料不存在")
-        return json.loads(row["receipt_json"])
-
-    @app.get("/api/setup/status", tags=["setup"], summary="Setup 向导状态")
-    def setup_status():
-        return service.models_public()
-
-    @app.get("/api/settings/models", tags=["setup"], summary="读取脱敏后的模型配置")
-    def get_models():
-        return service.models_public()
-
-    @app.put("/api/settings/models", tags=["setup"], summary="热更新模型配置（不回显密钥）")
-    def put_models(body: ModelsUpdateBody):
-        updates = {
-            key: value
-            for key, value in body.model_dump(exclude_none=True).items()
-            if isinstance(value, dict) and value
-        }
-        if not updates:
-            raise HTTPException(422, "至少提供一个模型槽位")
-        return service.update_models(updates)
-
-    @app.post("/api/settings/models/test", tags=["setup"], summary="测试模型连通性")
-    async def test_models(body: ModelTestBody):
-        return await service.test_model(body.slot)
-
-    @app.get("/api/markdown", tags=["markdown"], summary="Markdown 双层状态")
-    def markdown_status():
-        return service.markdown.status()
-
-    @app.get("/api/markdown/{name}", tags=["markdown"], summary="读取 MEMORY/SELF/PENDING")
-    def read_markdown(name: str):
-        try:
-            content = service.markdown.read(name)
-        except KeyError as exc:
-            raise HTTPException(404, str(exc)) from exc
-        return {"name": name.upper() if name.lower() in {"memory", "self", "pending"} else name, "content": content}
-
-    @app.put("/api/markdown/{name}", tags=["markdown"], summary="写入 SELF 或 PENDING")
-    def write_markdown(name: str, body: MarkdownWriteBody):
-        try:
-            content = service.markdown.write(name, body.content)
-        except KeyError as exc:
-            raise HTTPException(404, str(exc)) from exc
-        except ValueError as exc:
-            raise HTTPException(409, str(exc)) from exc
-        return {"name": name, "content": content}
-
-    @app.post("/api/markdown/MEMORY/sync", tags=["markdown"], summary="从结构化记忆重写 MEMORY.md")
-    def sync_memory_markdown():
-        content = service.runtime.memory.refresh_markdown()
-        return {"name": "MEMORY", "content": content, "status": service.markdown.status()}
-
-    @app.get("/api/tools", tags=["tools"], summary="列出模型可调用工具")
-    def tools() -> list[dict[str, Any]]:
-        return service.runtime.tools.catalog()
-
-    @app.get("/api/tools/search", tags=["tools"], summary="Tool Search 状态与目录")
-    def tool_search_status():
-        return service.tool_presentation.public_status()
-
-    @app.post("/api/tools/search", tags=["tools"], summary="调试执行 tool_search")
-    async def tool_search_run(body: ToolSearchBody):
-        return service.tool_presentation.search(
-            body.query, top_k=body.top_k, allowed_risk=body.allowed_risk,
-        )
-
-    @app.get("/api/mcp", tags=["mcp"], summary="MCP server 连接状态")
-    def mcp_status():
-        return {**service.mcp.status(), "startup": service.integration_status()}
-
-    @app.post("/api/mcp/reload", tags=["mcp"], summary="重新加载并连接 MCP servers")
-    async def mcp_reload():
-        return await service.reload_mcp()
-
-    @app.get("/api/drift", tags=["drift"], summary="Drift 调度状态与最近运行")
-    def drift_status(limit: int = Query(default=20, ge=1, le=100)):
-        return {"status": service.drift.status(), "runs": service.drift.recent_runs(limit)}
-
-    @app.post("/api/drift/run", tags=["drift"], summary="手动触发一轮 Drift")
-    async def drift_run(body: DriftRunBody):
-        result = await service.drift.maybe_run(trigger="manual", force=body.force)
-        return {"result": result, "status": service.drift.status()}
-
-    @app.get("/api/skills", tags=["skills"], summary="列出已发现的轻量技能")
-    def list_skills():
-        if not service.skills:
-            return []
-        return [item.public_dict() for item in service.skills.list()]
-
-    @app.get("/api/skills/{skill_name}", tags=["skills"], summary="读取技能正文")
-    def get_skill(skill_name: str):
-        if not service.skills:
-            raise HTTPException(404, "skills 未启用")
-        record = service.skills.get(skill_name)
-        if not record:
-            raise HTTPException(404, "技能不存在")
-        return {
-            **record.public_dict(),
-            "body": record.body,
-            "root_dir": str(record.root_dir) if record.root_dir else "",
-        }
-
-    @app.post("/api/skills/reload", tags=["skills"], summary="重新扫描 skills 目录")
-    def reload_skills():
-        if not service.skills:
-            raise HTTPException(404, "skills 未启用")
-        return [item.public_dict() for item in service.skills.reload()]
-
-    @app.post("/api/tools/{tool_name}/execute", response_model=ToolExecuteResponse, tags=["tools"], summary="调试执行一个工具")
-    async def execute_tool(tool_name: str, body: ToolExecuteBody):
-        catalog = {item["name"]: item for item in service.runtime.tools.catalog()}
-        tool = catalog.get(tool_name)
-        if not tool: raise HTTPException(404, "工具不存在")
-        if tool["risk"] != "read-only" and not body.confirm_write: raise HTTPException(409, "写工具需要 confirm_write=true")
-        return await service.runtime.tools.execute(tool_name, body.arguments, allow_write=body.confirm_write)
-
-    @app.get("/api/traces", response_model=list[TraceResponse], tags=["traces"], summary="查询最近运行追踪")
-    def traces(session_id: str = Query(default="", max_length=64), limit: int = Query(default=50, ge=1, le=200)):
-        return store.traces(session_id, limit)
-
-    @app.get("/api/sessions", response_model=list[SessionResponse], tags=["sessions"], summary="列出会话")
-    def sessions(): return store.sessions()
-
-    @app.post("/api/sessions", response_model=SessionResponse, status_code=201, tags=["sessions"], summary="创建会话")
-    def create_session(body: SessionBody): return {**store.create_session(body.title), "message_count": 0}
-
-    @app.get("/api/sessions/{session_id}", response_model=SessionResponse, tags=["sessions"], summary="获取会话")
-    def session(session_id: str):
-        item = store.session(session_id)
-        if not item: raise HTTPException(404, "会话不存在")
-        item["message_count"] = len(store.messages(session_id, 10000))
-        return item
-
-    @app.patch("/api/sessions/{session_id}", response_model=SessionResponse, tags=["sessions"], summary="重命名会话")
-    def update_session(session_id: str, body: SessionPatch):
-        if not store.session(session_id): raise HTTPException(404, "会话不存在")
-        store.rename_session(session_id, body.title)
-        item = store.session(session_id) or {}
-        item["message_count"] = len(store.messages(session_id, 10000))
-        return item
-
-    @app.get("/api/sessions/{session_id}/messages", response_model=list[MessageResponse], tags=["sessions"], summary="获取会话消息")
-    def messages(session_id: str, limit: int = Query(default=100, ge=1, le=1000), anchor_id: str = ""):
-        if not store.session(session_id): raise HTTPException(404, "会话不存在")
-        if anchor_id:
-            source = store.message_source(anchor_id)
-            if not source or source["session_id"] != session_id:
-                raise HTTPException(404, "来源消息不属于该会话或已删除")
-        return store.messages(session_id, limit, anchor_id or None)
-
-    @app.get("/api/messages/{message_id}/source", response_model=MessageSourceResponse, tags=["sessions"], summary="按来源 ID 定位原始消息")
-    def message_source(message_id: str):
-        item = store.message_source(message_id)
-        if not item: raise HTTPException(404, "来源消息不存在，可能已删除")
-        return item
-
-    def release_turn(session_id, task, lock):
-        if task is not None and active_turns.get(session_id) is task:
-            active_turns.pop(session_id, None)
-        if (session_id not in active_turns and not lock.locked()
-                and session_locks.get(session_id) is lock):
-            session_locks.pop(session_id, None)
-
-    async def execute_turn(session_id: str, content: str, request_id: str | None = None):
-        if session_id in deleting_sessions: raise HTTPException(409, "该会话正在删除")
-        if not store.session(session_id): raise HTTPException(404, "会话不存在")
-        lock = session_locks.setdefault(session_id, asyncio.Lock())
-        if lock.locked() or session_id in active_turns: raise HTTPException(409, "该会话已有一轮对话正在执行")
-        task = None
-        try:
-            async with lock:
-                if session_id in deleting_sessions:
-                    raise HTTPException(409, "该会话正在删除")
-                if not store.session(session_id):
-                    raise HTTPException(404, "会话不存在")
-                with message_ingress('api',preserve=True):
-                    task = asyncio.create_task(service.chat_with_trace(session_id, content.strip(), request_id=request_id))
-                active_turns[session_id] = task
-                task.add_done_callback(lambda done: release_turn(session_id, done, lock))
-                message, memories, trace = await task
-            return {"message": message, "memories_created": memories, "trace": trace}
-        except HTTPException: raise
-        except Exception as exc: raise HTTPException(502, f"模型调用失败：{type(exc).__name__}: {exc}") from exc
-        finally:
-            release_turn(session_id, task, lock)
-
-    # Trusted channels enter only after resolving an authenticated account binding.
-    app.state.chat_turn = execute_turn
-
-    @app.post("/api/sessions/{session_id}/chat", response_model=ChatResponse, tags=["agent"], summary="执行一轮 Agent 对话")
-    async def chat(session_id: str, body: ChatBody, request: Request):
-        return await execute_turn(session_id, body.content, getattr(request.state, "request_id", None))
-
-    @app.post("/api/sessions/{session_id}/chat/stream", tags=["agent"], summary="以 SSE 流式执行一轮 Agent 对话")
-    async def chat_stream(session_id: str, body: ChatBody, request: Request):
-        if session_id in deleting_sessions: raise HTTPException(409, "该会话正在删除")
-        if not store.session(session_id): raise HTTPException(404, "会话不存在")
-        lock = session_locks.setdefault(session_id, asyncio.Lock())
-        if lock.locked() or session_id in active_turns: raise HTTPException(409, "该会话已有一轮对话正在执行")
-        queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-        request_id = getattr(request.state, "request_id", None)
-        started = False
-
-        async def emit(event: dict[str, Any]): await queue.put(event)
-        async def worker():
-            nonlocal started
-            started = True
-            try:
-                async with lock:
-                    if session_id in deleting_sessions:
-                        raise HTTPException(409, "该会话正在删除")
-                    if not store.session(session_id):
-                        raise HTTPException(404, "会话不存在")
-                    message, memories, trace = await service.chat_with_trace(
-                        session_id, body.content.strip(), emit, request_id=request_id,
-                    )
-                await queue.put({"type":"complete","message":message,"memories_created":memories,"trace":trace})
-            except asyncio.CancelledError:
-                await queue.put({"type":"cancelled","session_id":session_id})
-                raise
-            except Exception as exc:
-                await queue.put({"type":"error","message":f"{type(exc).__name__}: {exc}"})
-            finally:
-                release_turn(session_id, asyncio.current_task(), lock)
-                await queue.put(None)
-
-        def finished(done):
-            release_turn(session_id, done, lock)
-            # Cancellation before the coroutine starts never enters its finally.
-            if not started and done.cancelled():
-                queue.put_nowait({'type': 'cancelled', 'session_id': session_id})
-                queue.put_nowait(None)
-
-        with message_ingress('chat'):
-            task = asyncio.create_task(worker())
-        active_turns[session_id] = task
-        task.add_done_callback(finished)
-
-        async def events():
-            try:
-                while True:
-                    if await request.is_disconnected():
-                        task.cancel()
-                        break
-                    try: event = await asyncio.wait_for(queue.get(), timeout=0.5)
-                    except asyncio.TimeoutError: continue
-                    if event is None: break
-                    yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-            finally:
-                if not task.done(): task.cancel()
-                with suppress(asyncio.CancelledError): await task
-        return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
-
-    @app.post("/api/sessions/{session_id}/cancel", response_model=CancelResponse, tags=["agent"], summary="取消正在执行的 Agent turn")
-    async def cancel_turn(session_id: str):
-        task = active_turns.get(session_id)
-        if not task or task.done(): return {"status":"idle","session_id":session_id}
-        task.cancel()
-        return {"status":"cancelled","session_id":session_id}
-
-    @app.delete("/api/sessions/{session_id}", status_code=204, tags=["sessions"], summary="删除会话及其消息")
-    async def delete_session(session_id: str):
-        if session_id in deleting_sessions:
-            raise HTTPException(409, "该会话正在删除")
-        deleting_sessions.add(session_id)
-        lock = session_locks.setdefault(session_id, asyncio.Lock())
-        try:
-            task = active_turns.get(session_id)
-            if task and not task.done():
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
-            async with lock:
-                if not store.delete_session(session_id):
-                    raise HTTPException(404, "会话不存在")
-                service.runtime.memory.refresh_markdown()
-            return Response(status_code=204)
-        finally:
-            deleting_sessions.discard(session_id)
-            if not lock.locked() and session_id not in active_turns:
-                session_locks.pop(session_id, None)
-
-    @app.get("/api/memories", response_model=list[MemoryResponse], tags=["memories"], summary="搜索长期记忆")
-    async def memories(q: str = Query(default="", max_length=200), limit: int = Query(default=100, ge=1, le=500), status: Literal["active", "superseded", "all"] = "active"):
-        if q.strip() and status == "active":
-            return await service.runtime.memory.retrieve(q, limit)
-        return store.memories(q, limit, status)
-
-    @app.get("/api/memories/export.md", tags=["memories"], summary="导出人类可读 Markdown 记忆层")
-    def export_memories_md(limit: int = Query(default=500, ge=1, le=2000)):
-        markdown = export_memories_markdown(store.retrieval_memories(limit))
-        return Response(markdown, media_type="text/markdown; charset=utf-8")
-
-    @app.get("/api/sessions/{session_id}/compaction", tags=["sessions"], summary="查看会话压缩摘要")
-    def session_compaction(session_id: str):
-        if not store.session(session_id):
-            raise HTTPException(404, "会话不存在")
-        item = store.session_compaction(session_id)
-        if not item:
-            return {"session_id": session_id, "summary": "", "covered_message_ids": [], "cursor_message_id": None, "updated_at": None}
-        return item
-
-    @app.post("/api/memories", response_model=MemoryWriteResponse, tags=["memories"], summary="创建、强化或替代长期记忆")
-    async def create_memory(body: MemoryBody):
-        if not body.content.strip(): raise HTTPException(422, "记忆内容不能为空")
-        result = await service.runtime.memory.remember(body.content, body.kind, body.importance, "manual")
-        return result.public_dict()
-
-    @app.post("/api/memories/reindex", response_model=MemoryReindexResponse, tags=["memories"], summary="回填长期记忆语义向量")
-    async def reindex_memories(limit: int = Query(default=1000, ge=1, le=5000)):
-        return await service.runtime.memory.reindex(limit)
-
-    @app.get("/api/memory-jobs", response_model=list[MemoryJobResponse], tags=["memories"], summary="查询后台记忆任务")
-    def memory_jobs(limit: int = Query(default=50, ge=1, le=200)):
-        return store.memory_jobs(limit)
-
-    @app.get("/api/memory-reviews", response_model=list[MemoryReviewResponse], tags=["memories"], summary="查询自动提取记忆审核队列")
-    def memory_reviews(status: Literal["pending", "approved", "rejected", "all"] = "pending", limit: int = Query(default=100, ge=1, le=500)):
-        return store.memory_reviews(status, limit)
-
-    def personal_review_source(message_id: str):
-        source = store.message_source(message_id)
-        if not source:
-            raise HTTPException(409, '来源消息不可用，请重新核对原话')
-        from ..claims import sha
-        service.claims._evidence({'evidence': [{'message_id': message_id, 'start': 0, 'end': len(source['content']),
-                                              'quote': source['content'], 'content_sha256': sha(source['content'])}]})
-
-    @app.post('/api/memory-reviews/propose', response_model=MemoryReviewResponse, status_code=201, tags=['memories'])
-    def propose_memory_review(body: MemoryReviewProposal):
-        with store._memory_transaction():
-            personal_review_source(body.message_id)
-            try:
-                return store.propose_memory_review(body.message_id, body.content, body.kind, body.importance)
-            except ValueError as exc:
-                raise HTTPException(422, str(exc)) from exc
-
-    @app.post("/api/memory-reviews/{review_id}/approve", response_model=MemoryReviewResponse, tags=["memories"], summary="批准并写入候选记忆")
-    async def approve_memory_review(review_id: str, body: MemoryReviewApproval):
-        if not body.content.strip(): raise HTTPException(422, "记忆内容不能为空")
-        candidate = store.memory_review(review_id)
-        if not candidate: raise HTTPException(404, "候选记忆不存在")
-        with store.lock:
-            pattern_link = store.db.execute('SELECT pattern_id FROM memory_formation_candidates WHERE review_id=?', (review_id,)).fetchone()
-        if pattern_link and pattern_link[0]:
-            if body.claim is not None or (body.content.strip(),body.kind,body.importance) != (candidate['content'],candidate['kind'],candidate['importance']):
-                raise HTTPException(409, '跨会话模式须保留完整证据组，不能直接改成单条原话Claim；请核对来源后重新整理')
-            return await service.auto_review.review(review_id, force=True)
-        if not store.message_source(candidate["source_ref"]):
-            raise HTTPException(409, "来源消息已删除，不能批准悬空记忆")
-        review = store.claim_memory_review(review_id, body.content, body.kind, body.importance)
-        if not review: raise HTTPException(409, "候选记忆已处理，请刷新审核队列")
-        if not store.message_source(review["source_ref"]):
-            store.reset_memory_review(review_id)
-            raise HTTPException(409, "来源消息已删除，不能批准悬空记忆")
-        try:
-            with store._memory_transaction():
-                personal_review_source(review['source_ref'])
-            if body.claim is not None:
-                from ..memory.review import approve_review_with_claim
-                return await approve_review_with_claim(service, review, body)
-            result = await service.runtime.memory.remember(
-                body.content, body.kind, body.importance, "reviewed_conversation", review["source_ref"],
-                require_source=True,
-            )
-            store.finish_memory_review(review_id, result.memory["id"] if result.memory else None, result.action)
-        except ClaimError:
-            store.reset_memory_review(review_id)
-            raise
-        except MemoryVersionConflict:
-            store.reset_memory_review(review_id)
-            raise
-        except MemorySourceUnavailable as exc:
-            store.reset_memory_review(review_id)
-            raise HTTPException(409, "来源消息已删除，不能批准悬空记忆") from exc
-        except BaseException as exc:
-            store.reset_memory_review(review_id)
-            if isinstance(exc, asyncio.CancelledError): raise
-            raise HTTPException(502, "记忆写入失败，候选项已恢复待审核状态") from exc
-        return store.memory_review(review_id)
-
-    @app.post('/api/memory-reviews/{review_id}/auto-review',response_model=MemoryReviewResponse,tags=['memories'])
-    async def auto_review_memory(review_id:str,body:MemoryReviewApproval | None=None):
-        if body is not None:
-            if body.claim is not None:raise HTTPException(422,'自动审核从原话判断结构化字段；不要混入手工Claim')
-            if not body.content.strip():raise HTTPException(422,'候选不能为空白')
-            with store._memory_transaction():
-                row=store.memory_review(review_id)
-                if not row:raise HTTPException(404,'候选不存在')
-                personal_review_source(row['source_ref'])
-                cursor=store.db.execute("UPDATE memory_reviews SET content=?,kind=?,importance=?,updated_at=? WHERE id=? AND status='pending'",
-                    (body.content.strip(),body.kind,body.importance,now(),review_id))
-                if not cursor.rowcount:raise HTTPException(409,'候选已处理，请刷新')
-        return await service.auto_review.review(review_id,force=True)
-
-    @app.post('/api/messages/{message_id}/memory-extraction',response_model=MemoryJobResponse,tags=['memories'])
-    def extract_history_memory(message_id:str):
-        with store._memory_transaction():
-            personal_review_source(message_id)
-            return store.request_memory_extraction(message_id)
-
-    @app.post("/api/memory-reviews/{review_id}/reject", response_model=MemoryReviewResponse, tags=["memories"], summary="拒绝候选记忆")
-    def reject_memory_review(review_id: str):
-        if not store.memory_review(review_id): raise HTTPException(404, "候选记忆不存在")
-        if not store.reject_memory_review(review_id): raise HTTPException(409, "候选记忆已处理，请刷新审核队列")
-        return store.memory_review(review_id)
-
-    @app.post("/api/memory-jobs/{job_id}/retry", response_model=MemoryJobResponse, tags=["memories"], summary="重试失败的记忆任务")
-    def retry_memory_job(job_id: str):
-        if not store.retry_memory_job(job_id):
-            raise HTTPException(409, "只有 failed 任务可以手动重试")
-        return store.memory_job(job_id)
-
-    @app.post("/api/memories/undo", response_model=MemoryUndoResponse, tags=["memories"], summary="按消息来源撤销自动记忆")
-    def undo_memories(body: MemoryUndoBody):
-        result = store.undo_memory_sources(body.source_refs, body.dry_run)
-        if not body.dry_run:
-            service.runtime.memory.refresh_markdown()
-        return result
-
-    @app.get("/api/memories/{memory_id}/history", response_model=list[MemoryReplacementResponse], tags=["memories"], summary="查询记忆替代历史")
-    def memory_history(memory_id: str):
-        if not store.memory(memory_id): raise HTTPException(404, "记忆不存在")
-        return store.memory_history(memory_id)
-
-    @app.get("/api/memories/{memory_id}/timeline", response_model=list[MemoryTimelineResponse], tags=["memories"], summary="查询完整记忆版本时间线")
-    def memory_timeline(memory_id: str):
-        if not store.memory(memory_id): raise HTTPException(404, "记忆不存在")
-        return store.memory_timeline(memory_id)
-
-    @app.post("/api/memories/{memory_id}/correct", response_model=MemoryResponse, tags=["memories"], summary="纠正记忆并保留旧版本")
-    async def correct_memory(memory_id: str, body: MemoryCorrectionBody):
-        if not body.content.strip() or not body.reason.strip():
-            raise HTTPException(422, "纠正内容和原因不能为空")
-        current = store.memory(memory_id)
-        if not current: raise HTTPException(404, "记忆不存在")
-        if current["status"] != "active": raise HTTPException(409, "只能纠正当前有效版本，请刷新记忆列表")
-        try:
-            item = await service.runtime.memory.correct(memory_id, body.content, body.kind, body.importance, body.reason)
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        if not item: raise HTTPException(409, "记忆已被其他操作替代，请刷新记忆列表")
-        return item
-
-    @app.patch("/api/memories/{memory_id}", response_model=MemoryResponse, tags=["memories"], summary="编辑长期记忆并保留旧版本")
-    async def update_memory(memory_id: str, body: MemoryPatch):
-        changes = body.model_dump(exclude_unset=True, exclude_none=True)
-        if not changes: raise HTTPException(422, "至少提供一个修改字段")
-        current = store.memory(memory_id)
-        if not current: raise HTTPException(404, "记忆不存在")
-        if current["status"] != "active": raise HTTPException(409, "只能编辑当前有效版本，请刷新记忆列表")
-        try:
-            item = await service.runtime.memory.correct(
-                memory_id, changes.get("content", current["content"]),
-                changes.get("kind", current["kind"]), changes.get("importance", current["importance"]),
-                "用户通过 PATCH 编辑",
-            )
-        except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        if not item: raise HTTPException(409, "记忆已被其他操作替代，请刷新记忆列表")
-        return item
-
-    @app.delete("/api/memories/{memory_id}", status_code=204, tags=["memories"], summary="删除长期记忆")
-    def delete_memory(memory_id: str):
-        if not store.delete_memory(memory_id): raise HTTPException(404, "记忆不存在")
-        service.runtime.memory.refresh_markdown()
-        return Response(status_code=204)
+    context = TenantApiContext(
+        app,
+        settings,
+        store,
+        service,
+        governance,
+        metrics,
+        session_locks,
+        active_turns,
+        deleting_sessions,
+        request_gate,
+    )
+    app.include_router(status_router(context))
+    app.include_router(formation_router(context))
+    app.include_router(episodes_router(context))
+    app.include_router(integrations_router(context))
+    app.include_router(conversations_router(context))
+    app.include_router(memories_router(context))
 
     app.include_router(governance_router(governance, store, settings))
-    _register_round13(app)
+    app.include_router(versions_router(context))
+
     @app.get("/", include_in_schema=False)
     def service_index():
-        return {"service": "Memoria-Agent", "docs": "/docs", "health": "/api/health", "memories": "/api/memories"}
+        return {
+            "service": "Memoria-Agent",
+            "docs": "/docs",
+            "health": "/api/health",
+            "memories": "/api/memories",
+        }
+
     return app
 
 
 def _error(request: Request, status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status, content=ErrorResponse(code=code, message=message, request_id=getattr(request.state, "request_id", "")).model_dump())
+    return JSONResponse(
+        status_code=status,
+        content=ErrorResponse(
+            code=code, message=message, request_id=getattr(request.state, "request_id", "")
+        ).model_dump(),
+    )
 
 
 def _error_code(status: int) -> str:
-    return {401: "unauthorized", 403: "forbidden", 404: "not_found", 409: "conflict", 413: "payload_too_large", 422: "validation_error", 429: "rate_limited", 502: "upstream_error"}.get(status, "request_error")
+    return {
+        401: "unauthorized",
+        403: "forbidden",
+        404: "not_found",
+        409: "conflict",
+        413: "payload_too_large",
+        422: "validation_error",
+        429: "rate_limited",
+        502: "upstream_error",
+    }.get(status, "request_error")
+
 
 # ---- 第十三轮: Bi-temporal + Agentic Memory 路由(追加,避免改动原有路由) ----
-class EvolveBody(StrictModel):
-    new_info: str = Field(min_length=1, max_length=4000)
-    reason: str = Field(default="", max_length=500)
 
-def _register_round13(app):
-    from fastapi import Query as _Q
-
-    @app.get("/api/memories/time-travel", tags=["memories"], summary="时间旅行查询某时刻有效记忆")
-    async def time_travel(as_of: str = _Q(min_length=4, max_length=40), q: str = _Q(default="", max_length=200), limit: int = _Q(default=20, ge=1, le=200)):
-        try:
-            timestamp = normalize_time(as_of)
-        except ValueError as exc:
-            raise HTTPException(422, "as_of 必须为 ISO 8601 时间") from exc
-        if q.strip():
-            return await app.state.service.runtime.memory.retrieve(q, limit=limit, as_of=timestamp)
-        return [{k: v for k, v in item.items() if k != "embedding"}
-                for item in app.state.store.time_travel(timestamp, limit)]
-
-    @app.get("/api/memories/{memory_id}", tags=["memories"], summary="记忆详情(含邻居与演化链)")
-    def memory_detail(memory_id: str):
-        store = app.state.store
-        item = store.memory(memory_id)
-        if not item: raise HTTPException(status_code=404, detail="memory not found")
-        item["neighbors"] = store.memory_neighbors(memory_id, depth=1, limit=10)
-        item["evolutions"] = store.memory_evolutions(memory_id)
-        item["validity_intervals"] = store.memory_validity(memory_id)
-        item.pop("embedding", None)
-        return item
-
-    @app.get("/api/memories/{memory_id}/neighbors", tags=["memories"], summary="记忆图邻居(一跳/多跳)")
-    def neighbors(memory_id: str, depth: int = _Q(default=1, ge=1, le=3)):
-        store = app.state.store
-        if not store.memory(memory_id):
-            from fastapi import HTTPException as _H; raise _H(404, "记忆不存在")
-        return store.memory_neighbors(memory_id, depth)
-
-    @app.post("/api/memories/{memory_id}/links/{other_id}", tags=["memories"], summary="建立记忆交叉链接")
-    def add_link(memory_id: str, other_id: str, relation: str = _Q(default="related", max_length=40)):
-        store = app.state.store
-        item = store.add_memory_link(memory_id, other_id, relation)
-        if not item:
-            from fastapi import HTTPException as _H; raise _H(422, "无法建立链接")
-        return item
-
-    @app.post("/api/memories/{memory_id}/evolve", tags=["memories"], summary="记忆持续演化(refinement)")
-    async def evolve(memory_id: str, body: EvolveBody):
-        service = app.state.service
-        item = await service.runtime.memory.evolve(memory_id, body.new_info, body.reason)
-        if not item:
-            from fastapi import HTTPException as _H; raise _H(404, "记忆不存在或非有效版本")
-        return item
-
-    @app.get("/api/memories/{memory_id}/evolutions", tags=["memories"], summary="记忆演化历史")
-    def evolutions(memory_id: str):
-        return app.state.store.memory_evolutions(memory_id)
+# Existing Python contract imports refer to the one schemas module.
+__all__ = [
+    "VERSION",
+    "_create_tenant_app",
+    "CancelResponse",
+    "ChatBody",
+    "ChatResponse",
+    "DriftRunBody",
+    "EpisodeMaintenanceBody",
+    "EpisodePatch",
+    "ErrorResponse",
+    "EvolveBody",
+    "HealthResponse",
+    "MarkdownWriteBody",
+    "MemoryBody",
+    "MemoryCorrectionBody",
+    "MemoryJobResponse",
+    "MemoryPatch",
+    "MemoryReindexResponse",
+    "MemoryReplacementResponse",
+    "MemoryResponse",
+    "MemoryReviewApproval",
+    "MemoryReviewProposal",
+    "MemoryReviewResponse",
+    "MemoryTimelineResponse",
+    "MemoryUndoBody",
+    "MemoryUndoResponse",
+    "MemoryWriteResponse",
+    "MessageResponse",
+    "MessageSourceResponse",
+    "ModelSlotBody",
+    "ModelTestBody",
+    "ModelsUpdateBody",
+    "SessionBody",
+    "SessionPatch",
+    "SessionResponse",
+    "StrictModel",
+    "ToolExecuteBody",
+    "ToolExecuteResponse",
+    "ToolSearchBody",
+    "TraceResponse",
+]

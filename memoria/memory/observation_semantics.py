@@ -149,7 +149,7 @@ def build(store,domain,source,revision,item,*,recorded_at=None,group=None,histor
         'explicit_statement' if item.get('asserted') else 'unconfirmed')
     request_actor=(domain=='conversation' and c['source_role']=='user' and item.get('category') in {'interest','behavior'}
         and not item.get('asserted') and not THIRD.search(quote))  # Actor of THIS interaction, not a confirmed preference.
-    subject='self' if request_actor else 'unknown';catalog=getattr(store,'entity_catalog',None)
+    subject='self' if request_actor else 'unknown';catalog=store.entities
     if catalog:
         lookup=catalog.match(quote,session_id=source.get('session_id'))
         entity_ids={m['entity_id'] for m in lookup['matches']} if not lookup['ambiguous'] else set()

@@ -105,7 +105,7 @@ def test_receiving_wakes_dispatch_without_waiting_for_periodic_scan(tmp_path):
 def test_latency_is_persisted_deduplicated_owner_scoped_and_deleted_with_inbox(tmp_path,monkeypatch):
     state=ChannelState(tmp_path/'channel.db');packet=source();packet['created']=100
     code=state.issue('app','owner');state.bind('app',packet['sender'],digest(code['code']))
-    clock=[101];monkeypatch.setattr('memoria.channels.state.time.time',lambda:clock[0])
+    clock=[101];monkeypatch.setattr('memoria.persistence.channels.time.time',lambda:clock[0])
     assert state.ingest('app',packet)
     clock[0]=102;assert state.claim('app',packet['message_id'])
     clock[0]=103;state.mark_timing('app',packet['message_id'],'generation_started_at')

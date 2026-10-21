@@ -5,11 +5,8 @@ import operator
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from ..memory import MemoryEngine
-from ..claims import AccessRequest, ClaimMemory
-from ..memory.episodic import EpisodicMemory
+from ..claims import AccessRequest
 from ..skills import SkillCatalog
-from ..store import Store
 from .http_get import DEFAULT_ALLOWED_HOSTS, fetch_url
 from .registry import Tool, ToolRegistry, ToolValue
 
@@ -19,40 +16,31 @@ def _schema(properties: dict, required: list[str]) -> dict:
 
 
 def build_registry(
-    store: Store,
-    memory: MemoryEngine | None = None,
+    kernel,
     skills: SkillCatalog | None = None,
     *,
     http_allowed_hosts: tuple[str, ...] = DEFAULT_ALLOWED_HOSTS,
-    episodes: EpisodicMemory | None = None,
-    claims: ClaimMemory | None = None,
-    kernel=None,
 ) -> ToolRegistry:
+    if kernel is None:
+        raise TypeError('A tenant-bound MemoryKernel is required')
+    store, claims, episodes = kernel.store, kernel.claims, kernel.episodes
     registry = ToolRegistry()
     async def recall(a):
-        if memory:
-            items = await memory.retrieve(str(a["query"]), int(a.get("limit", 5)))
-            # Tool budgets should preserve the matched tail, like the initial frame.
-            return [{**item, "content": ("\n".join(
-                f"[原文片段 {part['start']}:{part['end']}] {part['text']}" for part in item["retrieval_excerpts"])
-                if item.get("retrieval_excerpts") else item.get("retrieval_excerpt", item["content"]))} for item in items]
-        return store.memories(str(a["query"]), int(a.get("limit", 5)))
+        items = await kernel.recall(str(a['query']), int(a.get('limit', 5)))
+        return [{**item, 'content': ('\n'.join(
+            f"[原文片段 {part['start']}:{part['end']}] {part['text']}" for part in item['retrieval_excerpts'])
+            if item.get('retrieval_excerpts') else item.get('retrieval_excerpt', item['content']))} for item in items]
     async def memorize(a):
-        if memory:
-            result = await memory.remember(a["content"], a.get("kind", "fact"), int(a.get("importance", 3)), "agent_tool")
-            return result.public_dict()
-        return store.add_memory(a["content"], a.get("kind", "fact"), int(a.get("importance", 3)), "agent_tool")
+        result = await kernel.remember(a['content'], a.get('kind', 'fact'), int(a.get('importance', 3)), 'agent_tool')
+        return result.public_dict()
     async def forget(a):
-        deleted = store.delete_memory(a["memory_id"])
-        if memory:
-            memory.refresh_markdown()
-        return {"deleted": deleted}
-    async def history(a): return store.search_messages(a["query"], int(a.get("limit", 6)))
+        return {'deleted': kernel.forget(a['memory_id'])}
+    async def history(a):
+        return store.search_messages(a['query'], int(a.get('limit', 6)))
     async def access_claims(a):
         request = AccessRequest.model_validate(a)
         with store._memory_transaction():
-            result = claims.access(request)
-            if kernel:result=kernel.guard_pending_revisions(result,request)
+            result = kernel.access_state(request)
             return ToolValue(result, [claims.access_dependency(request, result['payload'])])
     async def recall_episodes(a):
         if not episodes:

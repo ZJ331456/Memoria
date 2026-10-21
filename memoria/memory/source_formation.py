@@ -375,7 +375,7 @@ class SourceFormation:
                     'scope':source['scope'],'session_id':source['session_id']}
                 cid, oid = uuid.uuid4().hex, uuid.uuid4().hex
                 at = start + payload['source'].index(item.quote)
-                catalog=getattr(self.store,'entity_catalog',None)
+                catalog=self.store.entities
                 if catalog and status=='approved':
                     from .entities import Anchor
                     catalog.bind('library_observation',oid,revision['id'],Anchor(domain='library',source_id=source['id'],
@@ -438,7 +438,7 @@ class SourceFormation:
     def _live(self, observation, *, complete=True):
         try:
             source, revision, feedback = self._snapshot(observation['source_id'])
-            catalog=getattr(self.store,'entity_catalog',None)
+            catalog=self.store.entities
             if catalog and catalog.cohort('library_observation',observation['id'],revision['id'])!=catalog.signature(
                 'library_observation',observation['id'],revision['id'],session_id=source['session_id']):return False
             return (observation['status']=='approved' and revision['id']==observation['revision_id']

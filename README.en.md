@@ -1,5 +1,7 @@
 # Memoria
 
+Architecture update: tenant-bound Kernel is required for production memory consumers. Personal-memory Chat/bot answers and API/replay use the same Reader; general task dialogue retains its tool loop. SQLite adapters are separated from HTTP/transport code. [Implementation and evaluation limits](docs/implemented/统一内核入口与存储边界.md).
+
 **Source-backed memory for long-term companionship.**
 
 [中文](README.md) · [Getting started](#getting-started) · [Architecture](#architecture) · [Documentation](docs/README.md)

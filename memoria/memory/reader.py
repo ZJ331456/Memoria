@@ -104,7 +104,7 @@ class CitationGuard:
 
     def freshness(self):
         if self.entity_snapshots:
-            catalog=getattr(self.claims.store,'entity_catalog',None)
+            catalog=self.claims.store.entities
             if not catalog or any(not catalog.dependency_valid(s) for s in self.entity_snapshots):return 'entity_binding_changed'
         if self.access_policy and self.access_policy():return 'unresolved_revision_proposal'
         if self.request.session_id and not self.claims.store.session(self.request.session_id):
@@ -231,6 +231,14 @@ async def rerank_memory_access(claims,llm,request,access):
     return access
 
 async def read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=None,policy_guard=None):
+    from .reader_calls import ReaderCallLog
+    observed = ReaderCallLog(llm)
+    result = await _read_memory_answer(claims,engine,observed,request,accessor=accessor,policy_guard=policy_guard)
+    result['reader_calls'] = observed.calls
+    return result
+
+
+async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=None,policy_guard=None):
     access=await accessor(request) if accessor else await MemoryAccessOrchestrator(claims,engine,llm).access(request)
     if request.use_llm_rerank and access['path']!='clarify':
         access=await rerank_memory_access(claims,llm,request,access)
@@ -313,7 +321,7 @@ async def read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=
                         risk_checks.get('pipeline_budget_unavailable') else 'sufficiency_check_failed',
                         'semantic_entailment_verified':False}}
     try:
-        result=await llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens)
+        result=await llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens,tools=None)
     except (ProviderError,RuntimeError):
         if risk_checks is not None:
             policy.release('answer_pipeline')
@@ -389,6 +397,14 @@ async def rerank_source_packet(kernel,request,packet,captured):
     return result,trace
 
 async def read_knowledge_answer(kernel,request):
+    from .reader_calls import ReaderCallLog
+    observed = ReaderCallLog(kernel.llm)
+    result = await _read_knowledge_answer(kernel,request,observed)
+    result['reader_calls'] = observed.calls
+    return result
+
+
+async def _read_knowledge_answer(kernel,request,llm):
     """Source-domain Reader. Retrieval evidence is never approved as personal Claim state."""
     captured={}
     packet=await kernel.search(request,capture=captured)
@@ -412,7 +428,7 @@ async def read_knowledge_answer(kernel,request):
     section=PromptSection('Source Evidence',canonical(packet),10,atomic=True)
     messages=PromptAssembler().assemble(contract,extra_sections=[section]).as_messages()
     messages.append({'role':'user','content':request.query})
-    meter=getattr(kernel.llm,'reader_budget',None) or ReaderBudget(kernel.settings)
+    meter=getattr(llm,'reader_budget',None) or ReaderBudget(kernel.settings)
     try:prepared=await meter.prepare(messages,temperature=0,top_p=1)
     except ContextLengthError:return reject('reader_budget_exceeded')
     # Preserve the entire evidence object, including all necessary support/subject/feedback.
@@ -426,7 +442,7 @@ async def read_knowledge_answer(kernel,request):
         from .rerank import seed_policy
         if not seed_policy(reranking).reserve_call('reader',prepared.report):return reject('rerank_reader_budget_unavailable')
     try:
-        result=await kernel.llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens,temperature=0,top_p=1)
+        result=await llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens,temperature=0,top_p=1,tools=None)
     except (ProviderError,RuntimeError):return reject('reader_provider_failure',called=True,budget=prepared.report)
     usage=result.usage or None
     if result.finish_reason not in {None,'stop'} or result.tool_calls:

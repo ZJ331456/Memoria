@@ -104,7 +104,11 @@ def test_snapshot_cli_uses_immutable_input_private_owner_and_no_live_writes(tmp_
     sid=store.create_session('Engineering snapshot')['id']
     store.add_message(sid,'user','Engineering cedar private source.')
     before=watermark(store)
-    settings=SimpleNamespace(root=Path(__file__).resolve().parents[1])
+    from memoria.config import Settings
+    config = tmp_path / 'snapshot.toml'
+    config.write_text('[memory.markdown]\nenabled=false\n', encoding='utf-8')
+    settings = Settings.load(config)
+    settings.root = Path(__file__).resolve().parents[1]
     try:
         run=asyncio.run(capture_production(workspace,settings,{'query':'cedar'}))
         assert watermark(store)==before

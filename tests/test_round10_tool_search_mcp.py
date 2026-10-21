@@ -1,3 +1,4 @@
+from tests.kernel_factory import tool_kernel
 from pathlib import Path
 
 
@@ -14,7 +15,7 @@ def test_local_tool_name():
 
 def test_tool_search_presentation(tmp_path: Path):
     store = Store(tmp_path / "search.db")
-    registry = build_registry(store)
+    registry = build_registry(tool_kernel(store))
     presentation = ToolPresentation(registry, enabled=True)
     names = {schema["function"]["name"] for schema in presentation.schemas()}
     assert "tool_search" in names
@@ -34,7 +35,7 @@ def test_tool_search_presentation(tmp_path: Path):
 
 def test_tool_search_disabled_exposes_all(tmp_path: Path):
     store = Store(tmp_path / "nosearch.db")
-    registry = build_registry(store)
+    registry = build_registry(tool_kernel(store))
     presentation = ToolPresentation(registry, enabled=False)
     names = {schema["function"]["name"] for schema in presentation.schemas()}
     assert "memorize" in names

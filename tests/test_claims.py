@@ -1,3 +1,4 @@
+from tests.kernel_factory import tool_kernel
 """Temporary engineering inputs only: never research users, histories or scores."""
 import asyncio
 import json
@@ -455,7 +456,7 @@ def test_two_connections_cannot_double_approve(core,tmp_path):
 
 def test_tool_and_narrow_natural_language_access(core):
     approve(core,create(core))
-    registry=build_registry(core[0],claims=core[1])
+    registry=build_registry(tool_kernel(core[0],claims=core[1]))
     result=asyncio.run(registry.execute("access_claims",{"predicates":["response_language"]}))
     assert result.ok and values(json.loads(result.content))==["中文"]
     result=asyncio.run(registry.execute("access_claims",{"predicates":["response_language"],"user_id":"other"}))

@@ -215,7 +215,7 @@ class MemoryAccessOrchestrator:
             and complex_recall(request.query) and not re.search(r'\d|年|月|周|星期|昨天|今天|明天|前年|去年|何时|哪天|什么时候', request.query)):
             # "以前/当时/后来" asks for narrative relations, not an invented ISO cutoff.
             parsed.update(requires_clarification=False, intent='retrieve', reason='unbounded_narrative_time_unknown')
-        catalog=getattr(self.claims.store,'entity_catalog',None)
+        catalog=self.claims.store.entities
         entities_enabled=request.use_entities if request.use_entities is not None else getattr(self.engine,'entity_enabled',False)
         identity_lookup=catalog.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type) if catalog else None
         if identity_lookup and identity_lookup['resolution']['ambiguous']:

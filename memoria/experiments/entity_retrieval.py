@@ -16,7 +16,6 @@ from ..claims import sha
 from ..memory.access import QueryRequest
 from ..memory.entities import Anchor, EntityInput, AliasInput
 from ..memory.kernel import MemoryKernel
-from ..memory.reader import read_memory_answer
 from ..store import Store
 from .history import write_json
 from .records import digest_file, code_identity
@@ -166,12 +165,13 @@ async def run_comparison(settings,*,reader_cases=(),allow_remote=False,max_calls
                     kernel.personal_access.engine=MethodEngine(kernel.memory,kernel.entities,current_method)
                     request=QueryRequest(query=case['query'],entity_type=case.get('entity_type'),mode='rrf',
                         use_entities=current_method!='three_lane_rrf',candidate_limit=8,top_k=4,selector='evidence_coverage',
-                        budget_chars=budget_chars,include_experiences=False,use_answer_risk=False)
-                    row['access']=await kernel.access(request)
-                    row['retrieval_selection_ms']=round((time.perf_counter()-start)*1000,3)
+                        budget_chars=budget_chars,include_experiences=False,use_answer_risk=False,use_adaptive_retrieval=False)
                     if case['id'] in reader_cases:
-                        async def frozen_access(_):return row['access']
-                        row['reader']=await read_memory_answer(kernel.claims,kernel.memory,llm,request,accessor=frozen_access)
+                        row['reader']=await kernel.answer(request)
+                        row['access']=row['reader']['access']
+                    else:
+                        row['access']=await kernel.access(request)
+                    row['retrieval_selection_ms']=row['access'].get('elapsed_ms')
                     row['status']='finished'
                     if row.get('reader',{}).get('validation',{}).get('valid') is False:
                         row.update(status='failed',error='ReaderValidationFailure')

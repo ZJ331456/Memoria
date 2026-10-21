@@ -329,7 +329,7 @@ class AutoMemoryReviewer:
                     from .formation_store import bind_support, published
                     bind_support(self.store, memory['id'], formation_context, before_groups)
                     published(self.store, row['id'], memory['id'])
-                    catalog=getattr(self.store,'entity_catalog',None)
+                    catalog=self.store.entities
                     if catalog:
                         from .entities import Anchor
                         anchors=formation_context['observations'] if formation_context else [

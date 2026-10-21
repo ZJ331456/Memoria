@@ -144,16 +144,12 @@ class EvidenceLibrary:
         with self.store._memory_transaction():install(self.store)
 
     def _source(self, sid, *, active=True):
-        row = self.store.db.execute('SELECT * FROM library_sources WHERE id=?', (sid,)).fetchone()
-        if not row or (active and row['status'] != 'active'):
-            raise LibraryError(404, '资料不存在或已撤回')
-        return dict(row)
+        from ..persistence.library_records import LibraryRecordRepository
+        return LibraryRecordRepository(self.store)._source(sid, active=active)
 
     def _revision(self, rid):
-        row = self.store.db.execute('SELECT * FROM library_revisions WHERE id=?', (rid,)).fetchone()
-        if not row or digest(row['content']) != row['sha']:
-            raise LibraryError(409, '资料版本或内容指纹失效')
-        return dict(row)
+        from ..persistence.library_records import LibraryRecordRepository
+        return LibraryRecordRepository(self.store)._revision(rid)
 
     def _feedback(self, rid):
         row = self.store.db.execute('SELECT * FROM library_feedback WHERE revision_id=? ORDER BY rowid DESC LIMIT 1', (rid,)).fetchone()
@@ -178,7 +174,7 @@ class EvidenceLibrary:
             self.store.db.execute('INSERT INTO library_fts(rowid,terms) VALUES(?,?)',
                 (rowid, ' '.join(token_sequence(title+' '+quote))))
         self.store.db.execute('UPDATE library_sources SET head_id=? WHERE id=?', (rid, sid))
-        if catalog:=getattr(self.store,'entity_catalog',None):catalog.index_source(sid)
+        if catalog:=self.store.entities:catalog.index_source(sid)
         return rid
 
     def create(self, body: SourceInput):
@@ -303,7 +299,7 @@ class EvidenceLibrary:
             return result
 
     def entity_supplement(self,query,lexical,*,session_id=None,entity_type=None,limit=8):
-        catalog=self.store.entity_catalog
+        catalog=self.store.entities
         rows,lookup=catalog.candidates('library',query,session_id=session_id,entity_type=entity_type,limit=limit)
         if lookup['resolution']['ambiguous']:return []
         if not rows:return lexical

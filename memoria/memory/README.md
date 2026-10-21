@@ -1,5 +1,7 @@
 # Memory：记忆版本、统一访问与证据选择
 
+[统一内核入口与存储边界](../../docs/implemented/统一内核入口与存储边界.md)：kernel为必需门面，bootstrap负责组件组装，search负责多来源查询，publication/policy负责发布与待修订保护；ports提供宿主读写协议。实体索引由Store明确持有，不再动态补属性。
+
 [observation_semantics.py](observation_semantics.py)保存来源约束的主体/角色/认识状态与事件区间，区分原始来源时间、来源入库时间、Observation记录时间；[temporal_evidence.py](temporal_evidence.py)提供范围过滤与读取前依赖复核。对话/资料、Chat/工具/Reader共用，详见[实现及边界](../../docs/implemented/普通观察主体与事件时间.md)。
 
 [formation_history.py](formation_history.py)接实际RRF历史、同会话前缀、受约束关联核验与依赖失效。历史只提供消歧/关联，不替代当前原话；未知指代不直接发布，当前明确冲突继续独立审核。[行为与边界](../../docs/implemented/有界历史上下文与观察关联.md)。

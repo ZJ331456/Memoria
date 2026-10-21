@@ -91,3 +91,5 @@ v3工程协议单独登记[配置](../../eval/protocols/research-locomo-risk-v3-
 production_replay的`prepare-memory-probe`准备固定单角色LoCoMo原文，接原closed-loop实际执行形成/审核/Claim/View/Reader与撤回；默认准备/验证0调用，显式执行另受调用预算约束。v1普通记忆与v2 Claim两轮共6次真模型调用/4829 tokens，原始记录和后验AI标注留私有空间，不是新的LoCoMo评分。统计区分状态查询尝试、选入Claim修订、编译View与热命中；合理非回答只有显式后验标签才标正确。[命令、结果与限制](../../docs/implemented/生产记忆闭环与逐题归因.md#claim与view真实调用补测2026-10-20)。
 
 [simulation.py](simulation.py)提供用户授权的虚构功能验收，复用production_replay原生产组件，显式synthetic_functional及专用输出隔离、全调用上限、后验断言/失败分母、冻结SHA与跨版本累计报告；真实LLM、离线BGE和工程替身分层，不进入正式研究成绩。[输入与命令](../../simulation/README.md)。
+
+2026-10-21：[生产与实验入口统一](../../docs/implemented/统一内核入口与存储边界.md)。production_replay的冻结账号副本也构造Kernel且禁用Markdown写出；entity_retrieval的Reader直接调用Kernel.answer并显式关闭自适应。rerank_comparison保留冻结候选池这一对照条件；独立PrefixRetriever LoCoMo协议及旧分数未改变。

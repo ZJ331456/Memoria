@@ -89,7 +89,7 @@ def test_self_change_is_rate_limited_separately_from_login(app, monkeypatch):
 
 @pytest.mark.parametrize('interruption', ['reset', 'logout', 'expiry'])
 def test_change_does_not_overwrite_reset_or_revive_revoked_session(tmp_path, monkeypatch, interruption):
-    import memoria.accounts as module
+    import memoria.persistence.accounts as module
     store = AccountStore(tmp_path / 'accounts.db')
     store.register('temporary', OLD)
     user, token = store.login('temporary', OLD)

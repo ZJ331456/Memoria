@@ -49,3 +49,5 @@
 遵循用户最新授权。本项目当前约定在 `main` 工作，未经用户要求不新建分支、不强推。身份为 `ZJ331456 <ZJ331456@users.noreply.github.com>`，远程应为 `https://github.com/ZJ331456/Memoria.git`。
 
 用户要求提交/更新远程时，在完成验证、审查 diff 和确认无凭据后执行提交与普通推送；只读分析或尚未授权的发布不得因本文件自动触发推送。发现远程更新先 fetch 并判断分歧，不能用 reset/force 覆盖其他工作。提交格式与最终核验步骤以提交规范为准。
+
+入口与存储边界遵循docs/implemented/统一内核入口与存储边界.md：生产Runtime/工具必须注入租户Kernel，个人记忆Reader统一走Kernel.answer；不得在API、runtime或tools另造MemoryAccessOrchestrator/Reader备用实现。schema_only仅生成契约，缺Kernel的记忆请求必须503。API、渠道传输与公开账号模块不直接.db执行SQL；领域事务允许保留原SQLite操作，禁止拆散expected-revision与完整来源支持检查。改动须覆盖test_architecture_boundaries及冻结的68个租户接口，仍按上面的同指纹三重门槛验收。

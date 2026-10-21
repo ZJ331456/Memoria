@@ -55,8 +55,10 @@ def spans(text,name):
     return result
 
 class EntityCatalog:
-    def __init__(self,store,library):
-        self.store,self.library=store,library
+    def __init__(self, store, library=None):
+        from ..persistence.library_records import LibraryRecordRepository
+        self.store = store
+        self.library = library if library is not None else LibraryRecordRepository(store)
         schema="""
         CREATE TABLE IF NOT EXISTS memory_entities(id TEXT PRIMARY KEY,canonical_name TEXT NOT NULL,
             entity_type TEXT NOT NULL,scope TEXT NOT NULL,session_id TEXT,anchor_json TEXT NOT NULL,
@@ -86,6 +88,8 @@ class EntityCatalog:
                 if sqlite3.complete_statement(statement):store.db.execute(statement);statement=''
             from .formation_history import install as install_history
             install_history(store)
+            from ..observability.memory_trace import install as install_trace
+            install_trace(store)
 
     def _scope(self,scope,session_id):
         if (scope=='working') != bool(session_id):raise LibraryError(422,'工作实体/别名必须绑定会话，个人范围不能带会话')

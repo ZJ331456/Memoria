@@ -1,3 +1,4 @@
+from tests.kernel_factory import tool_kernel
 """Isolated lifecycle regressions; no production history or research scores."""
 import asyncio
 from datetime import datetime, timedelta, timezone
@@ -220,7 +221,7 @@ def test_truncated_builtin_output_retains_trusted_freshness_dependency(tmp_path,
     store=Store(tmp_path/'truncated.db','json')
     source=store.add_message(store.create_session()['id'],'user','工程截断来源'+('长文'*300))
     memory=store.add_memory(source['content'],source_ref=source['id'],require_source=True)
-    registry=build_registry(store,MemoryEngine(store))
+    registry=build_registry(tool_kernel(store,MemoryEngine(store)))
     registry.get(tool).max_output_chars=40
     result=asyncio.run(registry.execute(tool,{'query':'工程截断来源'}))
     assert result.ok and '截断' in result.content and result.memory_dependencies

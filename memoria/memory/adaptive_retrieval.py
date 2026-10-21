@@ -276,6 +276,8 @@ async def read_adaptive(kernel, request):
         try:
             async with asyncio.timeout(min(kernel.settings.request_timeout_seconds, 90)):
                 with inference_scope(observe_embedding):
+                    from .reader_calls import notify_request
+                    notify_request()
                     result = await kernel.llm.chat(prepared.messages, model=prepared.model, max_tokens=prepared.max_tokens)
             row.update(raw=result.content, usage=result.usage or None, finish_reason=result.finish_reason, status='returned')
             return result
@@ -376,6 +378,8 @@ async def read_adaptive(kernel, request):
                     try:
                         async with asyncio.timeout(min(kernel.settings.request_timeout_seconds, 90)):
                             with inference_scope(observe_embedding):
+                                from .reader_calls import notify_request
+                                notify_request()
                                 result = await kernel.llm.chat(prepared.messages, model=prepared.model, max_tokens=prepared.max_tokens)
                         reader_usage = result.usage or None
                         row.update(raw=result.content, usage=reader_usage, finish_reason=result.finish_reason, status='returned')

@@ -6,7 +6,10 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| [agent.py](agent.py) | AgentRuntime.run、访问/工具循环、流式事件、取消、配额与 trace |
+| [agent.py](agent.py) | AgentRuntime.run生命周期、取消、失败和trace；必须提供租户Kernel |
+| [memory_turn.py](memory_turn.py) | Kernel.answer个人记忆回答、钩子后发布复核与最终缓冲 |
+| [dialogue_context.py](dialogue_context.py) | 一般聊天的记忆/情节/技能上下文 |
+| [dialogue_reasoning.py](dialogue_reasoning.py)、[tool_execution.py](tool_execution.py) | 工具推理循环、风险授权、并行执行与完整预算 |
 | [compaction.py](compaction.py) | SessionCompactor 增量摘要、分片续读、来源覆盖与 CAS 保存 |
 | [../service.py](../service.py) | 装配依赖，向账号内 API 提供轮次服务 |
 
@@ -15,7 +18,7 @@ HTTP 聊天 API 保留；Memory Studio 是来源/状态管理界面，不提供�
 ## 一轮路径
 
 1. 创建上下文与 tracer，执行 before_turn 并保存用户消息。
-2. 少量明确个人状态问题走 MemoryAccessOrchestrator，跳过旧摘要和 fast 查询规划；一般任务执行增量摘要、普通记忆规划/召回及情景召回。
+2. 个人记忆问题统一走 Kernel.answer，跳过未批准历史、旧摘要与 fast 查询规划；一般任务保留增量摘要，通过Kernel召回普通记忆并取情节上下文。
 3. 组装低信任上下文帧、技能和工具目录，追加近期消息，执行 before_reasoning。
 4. 主模型调用前应用字符预算和完整Reader预算（含输出预留）；工具校验/风险授权/配额通过后可并行执行，完整工具组回送模型，触发 after_step。
 5. 回复形成后执行 after_reasoning，保存助手消息及抽取任务；执行 after_turn，保存完成/失败/取消 trace 与来源短情景。
@@ -48,3 +51,5 @@ max_iterations=0 仍受 200 步硬上限，正值最多 200。上下文超限以
 Claim与情景工具现在携带独立于输出文本的来源/状态依赖，Reader前及发布前复核并缓冲输出；Claim直接重新选择状态。工程反例与剩余边界见[逐项修复](../../docs/implemented/算法逻辑审查逐项修复.md)。
 
 会话入口在任务登记时即保留占用，普通/流式与飞书同会话均拒绝重复请求；启动前取消也完成SSE通知和身份匹配清理。[修复证据](../../docs/implemented/算法逻辑审查逐项修复.md)。
+
+[本次入口和事务边界](../../docs/implemented/统一内核入口与存储边界.md)同时说明一般聊天与严格个人事实Reader的区别；不能将旧LoCoMo基线视为本链路效果验证。

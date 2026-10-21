@@ -312,7 +312,7 @@ class MemoryFormation:
                 entity_filter=" AND COALESCE((SELECT identity_key FROM memory_observation_history h WHERE h.observation_id=memory_observations.id),'')=?"
                 params=[topic['category'],topic['topic'],topic['scope'],topic['polarity'],cutoff]
                 params.append(topic.get('history_identity',''))
-                if getattr(self.store,'entity_catalog',None):
+                if self.store.entities:
                     entity_filter+=" AND COALESCE((SELECT identity_json FROM memory_entity_cohorts c WHERE c.domain='observation' AND c.target_id=memory_observations.id AND c.target_revision=memory_observations.source_sha),'[]')=?"
                     params.append(topic.get('entity_signature','[]'))
                 if topic.get('semantic_subject'):

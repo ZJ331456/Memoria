@@ -10,6 +10,7 @@
 
 | 目录 | 职责与入口 |
 | --- | --- |
+| [persistence/](persistence/README.md) | SQLite账号/渠道适配器、Studio只读投影、审核及资料记录；业务层不写SQL |
 | [api/](api/README.md) | 登录网关、个人记忆与 Claim、共享治理、SSE、只读实验账本和 Studio 静态托管 |
 | [memory/](memory/README.md) | 普通记忆版本、长文分块、混合召回、统一访问、中文时间、整组证据选择及审核辅助 |
 | [llm/](llm/README.md) | 本地与远程 OpenAI 兼容客户端及本地文本/Embedding 服务 |

@@ -172,7 +172,7 @@ def test_storage_path_rejects_client_chosen_ids(tmp_path):
 
 
 def test_password_reset_during_login_cannot_create_an_old_password_session(private_api, monkeypatch):
-    import memoria.accounts as accounts_module
+    import memoria.persistence.accounts as accounts_module
     app, client, root = private_api
     app.state.accounts.register('qin', 'Engineering-passphrase-2026')
     original = accounts_module.password_hash

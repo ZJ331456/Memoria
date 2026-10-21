@@ -1,3 +1,4 @@
+from tests.kernel_factory import tool_kernel
 """Long source coverage and lifecycle consistency across both vector backends."""
 import asyncio
 from pathlib import Path
@@ -164,7 +165,7 @@ def test_complementary_matched_chunks_reach_prompt_without_extra_parent_votes(se
     assert all(word in frame for word in ("alpha","beta","gamma"))
     assert "delta" not in frame and frame.count(parent["id"]) == 3
     from memoria.tools import build_registry
-    result = asyncio.run(build_registry(store, engine).execute("recall_memory", {"query":"Ω", "limit":1}))
+    result = asyncio.run(build_registry(tool_kernel(store, engine)).execute("recall_memory", {"query":"Ω", "limit":1}))
     assert result.ok and all(word in result.content for word in ("alpha","beta","gamma"))
     assert len(result.memory_dependencies) == 1
 

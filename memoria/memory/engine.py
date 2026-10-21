@@ -92,7 +92,7 @@ class MemoryEngine:
         if mode not in {"keyword", "bm25", "dense", "rrf"}:
             raise ValueError("unsupported retrieval mode")
         timers = timings or StageTimings()
-        catalog=getattr(self.store,'entity_catalog',None)
+        catalog=self.store.entities
         enabled=(self.entity_enabled if use_entities is None else use_entities) and mode=='rrf' and not as_of and catalog is not None
         entity_rows,entity_lookup=(catalog.candidates('memory',query,session_id=session_id,entity_type=entity_type) if enabled else ([],None))
         if enabled:
@@ -270,7 +270,7 @@ class MemoryEngine:
 
     async def remember(self, content: str, kind: str, importance: int, source: str, source_ref: str | None = None, *, require_source: bool = False, timings: StageTimings | None = None) -> MemoryWriteResult:
         result = await self._remember(content, kind, importance, source, source_ref, require_source=require_source, timings=timings)
-        if result.memory and (catalog:=getattr(self.store,'entity_catalog',None)):catalog.index_memory(result.memory)
+        if result.memory and (catalog:=self.store.entities):catalog.index_memory(result.memory)
         self._sync_markdown_layer(result, content=content, kind=kind, source_ref=source_ref)
         return result
 
@@ -439,7 +439,7 @@ class MemoryEngine:
                 logger.warning("纠正记忆向量化不可用，使用关键词检索: %s", type(exc).__name__)
         corrected = self.store.correct_memory(memory_id, content, kind, importance, reason, vector, embedding_namespace=embedding_namespace, embedding_chunks=chunks or None)
         if corrected:
-            if catalog:=getattr(self.store,'entity_catalog',None):catalog.index_memory(corrected)
+            if catalog:=self.store.entities:catalog.index_memory(corrected)
             self.refresh_markdown()
         return corrected
 

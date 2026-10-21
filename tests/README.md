@@ -108,3 +108,5 @@ TLS新增CA优先级/缓存轮换/目录变化/冷载不阻塞/缺失失败测�
 [test_ordinary_update_policy.py](test_ordinary_update_policy.py)覆盖不同人物/场景、临时与相对时间、计划/不确定、极性、多值、目标截断顺序与模型等待期间竞态；只验证保守闸门，不是抽取F1。
 
 [test_micro_budget.py](test_micro_budget.py)检查固定两题、四次调用/字节/输出硬上限、gold隔离、失败分母/未知usage及连接错误不算合理拒答；模型替身无费用。
+
+[入口与边界检查](test_architecture_boundaries.py)新增21项：5类消息入口与HTTP同一Kernel Reader、状态工具同一发布策略、钩子/来源/元数据失效、未批准历史隔离、任务局部请求观察器、schema_only拒绝服务、业务层不得直接SQL或另造Reader，以及文件/函数大小约束。[68个原租户契约](fixtures/tenant_routes_v1.json)冻结自567ff219；路径、方法、处理器名和响应状态必须保留。最终仍须完整pytest、完整固定模拟和实际本地BGE四路通过，不能只运行此文件。

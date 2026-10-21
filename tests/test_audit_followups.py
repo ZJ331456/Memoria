@@ -1,3 +1,4 @@
+from tests.kernel_factory import tool_kernel
 """Isolated audit counterexamples; no production data or model calls."""
 import asyncio
 import json
@@ -19,7 +20,7 @@ def test_write_policy_rejects_negation_recollection_and_quoted_commands(tmp_path
     assert not authorization.allowed_write_tools
     store = Store(tmp_path / 'policy.db', 'json')
     try:
-        tools = build_registry(store)
+        tools = build_registry(tool_kernel(store))
         item = store.add_memory('工程临时事实')
         for name, arguments in [('memorize', {'content': '不应保存'}),
                                 ('forget_memory', {'memory_id': item['id']})]:
@@ -382,9 +383,18 @@ def test_stream_reserves_session_before_start_and_cancel_always_releases_it(tmp_
         app = _app(tmp_path)
         store = app.state.store
         sid = store.create_session()['id']
-        stream = next(r.endpoint for r in app.routes if getattr(r, 'path', '') == '/api/sessions/{session_id}/chat/stream')
-        cancel = next(r.endpoint for r in app.routes if getattr(r, 'path', '') == '/api/sessions/{session_id}/cancel')
-        delete = next(r.endpoint for r in app.routes if getattr(r, 'path', '') == '/api/sessions/{session_id}' and 'DELETE' in r.methods)
+        def route_leaves(router):
+            # FastAPI includes APIRouter lazily; the cancellation assertions stay unchanged.
+            for route in router.routes:
+                nested = getattr(route, 'original_router', None)
+                if nested is None:
+                    yield route
+                else:
+                    yield from route_leaves(nested)
+        routes = list(route_leaves(app))
+        stream = next(r.endpoint for r in routes if getattr(r, 'path', '') == '/api/sessions/{session_id}/chat/stream')
+        cancel = next(r.endpoint for r in routes if getattr(r, 'path', '') == '/api/sessions/{session_id}/cancel')
+        delete = next(r.endpoint for r in routes if getattr(r, 'path', '') == '/api/sessions/{session_id}' and 'DELETE' in r.methods)
         calls = []
         async def chat(session_id, content, *args, **kwargs):
             calls.append(content)

@@ -1,0 +1,413 @@
+{
+  "baseline_commit": "567ff219f06e4efac46b3b26aa2eeb12fdcfa886",
+  "routes": [
+    {
+      "path": "/api/health",
+      "method": "get",
+      "handler": "health",
+      "status": 200
+    },
+    {
+      "path": "/api/overview",
+      "method": "get",
+      "handler": "overview",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-formation",
+      "method": "get",
+      "handler": "formation_status",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-observations",
+      "method": "get",
+      "handler": "formation_observations",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-extraction-diagnostics",
+      "method": "get",
+      "handler": "extraction_diagnostics",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-patterns",
+      "method": "get",
+      "handler": "formation_patterns",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-layers",
+      "method": "get",
+      "handler": "memory_layers",
+      "status": 200
+    },
+    {
+      "path": "/api/episodes",
+      "method": "get",
+      "handler": "list_episodes",
+      "status": 200
+    },
+    {
+      "path": "/api/episodes/maintenance",
+      "method": "post",
+      "handler": "maintain_episodes",
+      "status": 200
+    },
+    {
+      "path": "/api/episodes/{episode_id}",
+      "method": "get",
+      "handler": "episode_detail",
+      "status": 200
+    },
+    {
+      "path": "/api/episodes/{episode_id}",
+      "method": "patch",
+      "handler": "update_episode",
+      "status": 200
+    },
+    {
+      "path": "/api/datasets",
+      "method": "get",
+      "handler": "list_datasets",
+      "status": 200
+    },
+    {
+      "path": "/api/datasets/{dataset_id}",
+      "method": "get",
+      "handler": "dataset_receipt",
+      "status": 200
+    },
+    {
+      "path": "/api/setup/status",
+      "method": "get",
+      "handler": "setup_status",
+      "status": 200
+    },
+    {
+      "path": "/api/settings/models",
+      "method": "get",
+      "handler": "get_models",
+      "status": 200
+    },
+    {
+      "path": "/api/settings/models",
+      "method": "put",
+      "handler": "put_models",
+      "status": 200
+    },
+    {
+      "path": "/api/settings/models/test",
+      "method": "post",
+      "handler": "test_models",
+      "status": 200
+    },
+    {
+      "path": "/api/markdown",
+      "method": "get",
+      "handler": "markdown_status",
+      "status": 200
+    },
+    {
+      "path": "/api/markdown/{name}",
+      "method": "get",
+      "handler": "read_markdown",
+      "status": 200
+    },
+    {
+      "path": "/api/markdown/{name}",
+      "method": "put",
+      "handler": "write_markdown",
+      "status": 200
+    },
+    {
+      "path": "/api/markdown/MEMORY/sync",
+      "method": "post",
+      "handler": "sync_memory_markdown",
+      "status": 200
+    },
+    {
+      "path": "/api/tools",
+      "method": "get",
+      "handler": "tools",
+      "status": 200
+    },
+    {
+      "path": "/api/tools/search",
+      "method": "get",
+      "handler": "tool_search_status",
+      "status": 200
+    },
+    {
+      "path": "/api/tools/search",
+      "method": "post",
+      "handler": "tool_search_run",
+      "status": 200
+    },
+    {
+      "path": "/api/mcp",
+      "method": "get",
+      "handler": "mcp_status",
+      "status": 200
+    },
+    {
+      "path": "/api/mcp/reload",
+      "method": "post",
+      "handler": "mcp_reload",
+      "status": 200
+    },
+    {
+      "path": "/api/drift",
+      "method": "get",
+      "handler": "drift_status",
+      "status": 200
+    },
+    {
+      "path": "/api/drift/run",
+      "method": "post",
+      "handler": "drift_run",
+      "status": 200
+    },
+    {
+      "path": "/api/skills",
+      "method": "get",
+      "handler": "list_skills",
+      "status": 200
+    },
+    {
+      "path": "/api/skills/{skill_name}",
+      "method": "get",
+      "handler": "get_skill",
+      "status": 200
+    },
+    {
+      "path": "/api/skills/reload",
+      "method": "post",
+      "handler": "reload_skills",
+      "status": 200
+    },
+    {
+      "path": "/api/tools/{tool_name}/execute",
+      "method": "post",
+      "handler": "execute_tool",
+      "status": 200
+    },
+    {
+      "path": "/api/traces",
+      "method": "get",
+      "handler": "traces",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions",
+      "method": "get",
+      "handler": "sessions",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions",
+      "method": "post",
+      "handler": "create_session",
+      "status": 201
+    },
+    {
+      "path": "/api/sessions/{session_id}",
+      "method": "get",
+      "handler": "session",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions/{session_id}",
+      "method": "patch",
+      "handler": "update_session",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions/{session_id}/messages",
+      "method": "get",
+      "handler": "messages",
+      "status": 200
+    },
+    {
+      "path": "/api/messages/{message_id}/source",
+      "method": "get",
+      "handler": "message_source",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions/{session_id}/chat",
+      "method": "post",
+      "handler": "chat",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions/{session_id}/chat/stream",
+      "method": "post",
+      "handler": "chat_stream",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions/{session_id}/cancel",
+      "method": "post",
+      "handler": "cancel_turn",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions/{session_id}",
+      "method": "delete",
+      "handler": "delete_session",
+      "status": 204
+    },
+    {
+      "path": "/api/memories",
+      "method": "get",
+      "handler": "memories",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/export.md",
+      "method": "get",
+      "handler": "export_memories_md",
+      "status": 200
+    },
+    {
+      "path": "/api/sessions/{session_id}/compaction",
+      "method": "get",
+      "handler": "session_compaction",
+      "status": 200
+    },
+    {
+      "path": "/api/memories",
+      "method": "post",
+      "handler": "create_memory",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/reindex",
+      "method": "post",
+      "handler": "reindex_memories",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-jobs",
+      "method": "get",
+      "handler": "memory_jobs",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-reviews",
+      "method": "get",
+      "handler": "memory_reviews",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-reviews/propose",
+      "method": "post",
+      "handler": "propose_memory_review",
+      "status": 201
+    },
+    {
+      "path": "/api/memory-reviews/{review_id}/approve",
+      "method": "post",
+      "handler": "approve_memory_review",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-reviews/{review_id}/auto-review",
+      "method": "post",
+      "handler": "auto_review_memory",
+      "status": 200
+    },
+    {
+      "path": "/api/messages/{message_id}/memory-extraction",
+      "method": "post",
+      "handler": "extract_history_memory",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-reviews/{review_id}/reject",
+      "method": "post",
+      "handler": "reject_memory_review",
+      "status": 200
+    },
+    {
+      "path": "/api/memory-jobs/{job_id}/retry",
+      "method": "post",
+      "handler": "retry_memory_job",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/undo",
+      "method": "post",
+      "handler": "undo_memories",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}/history",
+      "method": "get",
+      "handler": "memory_history",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}/timeline",
+      "method": "get",
+      "handler": "memory_timeline",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}/correct",
+      "method": "post",
+      "handler": "correct_memory",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}",
+      "method": "patch",
+      "handler": "update_memory",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}",
+      "method": "delete",
+      "handler": "delete_memory",
+      "status": 204
+    },
+    {
+      "path": "/api/memories/time-travel",
+      "method": "get",
+      "handler": "time_travel",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}",
+      "method": "get",
+      "handler": "memory_detail",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}/neighbors",
+      "method": "get",
+      "handler": "neighbors",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}/links/{other_id}",
+      "method": "post",
+      "handler": "add_link",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}/evolve",
+      "method": "post",
+      "handler": "evolve",
+      "status": 200
+    },
+    {
+      "path": "/api/memories/{memory_id}/evolutions",
+      "method": "get",
+      "handler": "evolutions",
+      "status": 200
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+from tests.kernel_factory import tool_kernel
 """Authorization applies to the requested operation, not verbs in its payload."""
 import asyncio
 
@@ -22,7 +23,7 @@ def test_commands_cannot_authorize_other_verbs_in_the_saved_fact(tmp_path, text,
     assert authorization.allowed_write_tools == allowed
     store = Store(tmp_path / 'scope.db', 'json')
     try:
-        tools = build_registry(store)
+        tools = build_registry(tool_kernel(store))
         item = store.add_memory('Engineering existing fact')
         if 'forget_memory' not in allowed:
             result = asyncio.run(tools.execute('forget_memory', {'memory_id': item['id']},

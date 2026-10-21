@@ -1,34 +1,30 @@
-from __future__ import annotations
+"""Tenant turn lifecycle. Memory answers, dialogue preparation and tool loops have explicit boundaries."""
 
+from __future__ import annotations
 import asyncio
-import json
 import logging
-import re
 import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
-
 from ..config import Settings
-from ..claims import ClaimMemory
-from ..memory.access import MemoryAccessOrchestrator, infer_query
-from ..memory.reader import CitationGuard, ANSWER_CONTRACT, SAFE_UNKNOWN, SAFE_REJECTED
+from ..memory.access import infer_query
+from ..memory.reader import SAFE_UNKNOWN
 from ..lifecycle import Phase, Pipeline, TurnContext
-from ..llm import ContextLengthError, LLMClient
-from ..memory import MemoryEngine, MemoryQueryPlanner
-from ..memory.budget import TurnMemoryBudget, _MEMORY_READ_TOOLS
-from ..memory.episodic import EpisodicMemory
+from ..llm import LLMClient
+from ..memory import MemoryQueryPlanner
+from ..memory.budget import TurnMemoryBudget
 from ..observability import EventBus, RequestContext, TurnTracer
-from ..prompting import ContextBudget, PromptAssembler, PromptSection
+from ..prompting import ContextBudget, PromptAssembler
 from ..prompting.reader_budget import ReaderBudget
-from ..memory.layer import MarkdownMemoryLayer
-from ..memory.planner import RetrievalPlan
-from ..skills import SkillCatalog, SkillMatch
+from ..skills import SkillCatalog
 from ..store import Store
 from ..tools import ToolPolicy, ToolPresentation, ToolRegistry
-from ..tools.loop_guard import ToolLoopGuard
 from ..tools.policy import ToolAuthorization
 from .compaction import SessionCompactor
-
+from .dialogue_context import assemble_dialogue
+from .dialogue_reasoning import reason_dialogue
+from .memory_turn import run_memory_turn
+from .tool_execution import execute_tools
 
 logger = logging.getLogger(__name__)
 
@@ -39,31 +35,34 @@ class AgentRuntime:
         settings: Settings,
         store: Store,
         llm: LLMClient,
-        memory: MemoryEngine,
         tools: ToolRegistry,
+        *,
+        kernel,
         pipeline: Pipeline | None = None,
         event_bus: EventBus | None = None,
         skills: SkillCatalog | None = None,
-        markdown: MarkdownMemoryLayer | None = None,
         tool_presentation: ToolPresentation | None = None,
-        episodes: EpisodicMemory | None = None,
-        claims: ClaimMemory | None = None,
     ):
         self.settings = settings
         self.store = store
         self.llm = llm
-        self.memory = memory
+        if kernel is None:
+            raise TypeError("A tenant-bound MemoryKernel is required")
+        self.kernel = kernel
+        self.memory = kernel.memory
+        self.formation = kernel.formation
+        self.library = kernel.library
         self.tools = tools
         self.skills = skills
-        self.markdown = markdown
+        self.markdown = kernel.markdown
         self.tool_presentation = tool_presentation or ToolPresentation(tools, enabled=False)
-        self.episodes = episodes
-        self.claims = claims
+        self.episodes = kernel.episodes
+        self.claims = kernel.claims
         self.layers = getattr(settings, "memory_layers", None)
         self.pipeline = pipeline or Pipeline()
         self.event_bus = event_bus or EventBus()
         self.context_budget = ContextBudget(settings.context_char_budget)
-        self.reader_budget = getattr(llm,'reader_budget',None) or ReaderBudget(settings)
+        self.reader_budget = getattr(llm, "reader_budget", None) or ReaderBudget(settings)
         self.retrieval_planner = MemoryQueryPlanner(llm.plan_memory_retrieval)
         self.tool_policy = ToolPolicy()
         if self.layers and self.layers.enabled:
@@ -112,25 +111,34 @@ class AgentRuntime:
         context.metadata["turn_kind"] = turn_kind
         user_message: dict[str, Any] | None = None
         memory_dependencies = {}
-        claim_access=claim_request=None
+        claim_access = claim_request = None
         memory_budget = (
             TurnMemoryBudget(self.layers.retrieval_max_calls, self.layers.retrieval_max_chars)
-            if self.layers and self.layers.enabled else None
+            if self.layers and self.layers.enabled
+            else None
         )
         from ..observability.memory_trace import observe_reads
-        with RequestContext(session_id=session_id, turn_id=turn_id, request_id=request_id),observe_reads() as memory_reads:
+
+        with RequestContext(
+            session_id=session_id, turn_id=turn_id, request_id=request_id
+        ), observe_reads() as memory_reads:
             try:
                 await self.pipeline.run(Phase.BEFORE_TURN, context)
-                await self.event_bus.emit("turn.before", {"session_id": session_id, "turn_id": turn_id})
+                await self.event_bus.emit(
+                    "turn.before", {"session_id": session_id, "turn_id": turn_id}
+                )
                 if on_event:
                     await on_event({"type": "phase", "phase": "before_turn"})
 
-                kernel = getattr(self, 'kernel', None)
-                write_message = kernel.record_message if kernel else self.store.add_message
+                kernel = self.kernel
+                write_message = kernel.record_message
                 user_message = write_message(session_id, "user", user_text)
                 from ..provenance import current_ingress
-                context.metadata['message_origin']=(current_ingress.get() or {'channel':'unknown'}).get('channel')
-                context.metadata['user_message_id']=user_message['id']
+
+                context.metadata["message_origin"] = (
+                    current_ingress.get() or {"channel": "unknown"}
+                ).get("channel")
+                context.metadata["user_message_id"] = user_message["id"]
                 session = self.store.session(session_id)
                 if session and session["title"] == "新对话":
                     self.store.rename_session(session_id, user_text.replace("\n", " ")[:28])
@@ -140,11 +148,25 @@ class AgentRuntime:
                 context.metadata["query_route"] = "personal_memory" if claim_request else "dialogue"
                 if claim_request:
                     claim_request.session_id = session_id
-                if kernel and claim_request and claim_request.use_adaptive_retrieval:
-                    return await self._adaptive_turn(kernel, claim_request, context, tracer, user_message,
-                        write_message, on_event, skip_memory_enqueue, turn_kind, turn_id)
+                if claim_request:
+                    return await self._memory_turn(
+                        kernel,
+                        claim_request,
+                        context,
+                        tracer,
+                        user_message,
+                        write_message,
+                        on_event,
+                        skip_memory_enqueue,
+                        turn_kind,
+                        turn_id,
+                    )
                 with tracer.timings.measure("compaction"):
-                    compaction = None if claim_request else await self.compactor.ensure(session_id, self.settings.memory_window)
+                    compaction = (
+                        None
+                        if claim_request
+                        else await self.compactor.ensure(session_id, self.settings.memory_window)
+                    )
                 if compaction:
                     context.metadata["compaction"] = {
                         "reused": compaction.reused,
@@ -153,387 +175,99 @@ class AgentRuntime:
                     }
 
                 history = self.store.messages(session_id, self.settings.memory_window)
-                with tracer.timings.measure("claim.access"):
-                    claim_access = None
-                    if claim_request:
-                        access = kernel.access if kernel else MemoryAccessOrchestrator(self.claims, self.memory, self.llm).access
-                        claim_access = await access(claim_request)
+                claim_access = None
                 with tracer.timings.measure("query_planner"):
-                    plan = RetrievalPlan(False,user_text,reason="structured_claim_access") if claim_request else await self.retrieval_planner.plan(user_text, history[:-1])
+                    plan = await self.retrieval_planner.plan(user_text, history[:-1])
                 context.metadata["retrieval_plan"] = plan.public_dict()
                 with tracer.timings.measure("memory.retrieve"):
-                    context.memories = await self.memory.retrieve(plan.query, plan.limit, plan.kinds or None, timings=tracer.timings) if plan.needed and not claim_access else []
+                    context.memories = (
+                        await kernel.recall(
+                            plan.query,
+                            plan.limit,
+                            plan.kinds or None,
+                            trace_query=user_text,
+                            timings=tracer.timings,
+                        )
+                        if plan.needed
+                        else []
+                    )
                 context.metadata["retrieval"] = {
                     "injected": len(context.memories),
-                    "top_score": context.memories[0].get("retrieval", {}).get("score") if context.memories else None,
-                    "sufficient": bool(context.memories and context.memories[0].get("retrieval", {}).get("score", 0) > 0),
+                    "top_score": (
+                        context.memories[0].get("retrieval", {}).get("score")
+                        if context.memories
+                        else None
+                    ),
+                    "sufficient": bool(
+                        context.memories
+                        and context.memories[0].get("retrieval", {}).get("score", 0) > 0
+                    ),
                 }
-                if kernel and context.memories:
-                    from ..observability.memory_trace import record_read
-                    records=[kernel.readers.memory(m,user_text).public() for m in context.memories]
-                    record_read({'query':plan.query,'route':'dialogue_initial_memory'},records,records)
-                memory_dependencies.update({'memory:'+m['id']:m['retrieval']['dependency'] for m in context.memories if m.get('retrieval',{}).get('dependency')})
-
-                episodes = (
-                    self.episodes.search(user_text, self.layers.episode_top_k)
-                    if self.episodes and self.layers and len(user_text.strip()) >= 4 and turn_kind == "chat" else []
+                memory_dependencies.update(
+                    {
+                        "memory:" + m["id"]: m["retrieval"]["dependency"]
+                        for m in context.memories
+                        if m.get("retrieval", {}).get("dependency")
+                    }
                 )
-                context.metadata["episode_retrieval"] = {
-                    "matched": len(episodes), "injected": 0, "ids": [],
-                }
 
-                extra_sections: list[PromptSection] = []
-                formation = getattr(self, 'formation', None)
-                if formation and not claim_request:
-                    core = formation.core()
-                    if core:
-                        extra_sections.append(PromptSection('Core Memory', '\n'.join(line for line, _ in core), 31))
-                        memory_dependencies.update({'memory:'+m['id']:self.store.memory_dependency(m) for _, m in core})
-                    context.metadata['memory_formation'] = {'core_count':len(core), 'inferred_patterns':True}
-                citation_guard = None
-                last_reader_result = None
-                citation_safe_answer = None
-                if claim_access:
-                    citation_guard = CitationGuard(self.claims,claim_access,claim_request,
-                        access_policy=(lambda:bool(kernel.guard_pending_revisions(dict(claim_access),claim_request).get('pending_revisions'))) if kernel else None)
-                    context.metadata["claim_access"] = {
-                        "production_trace": claim_access["production_trace"],
-                        "path": claim_access["path"], "reason": claim_access["reason"], "parsed": claim_access["parsed"],
-                        "candidate_ids": claim_access["selection"]["candidate_ids"],
-                        "selected_ids": [c["id"] for c in claim_access["selection"]["payload"]["evidence"]],
-                        "cost_chars": claim_access["selection"]["cost_chars"], "timings": claim_access["timings"],
-                        "rejected": claim_access["rejected"], "dropped": claim_access["selection"]["dropped"]}
-                    extra_sections.append(citation_guard.section())
-                    if kernel:
-                        from ..observability.memory_trace import answer_trace
-                        context.metadata['memory_closed_loop']=answer_trace(kernel,claim_request.model_dump(mode='json'),
-                            {'access':claim_access,'reader_called':False,'status':'pending'})
-                if episodes:
-                    lines = []
-                    for episode in episodes:
-                        source = f"user={episode['user_message_id']}"
-                        if episode.get("assistant_message_id"):
-                            source += f", assistant={episode['assistant_message_id']}"
-                        lines.append(
-                            f"- [episode:{episode['id']}] 任务执行记录，不是已验证的用户事实 | source({source}) | "
-                            f"outcome={episode['outcome']} | task={episode['task'][:200]} | "
-                            f"result={episode['result'][:300]}"
-                        )
-                    extra_sections.append(PromptSection("Past Task Episodes", "\n".join(lines), 32))
-                if turn_kind == "drift":
-                    extra_sections.append(
-                        PromptSection(
-                            "Drift Mode",
-                            "这是空闲 Drift 轮次：遵守技能与写权限白名单，完成后给出简洁审计摘要。",
-                            12,
-                        )
-                    )
-                if self.markdown and self.markdown.enabled:
-                    self_text = self.markdown.self_excerpt()
-                    if self_text.strip():
-                        extra_sections.append(PromptSection("Self", self_text, 15))
-                    context.metadata["markdown_layer"] = self.markdown.status()
-                catalog_text = ""
-                if self.skills:
-                    if force_skill:
-                        record = self.skills.get(force_skill)
-                        if record:
-                            matches = [SkillMatch(record, 100.0, "drift_forced")]
-                        else:
-                            matches = self.skills.select(force_skill)
-                        catalog_text, active_text = self.skills.render_sections(matches)
-                    else:
-                        matches = self.skills.select(user_text)
-                        catalog_text, active_text = self.skills.render_sections(matches)
-                    if active_text:
-                        extra_sections.append(PromptSection("Active Skills", active_text, 45))
-                    context.metadata["skills"] = {
-                        "matched": [
-                            {"name": item.skill.name, "revision": item.skill.revision,
-                             "score": item.score, "reason": item.reason}
-                            for item in matches
-                        ],
-                        "catalog_size": len(self.skills.list()),
-                        "loaded": [],
-                    }
-                tool_catalog = self.tool_presentation.catalog_prompt()
-                if self.layers and self.layers.enabled:
-                    catalog_cap = self.layers.catalog_chars
-                    if catalog_text and tool_catalog:
-                        skills_cap = catalog_cap - min(len(tool_catalog), catalog_cap // 2)
-                        catalog_text = catalog_text[:skills_cap]
-                        tool_catalog = tool_catalog[:catalog_cap - len(catalog_text)]
-                    else:
-                        catalog_text = catalog_text[:catalog_cap]
-                        tool_catalog = tool_catalog[:catalog_cap]
-                if catalog_text:
-                    extra_sections.append(PromptSection("Available Skills", catalog_text, 40))
-                if tool_catalog:
-                    extra_sections.append(PromptSection("Tool Search", tool_catalog, 35))
-                context.metadata["tool_search"] = self.tool_presentation.public_status()
-
-                with tracer.timings.measure("prompt.assemble"):
-                    assembled = self.prompt_assembler.assemble(
-                        self.settings.system_prompt + ('\n'+ANSWER_CONTRACT if citation_guard else ''),
-                        memories=context.memories,
-                        compaction_summary=compaction.summary if compaction else "",
-                        interrupt_note=interrupt_note,
-                        extra_sections=extra_sections,
-                    )
-                context.messages = assembled.as_messages()
-                context.messages += [{"role": message["role"], "content": message["content"]} for message in history]
-                context.metadata["prompt_sections"] = [section.name for section in assembled.sections]
-                episode_content = next(
-                    (section.content for section in assembled.sections if section.name == "Past Task Episodes"), ""
+                assemble_dialogue(
+                    self,
+                    context,
+                    tracer,
+                    history=history,
+                    compaction=compaction,
+                    interrupt_note=interrupt_note,
+                    turn_kind=turn_kind,
+                    force_skill=force_skill,
+                    memory_budget=memory_budget,
+                    memory_dependencies=memory_dependencies,
                 )
-                injected_episode_ids = [
-                    item["id"] for item in episodes
-                    if f"[episode:{item['id']}]" in episode_content and item["user_message_id"] in episode_content
-                ]
-                context.metadata["episode_retrieval"]["injected"] = len(injected_episode_ids)
-                context.metadata["episode_retrieval"]["ids"] = injected_episode_ids
-                for episode in episodes:
-                    if episode['id'] in injected_episode_ids:
-                        for source_id in (episode['user_message_id'],episode.get('assistant_message_id')):
-                            source=self.store.message_source(source_id) if source_id else None
-                            if source:
-                                memory_dependencies['message:'+source_id]=self.store.message_dependency(source)
-                if self.skills:
-                    active_content = next(
-                        (section.content for section in assembled.sections if section.name == "Active Skills"), ""
-                    )
-                    context.metadata["skills"]["injected"] = [
-                        {"name": item.skill.name, "revision": item.skill.revision}
-                        for item in matches
-                        if re.search(r"(?m)^### skill:" + re.escape(item.skill.name) + r" \(", active_content)
-                    ]
-                context.metadata["memory_layers"] = {
-                    "enabled": bool(self.layers and self.layers.enabled),
-                    "section_stats": assembled.section_stats,
-                    "frame_chars": len(assembled.context_frame["content"]) if assembled.context_frame else 0,
-                }
-                if memory_budget:
-                    memory_budget.account_initial(context.metadata["memory_layers"]["frame_chars"])
-                    context.metadata["memory_tool_budget"] = memory_budget.public_dict()
-                if interrupt_note:
-                    self.store.clear_interrupt_note(session_id)
 
-                await self.pipeline.run(Phase.BEFORE_REASONING, context)
-                await self.event_bus.emit("turn.before_reasoning", {"session_id": session_id, "turn_id": turn_id})
-
-                if iteration_limit is not None:
-                    max_steps = max(1, min(int(iteration_limit), self.HARD_ITERATION_CAP))
-                else:
-                    max_steps = self._iteration_limit()
-                loop_guard = ToolLoopGuard(max_identical=2)
-                if authorization is None:
-                    authorization = self.tool_policy.authorize(user_text)
-                context.metadata["tool_authorization"] = {
-                    "allowed_write_tools": sorted(authorization.allowed_write_tools),
-                    "reason": authorization.reason,
-                }
-
-                step = 0
-                while True:
-                    ceiling = max_steps if max_steps is not None else self.HARD_ITERATION_CAP
-                    if step >= ceiling:
-                        context.response = "工具调用达到安全上限，请缩小任务范围后重试。"
-                        break
-                    step += 1
-                    with tracer.timings.measure("prompt.budget"):
-                        budget = self.context_budget.apply(context.messages)
-                    context.messages = budget.messages
-                    context.metadata["context_budget"] = {
-                        "original_chars": budget.original_chars,
-                        "final_chars": budget.final_chars,
-                        "dropped_messages": budget.dropped_messages,
-                        "truncated_tool_results": budget.truncated_tool_results,
-                        "truncated_messages": budget.truncated_messages,
-                        "preserved_context_frame": budget.preserved_context_frame,
-                    }
-                    if any(not self._memory_dependency_valid(d) for d in memory_dependencies.values()):
-                        context.response = SAFE_UNKNOWN
-                        context.metadata['memory_freshness'] = 'dependency_changed_before_reader'
-                        break
-                    if citation_guard and (claim_access['path']=='clarify' or not any(v['eligible'] for v in citation_guard.catalog.values())):
-                        context.response=citation_safe_answer=SAFE_UNKNOWN
-                        context.metadata['citation_validation']={'valid':True,'reason':'access_requires_clarification','semantic_entailment_verified':False}
-                        context.metadata['citations']=[]
-                        break
-                    try:
-                        prepared=await self.reader_budget.prepare(context.messages,None if citation_guard else self.tool_presentation.schemas(),
-                                                                 stream=bool(on_event and not citation_guard and not memory_dependencies))
-                    except ContextLengthError:
-                        context.response=citation_safe_answer='当前完整请求超过阅读预算，请缩短输入或减少上下文后重试。'
-                        context.metadata['reader_budget']={'fits':False,'request_sent':False}
-                        context.metadata['citation_validation']={'valid':False,'reason':'reader_budget_exceeded'} if citation_guard else {}
-                        break
-                    context.messages=prepared.messages
-                    context.metadata['reader_budget']=prepared.report
-                    if citation_guard:
-                        with self.store._memory_transaction():
-                            fresh=citation_guard.freshness()
-                        if not citation_guard.visible(context.messages) or fresh:
-                            context.response=citation_safe_answer=SAFE_UNKNOWN
-                            context.metadata['citation_validation']={'valid':False,'reason':fresh or 'evidence_not_presented'}
-                            context.metadata['citations']=[]
-                            break
-                    try:
-                        tracer.mark_llm_request()
-                        if on_event and not citation_guard and not memory_dependencies:
-                            async def stream_delta(text: str):
-                                tracer.mark_visible_text(text)
-                                await on_event({"type": "delta", "content": text})
-
-                            with tracer.timings.measure("llm.reader"):
-                                result = await self._reader_chat(context,
-                                    context.messages, tools=prepared.tools, on_delta=stream_delta,stream=True,
-                                    model=prepared.model,max_tokens=prepared.max_tokens,
-                                )
-                        else:
-                            with tracer.timings.measure("llm.reader"):
-                                result = await self._reader_chat(context,context.messages, tools=prepared.tools,
-                                                             model=prepared.model,max_tokens=prepared.max_tokens)
-                    except ContextLengthError:
-                        emergency = self.context_budget.emergency(context.messages)
-                        context.messages = emergency.messages
-                        normal_stats = dict(context.metadata["context_budget"])
-                        context.metadata["context_budget"] = {
-                            "original_chars": normal_stats["original_chars"],
-                            "final_chars": emergency.final_chars,
-                            "dropped_messages": normal_stats["dropped_messages"] + emergency.dropped_messages,
-                            "truncated_tool_results": normal_stats["truncated_tool_results"] + emergency.truncated_tool_results,
-                            "truncated_messages": normal_stats["truncated_messages"] + emergency.truncated_messages,
-                            "preserved_context_frame": emergency.preserved_context_frame,
-                            "emergency_retry": True,
-                            "normal": normal_stats,
-                            "emergency": {
-                                "original_chars": emergency.original_chars,
-                                "final_chars": emergency.final_chars,
-                                "dropped_messages": emergency.dropped_messages,
-                                "truncated_tool_results": emergency.truncated_tool_results,
-                                "truncated_messages": emergency.truncated_messages,
-                                "preserved_context_frame": emergency.preserved_context_frame,
-                            },
-                        }
-                        prepared=await self.reader_budget.prepare(context.messages,prepared.tools,selected=prepared.model,max_tokens=prepared.max_tokens)
-                        context.messages=prepared.messages
-                        context.metadata['reader_budget']=prepared.report
-                        if citation_guard and not citation_guard.visible(context.messages):
-                            context.response=citation_safe_answer=SAFE_UNKNOWN
-                            context.metadata['citation_validation']={'valid':False,'reason':'evidence_not_presented_on_retry'}
-                            context.metadata['citations']=[]
-                            break
-                        with tracer.timings.measure("llm.reader_emergency"):
-                            result = await self._reader_chat(context,context.messages, tools=prepared.tools,stage='reader_emergency',
-                                                         model=prepared.model,max_tokens=prepared.max_tokens)
-                    if citation_guard:
-                        last_reader_result=result
-                        with self.store._memory_transaction():
-                            verdict=citation_guard.validate(result,context.messages)
-                        context.response=citation_safe_answer=verdict['answer']
-                        context.metadata['citation_validation']=verdict['validation']
-                        context.metadata['citations']=verdict['citations']
-                        break
-                    if not result.tool_calls:
-                        context.response = result.content or "我暂时没有生成有效回复，请再试一次。"
-                        break
-
-                    assistant = {
-                        "role": "assistant",
-                        "content": result.raw_message.get("content"),
-                        "tool_calls": result.raw_message.get("tool_calls", []),
-                    }
-                    context.messages.append(assistant)
-                    allowed, signature = loop_guard.check(result.tool_calls)
-                    if not allowed:
-                        for call in result.tool_calls:
-                            context.messages.append({
-                                "role": "tool",
-                                "tool_call_id": call["id"],
-                                "content": "工具循环保护：相同调用已连续执行两次，本次不再执行。请基于已有结果给出阶段性结论。",
-                            })
-                        context.tool_chain.append({
-                            "step": step,
-                            "name": "tool_loop_guard",
-                            "arguments": {},
-                            "ok": False,
-                            "elapsed_ms": 0,
-                            "preview": f"blocked repeated signature {signature[:160]}",
-                        })
-                        final_messages = context.messages + [{
-                            "role": "user",
-                            "content": f"{user_text}\n\n请停止调用工具，基于已有结果直接给出简洁的最终答复；说明已经完成什么和仍缺少什么。",
-                        }]
-                        final_budget = self.context_budget.apply(final_messages)
-                        context.metadata["context_budget"]["loop_guard_final_chars"] = final_budget.final_chars
-                        final_prepared=await self.reader_budget.prepare(final_budget.messages)
-                        context.metadata['reader_budget']=final_prepared.report
-                        with tracer.timings.measure("llm.reader_loop_guard"):
-                            summary = await self._reader_chat(context,final_prepared.messages,model=final_prepared.model,
-                                max_tokens=final_prepared.max_tokens,stage='reader_loop_guard')
-                        context.response = summary.content or "检测到重复工具调用，已安全停止。"
-                        break
-
-                    with tracer.timings.measure("tools.execute"):
-                        tool_records = await self._execute_tools_parallel(
-                            result.tool_calls,
-                            authorization.allowed_write_tools,
-                            step,
-                            on_event,
-                            memory_budget,
-                        )
-                    context.tool_chain.extend(tool_records)
-                    for record in tool_records:
-                        for dependency in record.get('memory_dependencies', []):
-                            memory_dependencies[dependency.get('dependency_type','memory')+':'+dependency['id']] = dependency
-                    if self.skills:
-                        context.metadata["skills"]["loaded"].extend(
-                            record["loaded_skill"] for record in tool_records if "loaded_skill" in record
-                        )
-                    if memory_budget:
-                        context.metadata["memory_tool_budget"] = memory_budget.public_dict()
-                    for call, record in zip(result.tool_calls, tool_records):
-                        context.messages.append({
-                            "role": "tool",
-                            "tool_call_id": call["id"],
-                            "content": record["content"],
-                        })
-                    await self.pipeline.run(Phase.AFTER_STEP, context)
-                    await self.event_bus.emit(
-                        "turn.after_step",
-                        {"session_id": session_id, "turn_id": turn_id, "step": step, "tools": len(tool_records)},
-                    )
+                step = await reason_dialogue(
+                    self,
+                    context,
+                    tracer,
+                    on_event=on_event,
+                    iteration_limit=iteration_limit,
+                    authorization=authorization,
+                    memory_budget=memory_budget,
+                    memory_dependencies=memory_dependencies,
+                )
 
                 await self.pipeline.run(Phase.AFTER_REASONING, context)
                 with self.store._memory_transaction():
-                    if any(not self._memory_dependency_valid(d) for d in memory_dependencies.values()):
+                    if any(
+                        not self._memory_dependency_valid(d) for d in memory_dependencies.values()
+                    ):
                         context.response = SAFE_UNKNOWN
-                        context.metadata['memory_freshness'] = 'dependency_changed_before_publish'
-                    if citation_guard:
-                        if context.response!=citation_safe_answer:
-                            context.response=SAFE_REJECTED
-                            context.metadata['citation_validation']={'valid':False,'reason':'post_hook_changed_answer'}
-                            context.metadata['citations']=[]
-                        elif last_reader_result:
-                            verdict=citation_guard.validate(last_reader_result,context.messages)
-                            context.response=verdict['answer']
-                            context.metadata['citation_validation']=verdict['validation']
-                            context.metadata['citations']=verdict['citations']
+                        context.metadata["memory_freshness"] = "dependency_changed_before_publish"
                     assistant_message = write_message(session_id, "assistant", context.response)
-                if (citation_guard or memory_dependencies) and on_event:
+                if memory_dependencies and on_event:
                     tracer.mark_visible_text(context.response)
-                    await on_event({'type':'delta','content':context.response})
-                self._audit_memory_path(context,claim_access,claim_request,memory_reads,
-                    verdict.get('status') if citation_guard and last_reader_result else 'clarify' if citation_guard else 'dialogue')
+                    await on_event({"type": "delta", "content": context.response})
+                self._audit_memory_path(
+                    context, claim_access, claim_request, memory_reads, "dialogue"
+                )
                 if not skip_memory_enqueue:
-                    memory_job=self.store.enqueue_memory_job(user_message["id"], user_text, context.response)
-                    context.metadata['memory_job']={'id':memory_job['id'],'source_ref':user_message['id'],'status_at_enqueue':memory_job['status']}
+                    memory_job = self.store.enqueue_memory_job(
+                        user_message["id"], user_text, context.response
+                    )
+                    context.metadata["memory_job"] = {
+                        "id": memory_job["id"],
+                        "source_ref": user_message["id"],
+                        "status_at_enqueue": memory_job["status"],
+                    }
                 created: list[dict] = []
                 await self.pipeline.run(Phase.AFTER_TURN, context)
                 await self.event_bus.emit(
                     "turn.after",
-                    {"session_id": session_id, "turn_id": turn_id, "status": "completed", "steps": step},
+                    {
+                        "session_id": session_id,
+                        "turn_id": turn_id,
+                        "status": "completed",
+                        "steps": step,
+                    },
                 )
                 trace = tracer.finish(
                     "completed",
@@ -543,15 +277,27 @@ class AgentRuntime:
                     metadata=context.metadata,
                 )
                 self._record_episode_safe(
-                    turn_kind, session_id, user_message, assistant_message, user_text,
-                    "completed", context.response, "", context.tool_chain, trace["id"],
+                    turn_kind,
+                    session_id,
+                    user_message,
+                    assistant_message,
+                    user_text,
+                    "completed",
+                    context.response,
+                    "",
+                    context.tool_chain,
+                    trace["id"],
                 )
                 return assistant_message, created, trace
             except asyncio.CancelledError:
-                self._audit_memory_path(context,claim_access,claim_request,memory_reads,'cancelled')
+                self._audit_memory_path(
+                    context, claim_access, claim_request, memory_reads, "cancelled"
+                )
                 note = f"上一轮在处理「{user_text[:80]}」时被中断；已完成 {len(context.tool_chain)} 个工具步骤。"
                 self.store.set_interrupt_note(session_id, note)
-                await self.event_bus.emit("turn.cancelled", {"session_id": session_id, "turn_id": turn_id})
+                await self.event_bus.emit(
+                    "turn.cancelled", {"session_id": session_id, "turn_id": turn_id}
+                )
                 trace = tracer.finish(
                     "cancelled",
                     len(context.tool_chain),
@@ -561,15 +307,29 @@ class AgentRuntime:
                     context.metadata,
                 )
                 self._record_episode_safe(
-                    turn_kind, session_id, user_message, None, user_text,
-                    "cancelled", "", "turn cancelled", context.tool_chain, trace["id"],
+                    turn_kind,
+                    session_id,
+                    user_message,
+                    None,
+                    user_text,
+                    "cancelled",
+                    "",
+                    "turn cancelled",
+                    context.tool_chain,
+                    trace["id"],
                 )
                 raise
             except Exception as exc:
-                self._audit_memory_path(context,claim_access,claim_request,memory_reads,'execution_failure')
+                self._audit_memory_path(
+                    context, claim_access, claim_request, memory_reads, "execution_failure"
+                )
                 await self.event_bus.emit(
                     "turn.failed",
-                    {"session_id": session_id, "turn_id": turn_id, "error": f"{type(exc).__name__}: {exc}"},
+                    {
+                        "session_id": session_id,
+                        "turn_id": turn_id,
+                        "error": f"{type(exc).__name__}: {exc}",
+                    },
                 )
                 trace = tracer.finish(
                     "failed",
@@ -580,160 +340,70 @@ class AgentRuntime:
                     context.metadata,
                 )
                 self._record_episode_safe(
-                    turn_kind, session_id, user_message, None, user_text,
-                    "failed", "", f"{type(exc).__name__}: {exc}", context.tool_chain, trace["id"],
+                    turn_kind,
+                    session_id,
+                    user_message,
+                    None,
+                    user_text,
+                    "failed",
+                    "",
+                    f"{type(exc).__name__}: {exc}",
+                    context.tool_chain,
+                    trace["id"],
                 )
                 raise
 
-    async def _adaptive_turn(self, kernel, request, context, tracer, user_message, write_message,
-                             on_event, skip_memory_enqueue, turn_kind, turn_id):
-        """Chat/bots use the same buffered Kernel loop, with normal hooks and publication gates."""
-        from ..llm.types import ChatResult
-        session_id = context.session_id
-        await self.pipeline.run(Phase.BEFORE_REASONING, context)
-        await self.event_bus.emit('turn.before_reasoning', {'session_id': session_id, 'turn_id': turn_id})
-        with tracer.timings.measure('memory.adaptive_answer'):
-            result = await kernel.answer(request)
-        access = result['access']
-        context.response = result['answer']
-        protected = context.response
-        context.metadata.update(memory_closed_loop=result['closed_loop'], adaptive_retrieval=access['adaptive'],
-            reader_calls=access['adaptive']['calls'], citation_validation=result['validation'],
-            citations=result['citations'], reader_budget=result.get('reader_budget'))
-        await self.pipeline.run(Phase.AFTER_REASONING, context)
-        with self.store._memory_transaction():
-            if context.response != protected:
-                context.response = SAFE_REJECTED
-                context.metadata['citation_validation'] = {'valid': False, 'reason': 'post_hook_changed_answer'}
-                context.metadata['citations'] = []
-            elif result['status'] == 'answer':
-                guard = CitationGuard(self.claims, access, request,
-                    access_policy=lambda: bool(kernel.guard_pending_revisions(dict(access), request).get('pending_revisions')))
-                prepared_messages = PromptAssembler().assemble(ANSWER_CONTRACT, extra_sections=[guard.section()]).as_messages()
-                prepared_messages.append({'role': 'user', 'content': request.query})
-                raw = next(c for c in reversed(access['adaptive']['calls']) if c['stage'] == 'reader')
-                verdict = guard.validate(ChatResult(content=raw['raw'], finish_reason=raw['finish_reason']), prepared_messages)
-                context.response = verdict['answer']
-                context.metadata.update(citation_validation=verdict['validation'], citations=verdict['citations'])
-            assistant_message = write_message(session_id, 'assistant', context.response)
-        # Final buffered text is emitted only after hook/source/identity/version checks.
-        if on_event:
-            tracer.mark_visible_text(context.response)
-            await on_event({'type': 'delta', 'content': context.response})
-        context.metadata['memory_closed_loop']['chat_publication'] = {
-            'validation': context.metadata['citation_validation'], 'citations': context.metadata['citations']}
-        from ..observability.memory_trace import fingerprint
-        closed = context.metadata['memory_closed_loop']
-        closed['trace_sha256'] = fingerprint({k: v for k, v in closed.items() if k != 'trace_sha256'})
-        if not skip_memory_enqueue:
-            job = self.store.enqueue_memory_job(user_message['id'], context.user_text, context.response)
-            context.metadata['memory_job'] = {'id': job['id'], 'source_ref': user_message['id'], 'status_at_enqueue': job['status']}
-        await self.pipeline.run(Phase.AFTER_TURN, context)
-        await self.event_bus.emit('turn.after', {'session_id': session_id, 'turn_id': turn_id, 'status': 'completed', 'steps': 1})
-        trace = tracer.finish('completed', 1, [], [], metadata=context.metadata)
-        self._record_episode_safe(turn_kind, session_id, user_message, assistant_message, context.user_text,
-            'completed', context.response, '', [], trace['id'])
-        return assistant_message, [], trace
+    async def _memory_turn(
+        self,
+        kernel,
+        request,
+        context,
+        tracer,
+        user_message,
+        write_message,
+        on_event,
+        skip_memory_enqueue,
+        turn_kind,
+        turn_id,
+    ):
+        return await run_memory_turn(
+            self,
+            kernel,
+            request,
+            context,
+            tracer,
+            user_message,
+            write_message,
+            on_event,
+            skip_memory_enqueue,
+            turn_kind,
+            turn_id,
+        )
 
     def _memory_dependency_valid(self, dependency: dict) -> bool:
-        kernel = getattr(self, 'kernel', None)
-        if kernel:
-            from ..observability.context import current_session_id
-            return kernel.dependency_valid(dependency, session_id=current_session_id.get())
-        if dependency.get('dependency_type') == 'library':
-            library=getattr(self,'library',None)
-            return bool(library and library.dependency_valid(dependency))
-        if dependency.get('dependency_type') == 'claim_access':
-            return bool(self.claims and self.claims.access_dependency_valid(dependency))
-        return self.store.memory_dependency_valid(dependency)
+        from ..observability.context import current_session_id
+
+        return self.kernel.dependency_valid(dependency, session_id=current_session_id.get())
 
     async def _execute_tools_parallel(
-        self,
-        tool_calls: list[dict[str, Any]],
-        allowed_write_tools: set[str],
-        step: int,
-        on_event: Callable[[dict[str, Any]], Awaitable[None]] | None,
-        memory_budget: TurnMemoryBudget | None = None,
-    ) -> list[dict[str, Any]]:
-        async def run_one(call: dict[str, Any]) -> dict[str, Any]:
-            decoded = self.tool_presentation.decode(call["name"], call["arguments"])
-            if isinstance(decoded, str):
-                record = {
-                    "step": step,
-                    "name": call["name"],
-                    "arguments": call["arguments"],
-                    "ok": False,
-                    "elapsed_ms": 0,
-                    "preview": decoded[:300],
-                    "content": decoded,
-                    "parallel": len(tool_calls) > 1,
-                }
-            else:
-                tool_name, tool_args = decoded
-                blocked = bool(memory_budget and not memory_budget.allow_call(tool_name))
-                budget_blocked = blocked
-                budget_truncated = False
-                if blocked:
-                    content = "[本轮记忆检索调用预算已用尽；工具未执行]"
-                    tool_ok, elapsed_ms = False, 0
-                else:
-                    tool_result = await self.tools.execute(
-                        tool_name,
-                        tool_args,
-                        allowed_write_tools=allowed_write_tools,
-                    )
-                    content = tool_result.content
-                    if tool_name=="access_claims":
-                        content = "[claim-access-atomic]\n" + content
-                    tool_ok, elapsed_ms = tool_result.ok, tool_result.elapsed_ms
-                    if memory_budget and tool_name in _MEMORY_READ_TOOLS:
-                        consumed = memory_budget.consume(content,atomic=tool_name in {"access_claims","search_library","search_knowledge"})
-                        if consumed != content:
-                            if consumed.startswith("[本轮记忆检索预算已用尽"):
-                                budget_blocked = True
-                                tool_ok = False
-                            else:
-                                budget_truncated = True
-                        content = consumed
-                record = {
-                    "step": step,
-                    "name": tool_name,
-                    "arguments": tool_args,
-                    "ok": tool_ok,
-                    "elapsed_ms": elapsed_ms,
-                    "preview": content[:300],
-                    "content": content,
-                    "parallel": len(tool_calls) > 1,
-                }
-                if tool_ok:
-                    record['memory_dependencies'] = getattr(tool_result,'memory_dependencies',[])
-                if budget_blocked:
-                    record["budget_blocked"] = True
-                if budget_truncated:
-                    record["budget_truncated"] = True
-                if call["name"] == "tool_call":
-                    record["via"] = "tool_call"
-                if tool_name == "load_skill" and tool_ok and self.skills:
-                    try:
-                        loaded = json.loads(content)
-                    except (TypeError, ValueError):
-                        loaded = {}
-                    if isinstance(loaded, dict) and loaded.get("instructions") and loaded.get("name"):
-                        record["loaded_skill"] = {
-                            "name": loaded["name"], "revision": loaded.get("revision", ""),
-                        }
-            if on_event:
-                await on_event({"type": "tool", "tool": {key: value for key, value in record.items() if key not in {"content","memory_dependencies"}}})
-            return record
-
-        if len(tool_calls) <= 1:
-            return [await run_one(tool_calls[0])] if tool_calls else []
-        return list(await asyncio.gather(*(run_one(call) for call in tool_calls)))
+        self, tool_calls, allowed_write_tools, step, on_event, memory_budget=None
+    ):
+        return await execute_tools(
+            self, tool_calls, allowed_write_tools, step, on_event, memory_budget
+        )
 
     def _record_episode_safe(
-        self, turn_kind: str, session_id: str, user_message: dict[str, Any] | None,
-        assistant_message: dict[str, Any] | None, task: str, outcome: str,
-        result: str, error: str, tool_chain: list[dict[str, Any]], trace_id: str,
+        self,
+        turn_kind: str,
+        session_id: str,
+        user_message: dict[str, Any] | None,
+        assistant_message: dict[str, Any] | None,
+        task: str,
+        outcome: str,
+        result: str,
+        error: str,
+        tool_chain: list[dict[str, Any]],
+        trace_id: str,
     ) -> None:
         if turn_kind != "chat" or not self.episodes or not user_message:
             return
@@ -742,53 +412,95 @@ class AgentRuntime:
                 session_id=session_id,
                 user_message_id=user_message["id"],
                 assistant_message_id=assistant_message["id"] if assistant_message else None,
-                task=task[:600], outcome=outcome, result=result[:1200], error=error[:300],
-                tool_names=[item["name"] for item in tool_chain if self.tools.get(item.get("name", ""))],
+                task=task[:600],
+                outcome=outcome,
+                result=result[:1200],
+                error=error[:300],
+                tool_names=[
+                    item["name"] for item in tool_chain if self.tools.get(item.get("name", ""))
+                ],
                 trace_id=trace_id,
             )
         except Exception:
             logger.exception("failed to record task episode for trace %s", trace_id)
 
-    async def _reader_chat(self,context,messages,*,stream=False,stage='reader',**kwargs):
+    async def _reader_chat(self, context, messages, *, stream=False, stage="reader", **kwargs):
         import time
-        from ..observability.memory_trace import fingerprint,read_visibility
-        attempt={'stage':stage,'status':'started','usage':None,'retries':0,
-            'request_sha256':fingerprint(messages),'memory_read_visibility':read_visibility(messages),
-            'budget':context.metadata.get('reader_budget'),
-            'scope':'LLM client request attempt; provider/network acceptance unknown on failure'}
-        context.metadata.setdefault('llm_calls',[]).append(attempt)
-        started=time.perf_counter()
+        from ..observability.memory_trace import fingerprint, read_visibility
+
+        attempt = {
+            "stage": stage,
+            "status": "started",
+            "usage": None,
+            "retries": 0,
+            "request_sha256": fingerprint(messages),
+            "memory_read_visibility": read_visibility(messages),
+            "budget": context.metadata.get("reader_budget"),
+            "scope": "LLM client request attempt; provider/network acceptance unknown on failure",
+        }
+        context.metadata.setdefault("llm_calls", []).append(attempt)
+        started = time.perf_counter()
         try:
-            result=await (self.llm.chat_stream(messages,**kwargs) if stream else self.llm.chat(messages,**kwargs))
-            attempt.update(status='returned',usage=result.usage or None,retries=result.retries,finish_reason=result.finish_reason)
+            result = await (
+                self.llm.chat_stream(messages, **kwargs)
+                if stream
+                else self.llm.chat(messages, **kwargs)
+            )
+            attempt.update(
+                status="returned",
+                usage=result.usage or None,
+                retries=result.retries,
+                finish_reason=result.finish_reason,
+            )
             return result
         except BaseException as exc:
-            attempt.update(status='failed',error_type=type(exc).__name__)
+            attempt.update(status="failed", error_type=type(exc).__name__)
             raise
-        finally:attempt['duration_ms']=round((time.perf_counter()-started)*1000,3)
+        finally:
+            attempt["duration_ms"] = round((time.perf_counter() - started) * 1000, 3)
 
-    def _audit_memory_path(self,context,access,request,reads,status):
-        kernel=getattr(self,'kernel',None)
-        if not kernel:return
+    def _audit_memory_path(self, context, access, request, reads, status):
+        kernel = self.kernel
         from ..observability.memory_trace import answer_trace
+
         if access is None:
-            access={'path':'dialogue','candidates':[c for r in reads for c in r['candidates']],
-                'selection':{'payload':{'evidence':[c for r in reads for c in r['selected']]}}}
+            access = {
+                "path": "dialogue",
+                "candidates": [c for r in reads for c in r["candidates"]],
+                "selection": {"payload": {"evidence": [c for r in reads for c in r["selected"]]}},
+            }
         elif request:
-            access=kernel.guard_pending_revisions(dict(access),request)
+            access = kernel.guard_pending_revisions(dict(access), request)
         try:
-            trace=answer_trace(kernel,request.model_dump(mode='json') if request else {'query':context.user_text},
-                {'access':access,'reader_called':bool(context.metadata.get('llm_calls')),'status':status,
-                 'answer':context.response,'reader_budget':context.metadata.get('reader_budget'),
-                 'validation':context.metadata.get('citation_validation',{'valid':None,'reason':'dialogue_has_no_strict_citation_contract'}),
-                 'citations':context.metadata.get('citations',[])},calls=context.metadata.get('llm_calls',[]))
+            trace = answer_trace(
+                kernel,
+                request.model_dump(mode="json") if request else {"query": context.user_text},
+                {
+                    "access": access,
+                    "reader_called": bool(context.metadata.get("llm_calls")),
+                    "status": status,
+                    "answer": context.response,
+                    "reader_budget": context.metadata.get("reader_budget"),
+                    "validation": context.metadata.get(
+                        "citation_validation",
+                        {"valid": None, "reason": "dialogue_has_no_strict_citation_contract"},
+                    ),
+                    "citations": context.metadata.get("citations", []),
+                },
+                calls=context.metadata.get("llm_calls", []),
+            )
             if not request:
-                trace['selection_scope']='retrieval/tool selection; actual request fragment visibility is in reader.calls'
+                trace["selection_scope"] = (
+                    "retrieval/tool selection; actual request fragment visibility is in reader.calls"
+                )
                 from ..observability.memory_trace import fingerprint
-                trace['trace_sha256']=fingerprint({k:v for k,v in trace.items() if k!='trace_sha256'})
-            context.metadata['memory_closed_loop']=trace
+
+                trace["trace_sha256"] = fingerprint(
+                    {k: v for k, v in trace.items() if k != "trace_sha256"}
+                )
+            context.metadata["memory_closed_loop"] = trace
         except Exception as exc:
-            context.metadata['memory_closed_loop_error']=type(exc).__name__
+            context.metadata["memory_closed_loop_error"] = type(exc).__name__
 
 
 class _FastSummarizer:
@@ -797,7 +509,9 @@ class _FastSummarizer:
     def __init__(self, llm: LLMClient):
         self.llm = llm
 
-    async def complete(self, messages: list[dict[str, str]], model=None, max_tokens: int | None = None) -> str:
+    async def complete(
+        self, messages: list[dict[str, str]], model=None, max_tokens: int | None = None
+    ) -> str:
         selected = model
         if selected is None:
             selected = self.llm.settings.preferred_chat_model(prefer_fast=True)

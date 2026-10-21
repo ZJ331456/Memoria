@@ -51,6 +51,7 @@ class Store:
         self.db.create_function('memoria_bm25',5,lambda tf,length,average,n,df:
             math.log(1+(n-df+0.5)/(df+0.5))*tf*2.2/(tf+1.2*(0.25+0.75*length/max(1.0,average))),deterministic=True)
         self.lock = threading.RLock()
+        self._entities = None
         self.embedding_namespace = "legacy"
         self.vector_backend = vector_backend
         with self.lock:
@@ -289,6 +290,15 @@ class Store:
             from .observability.memory_trace import install as install_memory_trace
             install_memory_trace(self)
             self.db.commit()
+
+    @property
+    def entities(self):
+        """Store-owned, lazy SQLite entity index; never injected by a consumer."""
+        from .memory.entities import EntityCatalog
+        with self.lock:
+            if self._entities is None:
+                self._entities = EntityCatalog(self)
+            return self._entities
 
     @contextmanager
     def _memory_transaction(self):

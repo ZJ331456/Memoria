@@ -113,7 +113,7 @@ def visible(store,*,session_id=None,limit=20):
                 if session_id and source['session_id']!=session_id:continue
                 if digest(source['content'])!=row['source_sha']:continue
             else:
-                catalog=getattr(store,'entity_catalog',None)
+                catalog=store.entities
                 if not catalog:continue
                 source=catalog.library._source(row['source_id'])
                 if source['head_id']!=row['revision_id'] or source['scope']=='working' and source['session_id']!=session_id:continue

@@ -10,7 +10,6 @@ from .config import Settings
 from .drift import DriftWorker
 from .llm import LLMClient
 from .store import Store
-from .memory import EmbeddingClient
 from .memory.kernel import MemoryKernel
 from .memory.forgetting import ForgettingWorker
 from .mcp import McpHost
@@ -27,10 +26,6 @@ class AgentService:
     def __init__(self, settings: Settings, store: Store, llm: LLMClient, *, user_id: str = "local"):
         self.settings, self.store, self.llm = settings, store, llm
         self.kernel = MemoryKernel(settings, store, llm, user_id=user_id)
-        # Existing application APIs retain their attributes, sharing the same tenant-bound instances.
-        for name in ('claims', 'markdown', 'embedder', 'episodes', 'auto_review', 'formation', 'library', 'memory_worker'):
-            setattr(self, name, getattr(self.kernel, name))
-        memory = self.kernel.memory
         self.skills = (
             SkillCatalog(settings.skills_directory, max_inject=settings.skills_max_inject)
             if settings.skills_enabled
@@ -42,13 +37,8 @@ class AgentService:
             if self.episodes else None
         )
         tools = build_registry(
-            store,
-            memory,
-            self.skills,
+            self.kernel, self.skills,
             http_allowed_hosts=settings.http_allowed_hosts,
-            episodes=self.episodes,
-            claims=self.claims,
-            kernel=self.kernel,
         )
         from .tools.knowledge import register_knowledge_tools
         register_knowledge_tools(tools, self.kernel)
@@ -60,17 +50,11 @@ class AgentService:
             settings,
             store,
             llm,
-            memory,
             tools,
+            kernel=self.kernel,
             skills=self.skills,
-            markdown=self.markdown,
             tool_presentation=self.tool_presentation,
-            episodes=self.episodes,
-            claims=self.claims,
         )
-        self.runtime.kernel = self.kernel
-        self.runtime.formation = self.formation
-        self.runtime.library = self.library
         self._busy_check: Callable[[], bool] = lambda: False
         self._integration_task: asyncio.Task | None = None
         self._integration_state = "not_started"
@@ -83,6 +67,38 @@ class AgentService:
             settings=settings,
             is_busy=lambda: self._busy_check(),
         )
+
+    @property
+    def claims(self):
+        return self.kernel.claims
+
+    @property
+    def markdown(self):
+        return self.kernel.markdown
+
+    @property
+    def embedder(self):
+        return self.kernel.embedder
+
+    @property
+    def episodes(self):
+        return self.kernel.episodes
+
+    @property
+    def auto_review(self):
+        return self.kernel.auto_review
+
+    @property
+    def formation(self):
+        return self.kernel.formation
+
+    @property
+    def library(self):
+        return self.kernel.library
+
+    @property
+    def memory_worker(self):
+        return self.kernel.memory_worker
 
     def set_busy_check(self, check: Callable[[], bool]) -> None:
         self._busy_check = check
@@ -178,11 +194,7 @@ class AgentService:
     def update_models(self, updates: dict[str, dict[str, str]]) -> dict[str, Any]:
         result = save_model_overrides(self.settings, updates)
         # In-flight embedding requests keep their original client/model identity.
-        self.embedder = EmbeddingClient(self.settings.embedding, min(self.settings.request_timeout_seconds, 30), self.settings.max_retries)
-        self.kernel.embedder = self.embedder
-        self.runtime.memory.embedder = self.embedder
-        if self.embedder.enabled:
-            self.store.configure_embedding(self.embedder.namespace)
+        self.kernel.configure_embedding()
         return result
 
     def models_public(self) -> dict[str, Any]:

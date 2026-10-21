@@ -518,12 +518,20 @@ async def capture_production(workspace, settings, request, *, local_embeddings=F
             shutil.copyfile(frozen,working)
             store = Store(working, vector_backend="json")
             try:
-                claims = ClaimMemory(store, workspace.owner)
-                engine = MemoryEngine(store,embedder)
+                import copy
+                from ..config import ModelConfig
+                from ..memory.kernel import MemoryKernel
+                replay_settings = copy.deepcopy(settings)
+                replay_settings.database = working
+                replay_settings.markdown_enabled = False
+                if embedder is None:
+                    replay_settings.embedding = ModelConfig(model='', api_key='', base_url='')
+                kernel = MemoryKernel(replay_settings, store, user_id=workspace.owner)
+                kernel.memory.embedder = embedder
                 if index_local_chunks:
                     from ..memory.experience import reindex_dense
                     metrics["experience_index"] = await reindex_dense(store,embedder,index_local_chunks)
-                packet = await MemoryAccessOrchestrator(claims,engine).access(request)
+                packet = await kernel.access(request)
                 write_json(recorder.path/"production-capture.json",packet)
                 write_json(recorder.path/"selection-replay.json",replay(packet,workspace.owner))
                 recorder.append("events.jsonl", {"snapshot_watermark":watermark(store),

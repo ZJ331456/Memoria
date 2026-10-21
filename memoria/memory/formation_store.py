@@ -85,7 +85,7 @@ def live_observation(store, row, *, allow_archived=False):
         raise ValueError('Observation span no longer matches')
     from .formation_history import load
     load(store,row['id'])
-    catalog=getattr(store,'entity_catalog',None)
+    catalog=store.entities
     if catalog and catalog.cohort('observation',row['id'],row['source_sha'])!=catalog.signature(
         'observation',row['id'],row['source_sha'],session_id=row['session_id']):
         raise ValueError('Observation entity identity changed')
@@ -112,7 +112,7 @@ def bucket(row):
 
 
 def with_entities(store,row):
-    row=dict(row);catalog=getattr(store,'entity_catalog',None)
+    row=dict(row);catalog=store.entities
     if catalog:
         ids=catalog.cohort('observation',row['id'],row['source_sha'])
         if ids:row['entity_signature']=canonical(ids)
@@ -162,7 +162,7 @@ def stage(store, job, receipt, reviews):
             (oid,json.dumps(proposal),json.dumps(context),json.dumps(audit),identity))
         from . import observation_semantics as semantics
         semantics.save(store,'conversation',oid,semantics.build(store,'conversation',source,source,item,history_audit=audit))
-        catalog=getattr(store,'entity_catalog',None)
+        catalog=store.entities
         if catalog:
             from .entities import Anchor
             catalog.bind('observation',oid,receipt['source_sha'],Anchor(domain='conversation',source_id=source['id'],

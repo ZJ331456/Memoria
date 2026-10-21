@@ -128,7 +128,7 @@ def _memory(store, current, item):
     from .auto_review import SECRET, SENSITIVE, THIRD_PARTY
     if SECRET.search(source['content']+item['content']) or SENSITIVE.search(source['content']+item['content']) or THIRD_PARTY.search(source['content']):
         raise ValueError('Sensitive historical context excluded')
-    catalog = getattr(store, 'entity_catalog', None)
+    catalog = store.entities
     entities = catalog.cohort('memory', item['id'], digest(item['content'])) if catalog else []
     if entities and catalog.signature('memory', item['id'], digest(item['content']), session_id=current['session_id']) != entities:
         raise ValueError('Historical entity scope or source changed')
@@ -144,7 +144,7 @@ async def collect(store, engine, current):
     context = {'policy': POLICY, 'memories': [], 'recent_messages': [], 'prior_topics': [],
                'retrieval': {}, 'rejected': [], 'purpose': 'association_only_not_new_fact_evidence'}
     with store.lock:
-        catalog=getattr(store,'entity_catalog',None)
+        catalog=store.entities
         context['entity_lookup']=catalog.lookup(current['content'],session_id=current['session_id']) if catalog else None
         # Only the strict prefix in this same session, never assistant suggestions.
         from .experience import personal_source_sql
@@ -190,7 +190,7 @@ async def collect(store, engine, current):
                 try:
                     candidate = _memory(store, current, item)
                     if candidate['source_id'] in seen_sources:continue
-                    catalog = getattr(store, 'entity_catalog', None)
+                    catalog = store.entities
                     if catalog:
                         match = catalog.match(current['content'], session_id=current['session_id'])
                         ids = {m['entity_id'] for m in match['matches']}
@@ -257,7 +257,7 @@ def proposal_check(item, context, current):
 
 
 def validate(store, current, context, selected=None):
-    catalog=getattr(store,'entity_catalog',None)
+    catalog=store.entities
     if context.get('entity_lookup') and (not catalog or not catalog.lookup_valid(context['entity_lookup'])):
         raise ValueError('Historical identity lookup changed')
     selected = set(selected) if selected is not None else set(targets(context))
@@ -332,7 +332,7 @@ def load(store, oid, *, check=True):
 
 
 def identity(item, current, verified, store=None):
-    catalog=getattr(store,'entity_catalog',None)
+    catalog=store.entities
     matched=catalog.match(item['quote'],session_id=current['session_id']) if catalog else None
     if matched and not matched['ambiguous'] and len({m['entity_id'] for m in matched['matches']})==1:
         return ''  # The existing source-bound entity cohort already supplies identity.
