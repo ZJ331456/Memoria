@@ -141,6 +141,10 @@ class CitationGuard:
             instant=normalize_time(at or now())
             if not any(i['valid_at']<=instant and (not i['invalid_at'] or instant<i['invalid_at']) for i in self.claims.store.memory_validity(mid)):
                 return 'memory_inactive'
+        for item in self.catalog.values():
+            dependency = item['data'].get('memory_dependency')
+            if dependency and not self.claims.store.memory_dependency_valid(dependency, as_of=self.request.fact_as_of):
+                return 'memory_support_or_identity_changed'
         for snapshot in self.experience_snapshots.values():
             if not self.claims.store.memory_dependency_valid(snapshot):
                 return 'experience_source_changed'

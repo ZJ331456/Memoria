@@ -655,7 +655,81 @@
           ]
         }
       }
+    },
+    "adaptive_chain": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0
+        },
+        "capability": {
+          "status_in": [
+            "answer"
+          ],
+          "min_adaptive_checks": 1,
+          "max_adaptive_rounds": 0,
+          "reader_called": true,
+          "answer_all": [
+            "快照",
+            "恢复",
+            "磁盘"
+          ],
+          "min_citations": 3,
+          "adaptive_complete": true
+        }
+      },
+      "q2": {
+        "safety": {
+          "max_citations": 0,
+          "max_active_claims": 0
+        },
+        "capability": {
+          "status_in": [
+            "abstain"
+          ],
+          "reader_called": false
+        }
+      }
+    },
+    "adaptive_missing": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0
+        },
+        "capability": {
+          "status_in": [
+            "abstain"
+          ],
+          "min_adaptive_checks": 1,
+          "max_adaptive_rounds": 1,
+          "reader_called": false,
+          "min_adaptive_rounds": 1
+        }
+      }
+    },
+    "adaptive_targeted": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0
+        },
+        "capability": {
+          "status_in": [
+            "answer"
+          ],
+          "min_adaptive_checks": 2,
+          "min_adaptive_rounds": 1,
+          "max_adaptive_rounds": 1,
+          "min_adaptive_new_candidates": 1,
+          "min_citations": 3,
+          "answer_all": [
+            "快照",
+            "恢复",
+            "容量"
+          ],
+          "adaptive_complete": true,
+          "reader_called": true
+        }
+      }
     }
   },
-  "fixture_revision": 5
+  "fixture_revision": 6
 }

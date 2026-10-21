@@ -12,6 +12,8 @@ The current scope is a local research prototype and a controlled-pilot foundatio
 
 [Ordinary observation semantics](docs/implemented/普通观察主体与事件时间.md) now preserve subject, source role, epistemic status and event intervals separately from original-source and recording timestamps. Conversation and document readers use the same metadata; unknown dates remain unknown. This is functional coverage, with extraction and longitudinal quality still unverified.
 
+[Missing-evidence retrieval](docs/implemented/缺项驱动补检与依赖闭合回答.md) connects frozen query requirements, quoted coverage checks, one bounded supplemental round, dependency-closed selection and final answer verification. Chat, bots and source readers share the production loop and inference budget. RRF remains intact; LLM reranking stays off by default. General planning and quality/cost improvements remain unverified.
+
 ## Architecture
 
 The [MemoryKernel](docs/implemented/独立记忆核心与多来源接口.md) can be used without a chat runtime or web server. Conversation quotes, derived memories, documents and task results share a bounded evidence interface while retaining their authorship, scope and revision rules. Chat and task applications are clients of this core; documents do not automatically become personal facts.
@@ -20,7 +22,7 @@ The [MemoryKernel](docs/implemented/独立记忆核心与多来源接口.md) can
 
 ![How Memoria works — identity, memory runtime, models and storage](assets/images/memoria-architecture.png)
 
-Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Sufficiency and risk verification require an explicit option. See [implementation and limits](docs/implemented/系统架构与实现说明.md). [Poster PNG](assets/images/memoria-overview.png) · [Vector architecture SVG](assets/images/memoria-architecture.svg).
+Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Recognized compound recall questions use the bounded sufficiency loop; simple reads retain their existing path. See [implementation and limits](docs/implemented/系统架构与实现说明.md). [Poster PNG](assets/images/memoria-overview.png) · [Vector architecture SVG](assets/images/memoria-architecture.svg).
 
 Account-local watermarks, frozen-copy/fixed-pool replay, complete source groups, optional original-experience Dense/RRF, and conservative narrative-update vetoes are now available. The [implementation and tiny budget diagnostic](docs/implemented/生产重放与普通来源支持.md) separate engineering evidence from unverified quality; the complete LoCoMo results below remain frozen.
 

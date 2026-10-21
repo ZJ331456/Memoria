@@ -19,10 +19,11 @@ Memoria 管理对话、笔记、文档和任务结果的来源、审核、条件
 | 记忆形成与巩固 | [有界历史上下文与关联核验](docs/implemented/有界历史上下文与观察关联.md)辅助Observation；单次行为先观察，跨会话积累Pattern并独立审核，支持受约束演化及核心降级 |
 | 非对话资料与经验 | [TXT/Markdown/Word DOCX等文本导入](docs/implemented/文本解析与跨资料记忆形成.md)，保存原件与位置；来源感知观察、跨资料巩固、完整支持组和受约束版本演化；本人事实与外部知识分开 |
 | 生产闭环诊断 | [按来源前缀重执行](docs/implemented/生产记忆闭环与逐题归因.md)形成、审核、Claim/View或资料Reader；[限额真实调用](docs/implemented/生产记忆闭环与逐题归因.md#claim与view真实调用补测2026-10-20)已覆盖Claim自动发布、冷/热View和撤回失效，不改写LoCoMo冻结成绩 |
-| 模拟功能验收 | [35组/45项固定检查](simulation/README.md)，最终完整工程1401项、真实LLM功能断言45/45、实际本地BGE4/4通过；[主体/时间契约与完整记录](docs/implemented/普通观察主体与事件时间.md)，保留失败与全部费用，不作为真实长期效果或研究分数 |
+| 模拟功能验收 | [38组/49项固定检查](simulation/README.md)，同指纹完整工程1441项、真实LLM功能断言49/49、实际本地BGE4/4通过；[补检、完整预算与失败记录](docs/implemented/缺项驱动补检与依赖闭合回答.md)，保留全部费用，不作为真实长期效果或研究分数 |
 | 适用的状态 | Claim、条件视图、明确会话临时范围与双时间；区分当前、历史和未知 |
 | 普通观察与事件 | [主体、角色、认识状态与来源时钟](docs/implemented/普通观察主体与事件时间.md)接入对话/资料、Chat/工具/Reader；区分原始时间、事件区间和实际记录时间，日期未知保留未知 |
 | 有界的访问 | 普通记忆混合检索；原始经历BM25及可选Dense/RRF、邻块展开、预算和依赖复核 |
+| 缺项驱动回答 | [冻结需求→一次定向补检→依赖闭合选择](docs/implemented/缺项驱动补检与依赖闭合回答.md)，区分未召回与未呈现；Chat/机器人及资料Reader共享总预算和发布核验，重排继续默认关闭 |
 | 受约束的更新 | 非精确关系先筛主体/属性/条件/时间，未知关系不自动覆盖旧记忆 |
 | 独立的使用入口 | Chat 负责对话，Studio 负责资料、审核与来源回查；账号数据隔离 |
 | 可核对的研究 | 事务水位、冻结副本/固定池重放，记录来源/模型、实际调用、失败、费用下界与指纹 |
@@ -33,7 +34,7 @@ Memoria 管理对话、笔记、文档和任务结果的来源、审核、条件
 
 ![How Memoria works — identity, memory runtime, models and storage](assets/images/memoria-architecture.png)
 
-Claim 按槽位与条件访问，普通记忆使用混合检索；充分性与风险核验通过显式开关启用。完整边界见[系统实现](docs/implemented/系统架构与实现说明.md)。[英文宣传海报 PNG](assets/images/memoria-overview.png) · [架构图矢量 SVG](assets/images/memoria-architecture.svg)
+Claim 按槽位与条件访问，普通记忆使用混合检索；复杂历史问题通过缺项闭环完成有界补检和支持核验，简单读取保留原流程。完整边界见[系统实现](docs/implemented/系统架构与实现说明.md)。[英文宣传海报 PNG](assets/images/memoria-overview.png) · [架构图矢量 SVG](assets/images/memoria-architecture.svg)
 
 ## 快速开始
 

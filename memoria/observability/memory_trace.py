@@ -118,6 +118,7 @@ def capture(request, result, owner, before, after, coverage_by_id):
         "quality": "unscored", "gold_read": False,
         "replay_scope": "frozen candidate selection; not rerunning extraction or reader"}
     if 'reranking' in result:trace['reranking_sha256']=fingerprint(result['reranking'])
+    if 'closure_advice' in result:trace['closure_advice_sha256']=fingerprint(result['closure_advice'])
     trace["trace_sha256"] = fingerprint(trace)
     return trace
 
@@ -137,6 +138,19 @@ def replay(packet, owner, *, budgets=None):
     request = trace["request"]
     if request["budget_unit"] == "reader_tokens":
         raise ValueError("Offline replay needs the original trusted reader tokenizer; tokens cannot be guessed")
+    if 'closure_advice_sha256' in trace:
+        from ..memory.evidence.closure import select_closed
+        advice = packet.get('closure_advice')
+        if fingerprint(advice) != trace['closure_advice_sha256']:
+            raise ValueError('Closure advice changed since capture')
+        catalog = {c['id']: c for c in packet['candidates']}
+        frozen = [catalog[mid] for mid in advice['candidate_ids']]
+        selections = {str(limit): {'dependency_closed': select_closed(frozen, advice['decision'], advice['citation_owners'],
+            EvidenceBudget(limit, request['budget_unit']), limit=request['top_k'])}
+            for limit in (budgets or [request['evidence_budget'] or request['budget_chars']])}
+        return {'selections': selections, 'candidate_pool_sha256': trace['candidate_pool_sha256'], 'model_calls': 0,
+            'automatic_memory_writes': 0, 'quality': 'unscored',
+            'replay_scope': 'frozen coverage advice and dependency closure; not live source/LLM validation'}
     if set(trace["coverage_by_id"]) != {c["id"] for c in packet["candidates"]}:
         raise ValueError("Captured coverage does not match candidate IDs")
     pool = [{**c, "covers":trace["coverage_by_id"][c["id"]]} for c in packet["candidates"]]
@@ -215,6 +229,8 @@ def execution_failure(exc,phase):
 
 def candidate_sources(candidate):
     """Use actual evidence spans, not timeline support-group IDs masquerading as messages."""
+    if candidate.get('kind') == 'library' and isinstance(candidate.get('data'), dict):
+        return candidate_sources(candidate['data'])
     if 'domain' in candidate:
         if candidate['representation']=='consolidated_memory':
             return [{'domain':'library','id':s['source_id']} for s in candidate['provenance']['support']]
@@ -350,7 +366,7 @@ def answer_trace(kernel, request, result, *, calls=None):
         data=c.get('data',[]);data=data if isinstance(data,list) else [data]
         return {'id':c.get('id',c.get('citation')),'kind':c.get('kind',c.get('representation')),
             'sources':candidate_sources(c),'payload_sha256':fingerprint(c),
-            'source_revision_id':c.get('provenance',{}).get('revision_id'),
+            'source_revision_id':c.get('provenance',c.get('data',{}).get('provenance',{}) if isinstance(c.get('data'),dict) else {}).get('revision_id'),
             'claim_revisions':[{'id':d['id'],'revision_id':d['revision_id'],'subject_id':d.get('subject_id'),
                 'predicate':d.get('predicate')} for d in data if 'revision_id' in d and 'predicate' in d]}
     pool=[summarize(c) for c in candidates]; chosen=[summarize(c) for c in selected]
@@ -380,6 +396,7 @@ def answer_trace(kernel, request, result, *, calls=None):
             'budget':result.get('reader_budget'),'usage':result.get('usage'), 'calls':calls or [],
             'validation':result.get('validation'),'citations':citations},
         'reranking':{k:access.get('reranking',{}).get(k) for k in ('status','calls','usage','elapsed_ms','reason','decision')},
+        'adaptive':{k:access.get('adaptive',{}).get(k) for k in ('version','query_plan','retrieval_rounds','rounds','policy','unknown_usage_count','elapsed_ms')},
         'answer_sha256':fingerprint(result.get('answer','')),
         'quality':'unscored','gold_read':False,'semantic_correctness':None}
     trace['trace_sha256']=fingerprint(trace)

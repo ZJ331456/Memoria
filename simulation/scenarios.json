@@ -1589,7 +1589,223 @@
           }
         ]
       }
+    },
+    {
+      "id": "adaptive_chain",
+      "title": "缺项驱动完整来源链",
+      "areas": [
+        "adaptive",
+        "selection",
+        "reader",
+        "budget",
+        "withdrawal"
+      ],
+      "max_calls": 8,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture; adaptive_chain",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "d0",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "演练项目记录0",
+              "content": "我负责的项目叫云杉归档，编号CS17；这次改造我在CS17项目采用了快照方案。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "演练项目记录1",
+              "content": "我的云杉归档项目编号CS17，这次选择快照方案的原因是恢复速度快。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "演练项目记录2",
+              "content": "我的云杉归档项目编号CS17，这次快照方案上线后遇到了磁盘空间不足的问题。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "knowledge",
+            "request": {
+              "query": "我之前在哪个项目采用了快照方案？当时为什么选择它？后来遇到了什么问题？",
+              "use_adaptive_retrieval": true,
+              "limit": 4,
+              "budget_chars": 16000
+            }
+          },
+          {
+            "id": "x0",
+            "kind": "retract",
+            "source": "d0"
+          },
+          {
+            "id": "x1",
+            "kind": "retract",
+            "source": "d1"
+          },
+          {
+            "id": "x2",
+            "kind": "retract",
+            "source": "d2"
+          },
+          {
+            "id": "q2",
+            "kind": "question",
+            "target": "knowledge",
+            "request": {
+              "query": "我之前在哪个项目采用了快照方案？当时为什么选择它？后来遇到了什么问题？",
+              "use_adaptive_retrieval": true,
+              "limit": 4,
+              "budget_chars": 16000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "adaptive_missing",
+      "title": "缺项一次补检后停止",
+      "areas": [
+        "adaptive",
+        "selection",
+        "reader",
+        "budget",
+        "withdrawal"
+      ],
+      "max_calls": 8,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture; adaptive_missing",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "d0",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "演练项目记录0",
+              "content": "我负责的项目叫云杉归档，编号CS17；这次改造我在CS17项目采用了快照方案。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "演练项目记录1",
+              "content": "我的云杉归档项目编号CS17，这次选择快照方案的原因是恢复速度快。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "knowledge",
+            "request": {
+              "query": "我之前在哪个项目采用了快照方案？当时为什么选择它？后来遇到了什么问题？",
+              "use_adaptive_retrieval": true,
+              "limit": 4,
+              "budget_chars": 16000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "adaptive_targeted",
+      "title": "原候选外必要记录经一次定向补检进入",
+      "areas": [
+        "adaptive",
+        "selection",
+        "reader",
+        "budget",
+        "withdrawal"
+      ],
+      "max_calls": 8,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture; adaptive_targeted",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "d0",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "演练项目记录0",
+              "content": "我负责的项目叫云杉归档，编号CS17；这次改造我在CS17项目采用了快照方案。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "演练项目记录1",
+              "content": "我的云杉归档项目编号CS17，这次选择快照方案的原因是恢复速度快。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "source",
+            "form": false,
+            "body": {
+              "kind": "document",
+              "title": "附记丙",
+              "content": "CS17这次改造上线后，存储盘容量耗尽。",
+              "authorship": "self"
+            }
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "knowledge",
+            "request": {
+              "query": "我之前在哪个项目采用了快照方案？当时为什么选择它？后来遇到了什么问题？",
+              "use_adaptive_retrieval": true,
+              "limit": 4,
+              "budget_chars": 16000
+            }
+          }
+        ]
+      }
     }
   ],
-  "fixture_revision": 7
+  "fixture_revision": 8
 }

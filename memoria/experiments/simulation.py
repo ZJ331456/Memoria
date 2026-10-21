@@ -102,6 +102,12 @@ def observations_at(case, database):
         'path': result.get('access', {}).get('path'), 'answer': result.get('answer', ''),
         'reader_called': result.get('reader_called'), 'validation': result.get('validation', {}),
         'reranking_applied': result.get('access',{}).get('reranking',{}).get('status')=='applied',
+        'adaptive_rounds': result.get('access',{}).get('adaptive',{}).get('retrieval_rounds',0),
+        'adaptive_checks': len(result.get('access',{}).get('adaptive',{}).get('rounds',[])),
+        'adaptive_complete': result.get('access',{}).get('selection',{}).get('complete',False),
+        'adaptive_new_candidates': (len({c.get('id',c.get('citation')) for c in result.get('access',{}).get('candidates',[])} -
+            {c.get('id',c.get('citation')) for c in result.get('access',{}).get('adaptive',{}).get('initial_candidates',[])})
+            if result.get('access',{}).get('adaptive',{}).get('enabled') else 0),
         'active_claims': len(claims), 'claim_values': values,
         'active_memories': sum(p['kind'] == 'memory' and p['status'] == 'active' for p in published.values()),
         'active_patterns': sum(p['kind'] == 'pattern' and p['status'] == 'active' for p in published.values()),
@@ -130,7 +136,7 @@ def check_observation(actual, expected):
             ok = actual[key[4:]] >= value
         elif key.startswith('max_'):
             ok = actual[key[4:]] <= value
-        elif key in {'reader_called', 'pending_revision','reranking_applied'}:
+        elif key in {'reader_called', 'pending_revision','reranking_applied','adaptive_complete'}:
             ok = actual[key] is value
         elif key == 'answer_any':
             ok = any(word.casefold() in actual['answer'].casefold() for word in value)

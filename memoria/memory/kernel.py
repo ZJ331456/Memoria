@@ -113,6 +113,17 @@ class MemoryKernel:
         from .reader import read_memory_answer, read_knowledge_answer
         from ..observability.memory_trace import answer_trace
         if self.llm is None:raise LibraryError(503,'未配置Reader模型')
+        from .evidence.query_plan import complex_recall
+        adaptive = getattr(request, 'use_adaptive_retrieval', False)
+        if adaptive is None:
+            adaptive = complex_recall(request.query) and not getattr(request, 'use_llm_rerank', False) and not getattr(request, 'use_query_model', False)
+        if adaptive:
+            from .adaptive_retrieval import read_adaptive
+            if getattr(request, 'use_llm_rerank', False) or getattr(request, 'use_query_model', False):
+                raise LibraryError(422, '自适应读取与独立查询模型/重排不能同时启用；所有调用使用同一预算')
+            result = await read_adaptive(self, request)
+            result['closed_loop'] = answer_trace(self, request.model_dump(mode='json'), result)
+            return result
         if isinstance(request,QueryRequest):
             result=await read_memory_answer(self.claims,self.memory,self.llm,request,accessor=self.access,
                 policy_guard=lambda access:bool(self.guard_pending_revisions(dict(access),request).get('pending_revisions')))
@@ -185,9 +196,10 @@ class MemoryKernel:
         if session_id is not None and not self.store.session(session_id):
             raise LibraryError(404, '会话不存在')
 
-    async def search(self, request: MemorySearch, *, capture=None):
+    async def search(self, request: MemorySearch, *, capture=None, retrieval_query=None):
         """Interleave source ranks, rather than comparing incomparable BM25/cosine scores."""
         self._check_session(request.session_id)
+        search_query = retrieval_query or request.query
         entity_enabled=self.memory.entity_enabled if request.use_entities is None else request.use_entities
         identity_lookup=self.entities.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type)
         if identity_lookup['resolution']['ambiguous']:
@@ -201,18 +213,18 @@ class MemoryKernel:
         lanes = {}
         for domain in request.domains:
             if domain == 'memory':
-                items = await self.memory.retrieve(request.query, request.limit, mode=request.memory_mode,as_of=request.recorded_as_of,
+                items = await self.memory.retrieve(search_query, request.limit, mode=request.memory_mode,as_of=request.recorded_as_of,
                     use_entities=entity_enabled,session_id=request.session_id,entity_type=request.entity_type)
-                lanes[domain] = [self.readers.memory(item, request.query) for item in items]
+                lanes[domain] = [self.readers.memory(item, search_query) for item in items]
             elif domain == 'conversation':
-                items = self.store.search_messages(request.query, request.limit)
-                lanes[domain] = [record for item in items if (record := self.readers.conversation(item, request.query))]
+                items = self.store.search_messages(search_query, request.limit)
+                lanes[domain] = [record for item in items if (record := self.readers.conversation(item, search_query))]
             else:
-                items = self.library.search(request.query, session_id=request.session_id,
+                items = self.library.search(search_query, session_id=request.session_id,
                     limit=min(8, request.limit), budget=8000, chunks_per_source=2)
                 if entity_enabled:items=self.library.entity_supplement(request.query,items,session_id=request.session_id,
                     entity_type=request.entity_type,limit=min(8,request.limit))
-                consolidated = self.library.formation.search(request.query,session_id=request.session_id,limit=min(4,request.limit))
+                consolidated = self.library.formation.search(search_query,session_id=request.session_id,limit=min(4,request.limit))
                 mixed=[]
                 for rank in range(max(len(items),len(consolidated))):
                     for channel in (consolidated,items):

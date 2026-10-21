@@ -28,11 +28,12 @@ class LLMClient:
         self.reader_budget = ReaderBudget(settings,transport=transport)
 
     def backend_for(self, model: ModelConfig | None = None):
+        from .call_scope import bounded_scope
         selected = copy.deepcopy(model or self.settings.main)
         return resolve_backend(
             selected,
             timeout_seconds=self.settings.request_timeout_seconds,
-            max_retries=self.settings.max_retries,
+            max_retries=0 if bounded_scope.get() is not None else self.settings.max_retries,
             transport=self.transport,
         )
 

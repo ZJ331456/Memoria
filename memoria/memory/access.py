@@ -31,6 +31,9 @@ def infer_query(text: str) -> QueryRequest | None:
     from ..claims import infer_access
     if infer_access(text):
         return QueryRequest(query=text)
+    from .evidence.query_plan import complex_recall
+    if (len(text) <= 1000 and complex_recall(text) and re.search(r'之前|曾经|当时|过去|先前|previous|previously|before', text, re.I)):
+        return QueryRequest(query=text, use_adaptive_retrieval=True)
     if len(text) > 160 or re.search(r"请记住|帮我|写代码|生成|翻译|总结", text):
         return None
     # Cause, advice, planning and recommendations belong to the normal dialogue
@@ -70,6 +73,7 @@ class QueryRequest(Strict):
     use_query_model: bool = Field(default=False, strict=True)
     use_answer_risk: bool = Field(default=False, strict=True)
     use_llm_rerank: bool = Field(default=False, strict=True)
+    use_adaptive_retrieval: bool | None = Field(default=None, strict=True)
     include_experiences: bool = Field(default=True, strict=True)
     experience_mode: Literal["bm25", "dense", "rrf"] = "bm25"
     use_entities: bool | None = None
@@ -192,10 +196,11 @@ class MemoryAccessOrchestrator:
             before, after, {c["id"]:coverage(c, result["requirements"], result["parsed"]) for c in result["candidates"]})
         return result
 
-    async def _access(self, request: QueryRequest) -> dict:
+    async def _access(self, request: QueryRequest, *, retrieval_query: str | None = None) -> dict:
         if request.session_id and not self.claims.store.session(request.session_id):
             raise ClaimError(422, "请求会话不属于当前账号或不存在")
         started, timings = time.perf_counter(), StageTimings()
+        search_query = retrieval_query or request.query
         try:
             tokenizer = self.reader_tokenizer
             if request.budget_unit == "reader_tokens" and tokenizer is None:
@@ -205,6 +210,11 @@ class MemoryAccessOrchestrator:
         except ValueError as exc:
             raise ClaimError(422, str(exc)) from exc
         parsed = TemporalQueryParser().parse(request.query)
+        from .evidence.query_plan import complex_recall
+        if (parsed['reason'] == 'unsupported_time_expression' and not parsed['predicates']
+            and complex_recall(request.query) and not re.search(r'\d|年|月|周|星期|昨天|今天|明天|前年|去年|何时|哪天|什么时候', request.query)):
+            # "以前/当时/后来" asks for narrative relations, not an invented ISO cutoff.
+            parsed.update(requires_clarification=False, intent='retrieve', reason='unbounded_narrative_time_unknown')
         catalog=getattr(self.claims.store,'entity_catalog',None)
         entities_enabled=request.use_entities if request.use_entities is not None else getattr(self.engine,'entity_enabled',False)
         identity_lookup=catalog.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type) if catalog else None
@@ -279,7 +289,7 @@ class MemoryAccessOrchestrator:
             if supplement and (not request.recorded_as_of or not parsed['predicates']):
                 diag = {}
                 with timings.measure("access.semantic"):
-                    memories = await self.engine.retrieve(request.query, limit=request.candidate_limit, as_of=request.recorded_as_of or request.fact_as_of,
+                    memories = await self.engine.retrieve(search_query, limit=request.candidate_limit, as_of=request.recorded_as_of or request.fact_as_of,
                                                           expand_graph=False, mode="rrf" if request.mode == "unified" else request.mode,
                                                           diagnostics=diag, timings=timings,use_entities=request.use_entities,
                                                           session_id=request.session_id,entity_type=request.entity_type)
@@ -319,7 +329,7 @@ class MemoryAccessOrchestrator:
                             item={**item,'retrieval':{**item['retrieval'],'entity_dependency':bound['dependency']}}
                         from .source_windows import windows
                         hint=bound['dependency']['literal_anchors'][0]['start'] if identity_required else None
-                        slices=sorted(windows(text,request.query,hint=hint))
+                        slices=sorted(windows(text,search_query,hint=hint))
                         spans=[{**evidence,'start':a,'end':b,'quote':text[a:b]} for a,b in slices]
                         selected_text='\n[… omitted source interval …]\n'.join(e['quote'] for e in spans)
                         candidates.append({"id": item["id"], "kind": "source", "score": item["retrieval"]["score"],
@@ -340,7 +350,7 @@ class MemoryAccessOrchestrator:
                     and not request.fact_as_of):
                 from .experience import query as query_experiences
                 with timings.measure("access.experiences"):
-                    experiences, experience_diag = await query_experiences(self.claims, request.query, getattr(self.engine,"embedder",None), mode=request.experience_mode,
+                    experiences, experience_diag = await query_experiences(self.claims, search_query, getattr(self.engine,"embedder",None), mode=request.experience_mode,
                         limit=request.candidate_limit, recorded_as_of=request.recorded_as_of)
                 candidates.extend(experiences)
                 diag["experiences"] = experience_diag

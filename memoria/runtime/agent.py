@@ -140,6 +140,9 @@ class AgentRuntime:
                 context.metadata["query_route"] = "personal_memory" if claim_request else "dialogue"
                 if claim_request:
                     claim_request.session_id = session_id
+                if kernel and claim_request and claim_request.use_adaptive_retrieval:
+                    return await self._adaptive_turn(kernel, claim_request, context, tracer, user_message,
+                        write_message, on_event, skip_memory_enqueue, turn_kind, turn_id)
                 with tracer.timings.measure("compaction"):
                     compaction = None if claim_request else await self.compactor.ensure(session_id, self.settings.memory_window)
                 if compaction:
@@ -581,6 +584,56 @@ class AgentRuntime:
                     "failed", "", f"{type(exc).__name__}: {exc}", context.tool_chain, trace["id"],
                 )
                 raise
+
+    async def _adaptive_turn(self, kernel, request, context, tracer, user_message, write_message,
+                             on_event, skip_memory_enqueue, turn_kind, turn_id):
+        """Chat/bots use the same buffered Kernel loop, with normal hooks and publication gates."""
+        from ..llm.types import ChatResult
+        session_id = context.session_id
+        await self.pipeline.run(Phase.BEFORE_REASONING, context)
+        await self.event_bus.emit('turn.before_reasoning', {'session_id': session_id, 'turn_id': turn_id})
+        with tracer.timings.measure('memory.adaptive_answer'):
+            result = await kernel.answer(request)
+        access = result['access']
+        context.response = result['answer']
+        protected = context.response
+        context.metadata.update(memory_closed_loop=result['closed_loop'], adaptive_retrieval=access['adaptive'],
+            reader_calls=access['adaptive']['calls'], citation_validation=result['validation'],
+            citations=result['citations'], reader_budget=result.get('reader_budget'))
+        await self.pipeline.run(Phase.AFTER_REASONING, context)
+        with self.store._memory_transaction():
+            if context.response != protected:
+                context.response = SAFE_REJECTED
+                context.metadata['citation_validation'] = {'valid': False, 'reason': 'post_hook_changed_answer'}
+                context.metadata['citations'] = []
+            elif result['status'] == 'answer':
+                guard = CitationGuard(self.claims, access, request,
+                    access_policy=lambda: bool(kernel.guard_pending_revisions(dict(access), request).get('pending_revisions')))
+                prepared_messages = PromptAssembler().assemble(ANSWER_CONTRACT, extra_sections=[guard.section()]).as_messages()
+                prepared_messages.append({'role': 'user', 'content': request.query})
+                raw = next(c for c in reversed(access['adaptive']['calls']) if c['stage'] == 'reader')
+                verdict = guard.validate(ChatResult(content=raw['raw'], finish_reason=raw['finish_reason']), prepared_messages)
+                context.response = verdict['answer']
+                context.metadata.update(citation_validation=verdict['validation'], citations=verdict['citations'])
+            assistant_message = write_message(session_id, 'assistant', context.response)
+        # Final buffered text is emitted only after hook/source/identity/version checks.
+        if on_event:
+            tracer.mark_visible_text(context.response)
+            await on_event({'type': 'delta', 'content': context.response})
+        context.metadata['memory_closed_loop']['chat_publication'] = {
+            'validation': context.metadata['citation_validation'], 'citations': context.metadata['citations']}
+        from ..observability.memory_trace import fingerprint
+        closed = context.metadata['memory_closed_loop']
+        closed['trace_sha256'] = fingerprint({k: v for k, v in closed.items() if k != 'trace_sha256'})
+        if not skip_memory_enqueue:
+            job = self.store.enqueue_memory_job(user_message['id'], context.user_text, context.response)
+            context.metadata['memory_job'] = {'id': job['id'], 'source_ref': user_message['id'], 'status_at_enqueue': job['status']}
+        await self.pipeline.run(Phase.AFTER_TURN, context)
+        await self.event_bus.emit('turn.after', {'session_id': session_id, 'turn_id': turn_id, 'status': 'completed', 'steps': 1})
+        trace = tracer.finish('completed', 1, [], [], metadata=context.metadata)
+        self._record_episode_safe(turn_kind, session_id, user_message, assistant_message, context.user_text,
+            'completed', context.response, '', [], trace['id'])
+        return assistant_message, [], trace
 
     def _memory_dependency_valid(self, dependency: dict) -> bool:
         kernel = getattr(self, 'kernel', None)

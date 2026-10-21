@@ -54,6 +54,7 @@ class MemorySearch(BaseModel):
 
 class KnowledgeAnswer(MemorySearch):
     use_llm_rerank: bool = False
+    use_adaptive_retrieval: bool | None = None
     domains: list[Domain]=Field(default_factory=lambda:['library'],min_length=1,max_length=1)
 
     @field_validator('domains')

@@ -138,22 +138,30 @@ class EmbeddingClient:
                 raise EmbeddingError(f"本地 Embedding 失败：{exc}") from exc
         headers = self.config.auth_headers()
         payload = {"model": self.config.model, "input": texts, "encoding_format": "float"}
+        from ..llm.call_scope import bounded_scope
+        observer = bounded_scope.get()
+        receipt = observer(payload) if observer is not None else None
+        retries = 0 if observer is not None else self.max_retries
         last_error: Exception | None = None
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds), trust_env=not self.config.is_local_http()) as client:
-            for attempt in range(self.max_retries + 1):
+            for attempt in range(retries + 1):
                 try:
                     response = await client.post(f"{self.config.base_url.rstrip('/')}/embeddings", headers=headers, json=payload)
                     if response.status_code >= 400:
                         raise EmbeddingError(f"embedding 服务返回 HTTP {response.status_code}: {response.text[:300]}")
-                    return self._vectors(response.json(), len(texts))
+                    data = response.json()
+                    if receipt is not None:
+                        receipt.update(status='returned', usage=data.get('usage') or None)
+                    return self._vectors(data, len(texts))
                 except (httpx.TimeoutException, httpx.TransportError, EmbeddingError, KeyError, TypeError, ValueError) as exc:
                     last_error = exc
                     retryable = isinstance(exc, (httpx.TimeoutException, httpx.TransportError)) or any(
                         token in str(exc).lower() for token in ("http 429", "http 500", "http 502", "http 503", "http 504")
                     )
-                    if not retryable or attempt >= self.max_retries:
+                    if not retryable or attempt >= retries:
                         break
                     await asyncio.sleep(min(4.0, float(2**attempt)))
+        if receipt is not None: receipt.update(status='failed', error_type=type(last_error).__name__)
         raise EmbeddingError(f"embedding 请求失败: {type(last_error).__name__}: {last_error}") from last_error
 
     @staticmethod
