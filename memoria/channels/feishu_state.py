@@ -2,6 +2,8 @@
 import json
 from .state import ChannelState as FeishuState, digest
 
+__all__ = ["FeishuState", "digest", "parse_event"]
+
 def parse_event(payload: dict, app_id: str) -> dict | None:
     header=payload.get('header',{})
     event=payload.get('event',{})

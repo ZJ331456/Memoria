@@ -91,7 +91,7 @@ def install(store):
 
 
 def record(store,domain,source_id,revision,source_sha,policy,start,end,diagnostic,raw):
-    with store._memory_transaction():
+    with store.memory_transaction():
         store.db.execute('INSERT INTO memory_extraction_diagnostics VALUES(?,?,?,?,?,?,?,?,?,?,?)',
             (uuid.uuid4().hex,domain,source_id,revision,source_sha,policy,start,end,
              json.dumps(diagnostic,ensure_ascii=False),json.dumps(raw,ensure_ascii=False),now()))

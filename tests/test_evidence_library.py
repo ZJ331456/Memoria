@@ -92,7 +92,7 @@ def test_revision_is_immutable_and_stale_head_cannot_publish(env):
     with pytest.raises(LibraryError):service.library.revise(item['id'],RevisionInput(expected_revision_id=old,title='旧更新',content='不得覆盖'))
     import sqlite3
     with pytest.raises(sqlite3.IntegrityError):
-        with store._memory_transaction():store.db.execute('UPDATE library_revisions SET content=? WHERE id=?',('伪造',old))
+        with store.memory_transaction():store.db.execute('UPDATE library_revisions SET content=? WHERE id=?',('伪造',old))
 
 
 def test_retraction_invalidates_knowledge_and_runtime_dependency(env):

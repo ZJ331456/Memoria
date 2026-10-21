@@ -194,6 +194,10 @@ def _create_tenant_app(
         request.state.request_id = request_id
         with RequestContext(request_id=request_id):
             denied = request_gate.check(request)
+            if schema_only and request.url.path not in {
+                "/api/health", "/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"
+            }:
+                denied = (503, "unavailable", "Schema-only application cannot serve tenant requests", {})
             if denied:
                 status, code, message, headers = denied
                 response = _error(request, status, code, message)

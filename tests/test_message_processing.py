@@ -144,7 +144,7 @@ def test_authenticated_status_filters_and_no_client_ingress_override(tmp_path,mo
 
 def test_failed_message_transaction_cannot_leave_origin_or_message(store):
     sid=store.create_session()['id']
-    with pytest.raises(RuntimeError),message_ingress('telegram'),store._memory_transaction():
+    with pytest.raises(RuntimeError),message_ingress('telegram'),store.memory_transaction():
         store.add_message(sid,'user','工程回滚原话')
         raise RuntimeError('engineering rollback')
     assert store.messages(sid)==[]

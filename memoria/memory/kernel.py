@@ -178,11 +178,7 @@ class MemoryKernel:
             if kind == "library_consolidation":
                 return self.library.formation.dependency_valid(dependency, session_id=session_id)
             if kind == "library":
-                with self.store.lock:
-                    source = self.library._source(dependency["id"])
-                    if source["scope"] == "working" and source["session_id"] != session_id:
-                        return False
-                    return self.library.dependency_valid(dependency)
+                return self.library.dependency_valid_for_session(dependency, session_id=session_id)
             if kind == "claim_access":
                 if not self.claims.access_dependency_valid(dependency):
                     return False
@@ -193,7 +189,7 @@ class MemoryKernel:
                     current = {
                         "path": "retrieve",
                         "reason": "dependency_check",
-                        "payload": self.claims._select(request),
+                        "payload": self.claims.selection_snapshot(request),
                     }
                 return not self.guard_pending_revisions(current, request).get("pending_revisions")
             if kind not in {"memory", "message"}:
@@ -204,7 +200,7 @@ class MemoryKernel:
 
     def read(self, domain: Domain, source_id: str, *, session_id: str | None = None):
         """Read a current source through its adapter. Explicit old library versions use the history API."""
-        self._check_session(session_id)
+        self.check_session(session_id)
         with self.store.lock:
             record = None
             if domain == "conversation":
@@ -250,8 +246,8 @@ class MemoryKernel:
                 raise LibraryError(404, "来源不存在、已失效或不适用于当前作用域")
             return {"evidence": record.public(), "dependency": record.dependency}
 
-    def _check_session(self, session_id):
-        return self.queries._check_session(session_id)
+    def check_session(self, session_id):
+        return self.queries.check_session(session_id)
 
     async def search(self, request: MemorySearch, *, capture=None, retrieval_query=None):
         return await self.queries.search(request, capture=capture, retrieval_query=retrieval_query)

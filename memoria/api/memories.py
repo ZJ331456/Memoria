@@ -145,7 +145,7 @@ def memories_router(context: TenantApiContext):
         tags=["memories"],
     )
     def propose_memory_review(body: MemoryReviewProposal):
-        with store._memory_transaction():
+        with store.memory_transaction():
             personal_review_source(body.message_id)
             try:
                 return store.propose_memory_review(
@@ -187,7 +187,7 @@ def memories_router(context: TenantApiContext):
             store.reset_memory_review(review_id)
             raise HTTPException(409, "来源消息已删除，不能批准悬空记忆")
         try:
-            with store._memory_transaction():
+            with store.memory_transaction():
                 personal_review_source(review["source_ref"])
             if body.claim is not None:
                 from ..memory.review import approve_review_with_claim
@@ -231,7 +231,7 @@ def memories_router(context: TenantApiContext):
                 raise HTTPException(422, "自动审核从原话判断结构化字段；不要混入手工Claim")
             if not body.content.strip():
                 raise HTTPException(422, "候选不能为空白")
-            with store._memory_transaction():
+            with store.memory_transaction():
                 row = store.memory_review(review_id)
                 if not row:
                     raise HTTPException(404, "候选不存在")
@@ -248,7 +248,7 @@ def memories_router(context: TenantApiContext):
         tags=["memories"],
     )
     def extract_history_memory(message_id: str):
-        with store._memory_transaction():
+        with store.memory_transaction():
             personal_review_source(message_id)
             return store.request_memory_extraction(message_id)
 

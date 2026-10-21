@@ -268,7 +268,7 @@ def test_update_uses_only_its_new_complete_group_and_revisions_are_immutable(env
         (result['consolidation']['revision_id'],)).fetchone()
     assert version['previous_id']==head['revision_id'] and len(json.loads(version['support_json']))==1
     with pytest.raises(sqlite3.IntegrityError):
-        with service.store._memory_transaction():
+        with service.store.memory_transaction():
             service.store.db.execute('UPDATE library_consolidation_versions SET content=? WHERE id=?',('changed',version['id']))
     library.retract(latest['id'])
     assert formation.search('Memoria')==[]  # Cannot borrow the previous version's three-source group.
@@ -418,7 +418,7 @@ def test_search_cards_keep_separate_subject_spans_and_recheck_approval_before_pu
     assert text[card['subject_start']:card['subject_end']]==card['subject_quote']
     assert card['citation'] and card['subject_citation'] and card['group']['subject']=='memoria'
     assert service.kernel.dependency_valid(hit['dependency'])
-    with service.store._memory_transaction():
+    with service.store.memory_transaction():
         service.store.db.execute("UPDATE library_cards SET status='needs_assistance' WHERE id=?",(card['id'],))
     assert not service.kernel.dependency_valid(hit['dependency'])
 

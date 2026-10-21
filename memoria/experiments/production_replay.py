@@ -7,9 +7,8 @@ import sqlite3
 import tempfile
 from pathlib import Path
 
-from ..claims import ClaimMemory
-from ..memory import MemoryEngine, EmbeddingClient
-from ..memory.access import MemoryAccessOrchestrator, QueryRequest
+from ..memory import EmbeddingClient
+from ..memory.access import QueryRequest
 from ..observability.memory_trace import replay, watermark
 from ..store import Store
 from .history import canonical, write_json
@@ -18,7 +17,7 @@ from .records import RunRecorder
 from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..memory.library import SourceInput,FeedbackInput,RevisionInput
-from ..memory.records import MemorySearch,KnowledgeAnswer
+from ..memory.records import KnowledgeAnswer
 
 
 class Step(BaseModel):

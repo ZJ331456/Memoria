@@ -50,4 +50,4 @@
 
 用户要求提交/更新远程时，在完成验证、审查 diff 和确认无凭据后执行提交与普通推送；只读分析或尚未授权的发布不得因本文件自动触发推送。发现远程更新先 fetch 并判断分歧，不能用 reset/force 覆盖其他工作。提交格式与最终核验步骤以提交规范为准。
 
-入口与存储边界遵循docs/implemented/统一内核入口与存储边界.md：生产Runtime/工具必须注入租户Kernel，个人记忆Reader统一走Kernel.answer；不得在API、runtime或tools另造MemoryAccessOrchestrator/Reader备用实现。schema_only仅生成契约，缺Kernel的记忆请求必须503。API、渠道传输与公开账号模块不直接.db执行SQL；领域事务允许保留原SQLite操作，禁止拆散expected-revision与完整来源支持检查。改动须覆盖test_architecture_boundaries及冻结的68个租户接口，仍按上面的同指纹三重门槛验收。
+入口与存储边界遵循docs/implemented/统一内核入口与存储边界.md及docs/implemented/协议计量隐私与边界审查.md：生产Runtime/工具必须注入租户Kernel，个人记忆Reader统一走Kernel.answer；不得另造备用Reader。schema_only仅生成契约，所有业务请求503。API、Runtime、渠道、Observability与公开账号模块不直接.db执行SQL；领域保留SQLite事务，统一使用公开Store.memory_transaction()，禁止拆散expected-revision与完整来源支持。Kernel不得调用领域私有方法。须覆盖旧68条及完整141个operation契约、认证/RequestGate/缺依赖HTTP验证；核心指纹包含tests/fixtures和eval/protocols冻结输入，仍按同指纹三重门槛验收。新生产trace只存单份调用摘要/哈希/成本，失败usage未知不能记作零；隔离实验保留完整原始记录。新LoCoMo风险全量须显式v3诊断登记和并发，旧v2不混跑、不改分数。

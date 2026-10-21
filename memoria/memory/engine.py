@@ -351,7 +351,7 @@ class MemoryEngine:
             if target and action == "reinforce" and float(target["relation_similarity"]) >= 0.78:
                 if source_ref and self.store.has_memory_operation(source_ref, target_id):
                     return MemoryWriteResult("skipped", target, target_id, "source already applied")
-                with self.store._memory_transaction():
+                with self.store.memory_transaction():
                     self._require_write_target(target)
                     reinforced = self.store.reinforce_memory(target_id, source_ref, require_source=require_source)
                 if reinforced is None:
@@ -360,7 +360,7 @@ class MemoryEngine:
             mutable_kinds = {"preference", "profile", "goal", "procedure"}
             if target and action == "supersede" and kind in mutable_kinds and float(target["relation_similarity"]) >= 0.55:
                 reason = decision.get("reason", "")
-                with self.store._memory_transaction():
+                with self.store.memory_transaction():
                     self._require_write_target(target)
                     committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=target_id,reason=reason,source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
                 committed.write_diagnostics=write_diagnostics
@@ -384,7 +384,7 @@ class MemoryEngine:
                 if full and full.get("source") == "user_correction" and source not in {"manual", "reviewed_conversation"}:
                     continue
                 if full and full.get("status") == "active" and kind in {"preference", "profile", "goal", "procedure"} and self._contradicts(content, full["content"]) and constrain_decision(content,full["content"],"supersede",source)["allowed"]:
-                    with self.store._memory_transaction():
+                    with self.store.memory_transaction():
                         self._require_write_target(item)
                         committed = self._commit_write(content,kind,importance,source,vector,supersedes_id=item['id'],reason='contradiction auto-supersede',source_ref=source_ref,require_source=require_source,embedding_namespace=embedding_namespace,embedding_chunks=document_chunks)
                     committed.write_diagnostics=write_diagnostics
@@ -507,7 +507,7 @@ class MemoryEngine:
         ):
             logger.warning("记忆向量回填返回数量、维度或数值不合法，整批跳过")
             return 0
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             if embedding_namespace != self.store.embedding_namespace:
                 logger.warning("Embedding 模型已切换，跳过旧模型的回填批次")
                 return 0

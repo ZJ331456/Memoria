@@ -36,7 +36,7 @@ def claims_router(kernel) -> APIRouter:
 
     @router.get("/api/claim-source/{message_id}")
     def source(message_id: str):
-        with memory.store._memory_transaction():
+        with memory.store.memory_transaction():
             item = memory.store.message_source(message_id)
             if not item:
                 raise ClaimError(404, "来源消息不存在")

@@ -15,13 +15,13 @@ class MemorySearchService:
         self.readers = readers
         self.dependency_valid = dependency_valid
 
-    def _check_session(self, session_id):
+    def check_session(self, session_id):
         if session_id is not None and not self.store.session(session_id):
             raise LibraryError(404, "会话不存在")
 
     async def search(self, request: MemorySearch, *, capture=None, retrieval_query=None):
         """Interleave source ranks, rather than comparing incomparable BM25/cosine scores."""
-        self._check_session(request.session_id)
+        self.check_session(request.session_id)
         search_query = retrieval_query or request.query
         entity_enabled = (
             self.memory.entity_enabled if request.use_entities is None else request.use_entities
@@ -239,7 +239,7 @@ class MemorySearchService:
         if size() > request.budget_chars:
             raise LibraryError(413, "身份保护元数据超过预算")
         with self.store.lock:
-            self._check_session(
+            self.check_session(
                 request.session_id
             )  # Vector calls may have yielded while a session was deleted.
             for rank in range(max(map(len, lanes.values()), default=0)):

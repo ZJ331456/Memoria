@@ -26,8 +26,9 @@ async def run_memory_turn(
     await self.event_bus.emit(
         "turn.before_reasoning", {"session_id": session_id, "turn_id": turn_id}
     )
+    calls = context.metadata.setdefault("llm_calls", [])
     with tracer.timings.measure("memory.kernel_answer"), observe_requests(
-        tracer.mark_llm_request, timings=tracer.timings
+        tracer.mark_llm_request, timings=tracer.timings, calls=calls
     ):
         result = deepcopy(await kernel.answer(request))
     access = result["access"]
@@ -41,10 +42,8 @@ async def run_memory_turn(
     if "adaptive" in access:
         context.metadata.update(
             adaptive_retrieval=deepcopy(access["adaptive"]),
-            reader_calls=deepcopy(access["adaptive"]["calls"]),
         )
-    elif result.get("reader_calls"):
-        context.metadata["reader_calls"] = deepcopy(result["reader_calls"])
+    if not calls and result.get("reader_calls"):
         context.metadata["llm_calls"] = deepcopy(result["reader_calls"])
     context.metadata["claim_access"] = deepcopy(
         {
@@ -63,7 +62,7 @@ async def run_memory_turn(
         }
     )
     await self.pipeline.run(Phase.AFTER_REASONING, context)
-    with self.store._memory_transaction():
+    with self.store.memory_transaction():
         verdict = kernel.revalidate_answer(request, result, answer=context.response)
         context.response = verdict["answer"]
         context.metadata.update(

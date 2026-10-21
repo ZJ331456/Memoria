@@ -56,7 +56,7 @@ class CitationGuard:
         self.catalog,self.source_snapshots,self.experience_snapshots={},{},{}
         self.entity_snapshots=[]
         evidence=[]
-        with claims.store._memory_transaction():
+        with claims.store.memory_transaction():
             for candidate in access['selection']['payload']['evidence']:
                 records=candidate['data'] if isinstance(candidate['data'],list) else [candidate['data']]
                 ids=[]
@@ -261,7 +261,7 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
         return {'status':'clarify','answer':SAFE_UNKNOWN,'citations':[],'reader_called':False,'access':access,
                 'reader_budget':prepared.report,
                 'validation':{'valid':False,'reason':'evidence_not_presented','semantic_entailment_verified':False}}
-    with claims.store._memory_transaction():
+    with claims.store.memory_transaction():
         fresh=guard.freshness()
     if fresh:
         return {'status':'clarify','answer':SAFE_UNKNOWN,'citations':[],'reader_called':False,'access':access,
@@ -310,7 +310,7 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
                 raise ContextLengthError('Answer pipeline budget unavailable')
             policy.reserve_call('reader',prepared.report,reservation='answer_pipeline')
             risk_checks['policy']=policy.public()
-            with claims.store._memory_transaction():
+            with claims.store.memory_transaction():
                 if guard.freshness(): raise ValueError('Source changed during sufficiency check')
         except (ValueError,TypeError,ProviderError,RuntimeError):
             policy.release('answer_pipeline')
@@ -330,7 +330,7 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
                 'reader_budget':prepared.report,'usage':None,'generation_started':None,
                 'validation':{'valid':False,'reason':'reader_provider_failure','semantic_entailment_verified':False},
                 **({'risk_checks':risk_checks} if risk_checks is not None else {})}
-    with claims.store._memory_transaction():
+    with claims.store.memory_transaction():
         verdict=guard.validate(result,prepared.messages)
     if risk_checks is not None and verdict['status']=='answer':
         from .answer_risk import is_refusal
@@ -348,7 +348,7 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
                                          'quote_integrity_verified':True})
             if not support['accepted']:
                 raise ValueError('Answer support not established')
-            with claims.store._memory_transaction():
+            with claims.store.memory_transaction():
                 verdict=guard.validate(result,prepared.messages)
         except (ValueError,TypeError,ProviderError,RuntimeError):
             verdict={'status':'abstain','answer':SAFE_REJECTED,'citations':[],

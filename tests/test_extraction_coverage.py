@@ -102,7 +102,7 @@ def test_diagnostic_raw_is_not_public_and_delete_cleans_private_output(env):
     store,service,client=env;model(service)
     source,job=send(store,service,'查找开发文章甲')
     assert client.get('/api/memory-extraction-diagnostics?session_id=other').status_code==404
-    with store._memory_transaction():store.db.execute('DELETE FROM messages WHERE id=?',(source['id'],))
+    with store.memory_transaction():store.db.execute('DELETE FROM messages WHERE id=?',(source['id'],))
     assert store.db.execute('SELECT count(*) FROM memory_extraction_diagnostics').fetchone()[0]==0
 
 

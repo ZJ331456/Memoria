@@ -39,13 +39,13 @@ def build_registry(
         return store.search_messages(a['query'], int(a.get('limit', 6)))
     async def access_claims(a):
         request = AccessRequest.model_validate(a)
-        with store._memory_transaction():
+        with store.memory_transaction():
             result = kernel.access_state(request)
             return ToolValue(result, [claims.access_dependency(request, result['payload'])])
     async def recall_episodes(a):
         if not episodes:
             return {"error": "episodic memory is disabled"}
-        with store._memory_transaction():
+        with store.memory_transaction():
             result = episodes.search(str(a["query"]), int(a.get("limit", 3)))
             dependencies = []
             for item in result:

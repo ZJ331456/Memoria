@@ -137,7 +137,7 @@ class MemoryAccessOrchestrator:
         items = []
         start = normalize_time(parsed["range_start"]) if parsed["range_start"] else None
         end = normalize_time(parsed["range_end"]) if parsed["range_end"] else None
-        with self.claims.store._memory_transaction():
+        with self.claims.store.memory_transaction():
             roots = self.claims.db.execute("SELECT id FROM claim_roots WHERE user_id=? AND subject_id=? ORDER BY created_at DESC LIMIT 500",
                                           (self.claims.user_id, request.subject_id)).fetchall()
             for row in roots:
@@ -294,7 +294,7 @@ class MemoryAccessOrchestrator:
                                                           diagnostics=diag, timings=timings,use_entities=request.use_entities,
                                                           session_id=request.session_id,entity_type=request.entity_type)
                 # Model I/O may have permitted a correction/revocation; take a fresh consistent snapshot.
-                with self.claims.store._memory_transaction():
+                with self.claims.store.memory_transaction():
                     if state:
                         state = self.claims.access(args)
                         path, reason = state["path"], state["reason"]
@@ -370,7 +370,7 @@ class MemoryAccessOrchestrator:
                         candidates.insert(0, {"id": "claim:" + predicate, "kind": "claim", "score": 2,
                                               "covers": [predicate], "source_ids": sorted({e["message_id"] for c in group for e in c["evidence"]+c.get("condition_evidence", [])}), "data": group})
         valid_candidates = []
-        with self.claims.store._memory_transaction():
+        with self.claims.store.memory_transaction():
             for candidate in candidates:
                 if candidate["kind"] == "source":
                     source = candidate["data"]

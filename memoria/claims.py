@@ -267,7 +267,7 @@ class ClaimMemory:
                      JOIN claim_support_parents p ON p.revision_id=r.id WHERE p.memory_id=OLD.id
                      AND c.user_id=claim_generations.user_id AND c.subject_id=claim_generations.subject_id
                      AND c.predicate=claim_generations.predicate); END""")
-            from .observability.memory_trace import install as install_memory_trace
+            from .persistence.memory_trace import install as install_memory_trace
             install_memory_trace(store)
             # SQL triggers protect caches even if mutations bypass this service.
             for table, key, events in (("messages", "message_id", ("UPDATE", "DELETE")),
@@ -282,7 +282,7 @@ class ClaimMemory:
                        AND c.user_id=claim_generations.user_id AND c.subject_id=claim_generations.subject_id
                        AND c.predicate=claim_generations.predicate); END""")
             self.db.commit()
-        with store._memory_transaction():
+        with store.memory_transaction():
             owner = self.db.execute("SELECT user_id FROM claim_owner WHERE singleton=1").fetchone()
             if owner and owner[0] != user_id:
                 raise ClaimError(403, "Claim库不属于此登录用户")
@@ -493,7 +493,7 @@ class ClaimMemory:
                 "semantic_support_verified":False}
 
     def create(self, draft: ClaimDraft) -> dict:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             fields = draft.model_dump()
             subject, predicate, scope = (fields.pop(k) for k in ("subject_id","predicate","scope"))
             data = self._evidence(fields)
@@ -570,7 +570,7 @@ class ClaimMemory:
                                          "temporal": fields.get("event_time").model_dump() if fields.get("event_time") else None})
         except (ValueError,TypeError) as error:
             raise ClaimError(422,"模型候选结构或引用无效；整批未写入") from error
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             # Verify the exact snapshot again after the awaited model request.
             self._evidence({"evidence":[{"message_id":request.message_id,"start":0,"end":len(text),"content_sha256":sha(text)}]})
             created = [self.create(draft) for draft in drafts]
@@ -584,11 +584,11 @@ class ClaimMemory:
                 "shadow_updates":shadow,"shadow_model_calls":0,"extraction_trace":extraction_trace}
 
     def get(self, claim_id: str) -> dict:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             return self._public(self._root(claim_id),self._head(claim_id))
 
     def history(self, claim_id: str) -> list[dict]:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             root = self._root(claim_id)
             rows = self.db.execute("SELECT * FROM claim_revisions WHERE claim_id=? ORDER BY revision", (claim_id,)).fetchall()
             results = [self._public(root,dict(row)) for row in rows]
@@ -600,7 +600,7 @@ class ClaimMemory:
             return results
 
     def list(self, limit=100) -> list[dict]:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             roots = self.db.execute("SELECT * FROM claim_roots WHERE user_id=? ORDER BY created_at DESC LIMIT ?", (self.user_id,limit)).fetchall()
             return [self._public(dict(root),self._head(root["id"])) for root in roots]
 
@@ -611,7 +611,7 @@ class ClaimMemory:
         return root, head
 
     def revise(self, claim_id: str, request: ClaimRevision) -> dict:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             root, head = self._expected(claim_id,request.expected_revision)
             if head["status"] != "approved":
                 raise ClaimError(409,"仅已批准的当前版本可修订")
@@ -652,7 +652,7 @@ class ClaimMemory:
         return (a["fact_end"] is None or b["fact_start"] is None or a["fact_end"]>b["fact_start"]) and (b["fact_end"] is None or a["fact_start"] is None or b["fact_end"]>a["fact_start"])
 
     def approve(self, claim_id: str, decision: ClaimDecision) -> dict:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             root, head = self._expected(claim_id,decision.expected_revision)
             if head["status"] != "pending":
                 raise ClaimError(409,"仅待审核版本可批准")
@@ -682,7 +682,7 @@ class ClaimMemory:
             return self._append(root,data,"approved",decision.reason)
 
     def decide(self, claim_id: str, decision: ClaimDecision, action: str) -> dict:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             root, head = self._expected(claim_id,decision.expected_revision)
             if action not in {"retract","dispute","reject","restore"}:
                 raise ClaimError(422,"不支持的决定")
@@ -711,9 +711,14 @@ class ClaimMemory:
             return self._append(root,data,status,decision.reason)
 
     def delete(self, claim_id: str):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             self._root(claim_id)
             self.db.execute("DELETE FROM claim_roots WHERE id=?", (claim_id,))
+
+    def selection_snapshot(self, request: AccessRequest) -> dict:
+        """Current validated selection for publication policies, without compiling a view."""
+        with self.store.lock:
+            return self._select(request)
 
     def _select(self, request: AccessRequest) -> dict:
         if request.session_id and not self.store.session(request.session_id):
@@ -823,7 +828,7 @@ class ClaimMemory:
             return False
         try:
             request = AccessRequest.model_validate(snapshot['request'])
-            with self.store._memory_transaction():
+            with self.store.memory_transaction():
                 # Re-select directly: a cached view is not an independent freshness check.
                 return sha(canonical(self._select(request))) == snapshot['payload_sha256']
         except (ClaimError, ValueError, KeyError, TypeError):
@@ -833,7 +838,7 @@ class ClaimMemory:
         return sha(canonical(request.model_dump(exclude={"ttl_seconds"})))
 
     def compile(self, request: ViewRequest) -> dict:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             payload = self._select(request)
             compiled = now()
             expiry = (datetime.fromisoformat(compiled)+timedelta(seconds=request.ttl_seconds)).isoformat(timespec="microseconds")
@@ -870,12 +875,12 @@ class ClaimMemory:
                 "payload":payload if valid else None}
 
     def view(self, vid: str) -> dict:
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             return self._view(vid)
 
     def access(self, request: AccessRequest) -> dict:
         started = time.perf_counter()
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             historical = request.intent=="history" or bool(request.fact_as_of or request.recorded_as_of)
             view = None
             if not historical:

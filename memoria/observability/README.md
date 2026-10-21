@@ -1,5 +1,7 @@
 # Observability：耗时、trace 与指标
 
+2026-10-22：[13项审查](../../docs/implemented/协议计量隐私与边界审查.md)将触发器/事务水位/lineage SQL归入[persistence](../persistence/memory_trace.py)。生产trace经[隐私投影](trace_metadata.py)只存单份调用摘要、提示词哈希/长度、usage及失败，未知成本单列；完整原始实验记录仍在隔离研究目录。
+
 [memory_trace.py](memory_trace.py)还提供来源链、实际候选/选择/Claim/View快照、Reader请求片段可见性及后验归因；事务水位包含资料形成/版本。失败/未知usage保留，见[生产闭环](../../docs/implemented/生产记忆闭环与逐题归因.md)。
 
 [核心包](../README.md) · [运行时](../runtime/README.md) · [实验账本](../experiments/README.md) · [API](../api/README.md)

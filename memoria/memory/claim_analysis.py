@@ -24,7 +24,7 @@ def update_suggestion(memory: ClaimMemory, item: dict) -> dict:
 
 async def analyze_claim(memory: ClaimMemory, llm, cid: str, request: AnalysisRequest) -> dict:
     resolver, verifier = ClaimRelationResolver(), EvidenceVerifier()
-    with memory.store._memory_transaction():
+    with memory.store.memory_transaction():
         memory._expected(cid, request.expected_revision)
         item = memory.get(cid)
         if not item["source_available"]:
@@ -40,7 +40,7 @@ async def analyze_claim(memory: ClaimMemory, llm, cid: str, request: AnalysisReq
     model_calls = int(request.use_model) + int(request.use_relation_model and bool(snapshot["peers"]))
     if model_calls:
         model = llm.settings.main.model if getattr(llm, "settings", None) else None
-    with memory.store._memory_transaction():
+    with memory.store.memory_transaction():
         memory._expected(cid, request.expected_revision)
         current = memory.get(cid)
         current_snapshot = resolver.snapshot(memory, current, request.peer_limit)

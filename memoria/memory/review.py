@@ -34,7 +34,7 @@ async def approve_review_with_claim(service, review, body):
             pass  # Approved lexical storage remains available; indexing is recoverable.
     if namespace != engine.store.embedding_namespace:
         vector=chunks=None
-    with store._memory_transaction():
+    with store.memory_transaction():
         current = store.memory_review(review['id'])
         if not current or current['status']!='applying':
             raise ClaimError(409, '审核状态已变化')

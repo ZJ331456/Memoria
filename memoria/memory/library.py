@@ -128,7 +128,7 @@ class EvidenceLibrary:
         CREATE TRIGGER IF NOT EXISTS library_feedback_immutable BEFORE UPDATE ON library_feedback
         BEGIN SELECT RAISE(ABORT,'library feedback is append-only'); END;
         '''
-        with store._memory_transaction():
+        with store.memory_transaction():
             statement = ''
             for line in schema.splitlines(keepends=True):
                 statement += line
@@ -139,9 +139,9 @@ class EvidenceLibrary:
         from .source_formation import SourceFormation
         self.formation = SourceFormation(self)
         from .observation_semantics import install as install_semantics
-        with store._memory_transaction():install_semantics(store)
-        from ..observability.memory_trace import install
-        with self.store._memory_transaction():install(self.store)
+        with store.memory_transaction():install_semantics(store)
+        from ..persistence.memory_trace import install
+        with self.store.memory_transaction():install(self.store)
 
     def _source(self, sid, *, active=True):
         from ..persistence.library_records import LibraryRecordRepository
@@ -182,7 +182,7 @@ class EvidenceLibrary:
             raise LibraryError(422, '工作资料必须指定当前账号的会话')
         if body.scope == 'personal' and body.session_id is not None:
             raise LibraryError(422, '个人资料不绑定会话；临时资料请选择working')
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             if body.session_id and not self.store.session(body.session_id):
                 raise LibraryError(404, '会话不存在')
             sid = uuid.uuid4().hex
@@ -193,7 +193,7 @@ class EvidenceLibrary:
             return self.detail(sid)
 
     def revise(self, sid, body: RevisionInput):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             source = self._source(sid)
             if source['head_id'] != body.expected_revision_id:
                 raise LibraryError(409, '资料已更新，请重新核对当前版本')
@@ -204,14 +204,14 @@ class EvidenceLibrary:
             return self.detail(sid)
 
     def retract(self, sid):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             self._source(sid)
             self.store.db.execute("UPDATE library_sources SET status='retracted' WHERE id=?", (sid,))
             self._event(sid,'retract')
         return {'status':'retracted'}
 
     def feedback(self, sid, body: FeedbackInput):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             source=self._source(sid)
             if source['kind'] != 'task_result':
                 raise LibraryError(422, '反馈闭环仅用于任务结果资料')
@@ -342,6 +342,15 @@ class EvidenceLibrary:
             if len(result)+len(by_id[mid])<=limit:result.extend(by_id[mid])
         return result
 
+    def dependency_valid_for_session(self, dependency, *, session_id=None):
+        """Publication lease including the requesting session's working scope."""
+        with self.store.lock:
+            try:
+                source=self._source(dependency['id'])
+                if source['scope']=='working' and source['session_id']!=session_id:return False
+                return self.dependency_valid(dependency)
+            except (LibraryError,KeyError,TypeError):return False
+
     def dependency_valid(self, dependency):
         with self.store.lock:
             try:
@@ -377,7 +386,7 @@ class EvidenceLibrary:
             try:return json.loads(re.sub(r'^```(?:json)?\s*|\s*```$','',result.content.strip()))
             except ValueError:status='invalid_output';raise LibraryError(502,'模型未返回合法结构，未发布经验')
         finally:
-            with self.store._memory_transaction():
+            with self.store.memory_transaction():
                 self.store.db.execute('INSERT INTO library_calls VALUES(?,?,?,?,?,?,?,?)',
                     (uuid.uuid4().hex,rid,stage,selected.model,json.dumps(result.usage) if result and result.usage else None,
                      status,round((time.monotonic()-started)*1000),now()))
@@ -404,7 +413,7 @@ class EvidenceLibrary:
             if old:return dict(old)
         raw=await self._call(revision['id'],'observe_reflect',[{'role':'system','content':PROPOSE},{'role':'user','content':text}],1000)
         if raw is None:
-            with self.store._memory_transaction():
+            with self.store.memory_transaction():
                 current=self._source(sid);latest=self._feedback(revision['id'])
                 if current['head_id']!=revision['id'] or (latest['id'] if latest else None)!=(feedback['id'] if feedback else None):
                     raise LibraryError(409,'资料或反馈变化，未缓存旧的空结论')
@@ -421,7 +430,7 @@ class EvidenceLibrary:
         except ValueError as exc:raise LibraryError(502,'审核结构不合法，未发布') from exc
         status='approved' if verdict.assessment=='Supported' and verdict.conditions_preserved and verdict.task_bound and not verdict.sensitive else 'needs_assistance'
         if SENSITIVE.search(text+proposal.content) or SECRET.search(proposal.content):status='needs_assistance'
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             current=self._source(sid);latest=self._feedback(revision['id'])
             if current['head_id']!=revision['id'] or (latest['id'] if latest else None)!=(feedback['id'] if feedback else None):
                 raise LibraryError(409,'模型处理期间资料或反馈变化，未发布旧结论')

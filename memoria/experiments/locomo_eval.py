@@ -354,9 +354,16 @@ def checkpoint_rows(workspace, run_id, protocol, cases, histories, retry_errors=
 
 
 async def execute(workspace, settings, source, *, scope='full', profile=None, roles=None,
-                  allow_remote=False, embedding_device='auto', concurrency=4, candidate_limit=40,
+                  allow_remote=False, embedding_device='auto', concurrency=None, candidate_limit=40,
                   anchor_limit=40, evidence_chars=12000, embedding_model='bge-small-en-v1.5', fallback='full_history', client_factory=ExperimentLLM,
-                  embedding_factory=EmbeddingClient, resume_from=None, retry_errors=False):
+                  embedding_factory=EmbeddingClient, resume_from=None, retry_errors=False, registration=None):
+    risk_method = fallback in {'targeted', 'adaptive_risk'}
+    explicit_concurrency = concurrency is not None
+    if risk_method and scope=='full' and registration is None:
+        raise ValueError('Full risk runs require a v3 diagnostic --registration; v2 cannot be reproduced by v3 code')
+    if registration and not explicit_concurrency:
+        raise ValueError('Registered runs require explicit --concurrency')
+    concurrency = concurrency if explicit_concurrency else (2 if risk_method else 4)
     if not 1 <= concurrency <= 8 or not 1 <= anchor_limit <= candidate_limit <= 100:
         raise ValueError('Invalid concurrency/retrieval limits')
     if not 256 <= evidence_chars <= 16000 or embedding_device not in {'auto', 'cpu', 'cuda'}:
@@ -370,7 +377,6 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
     # Fail before any paid call if optional scoring dependency is unavailable.
     answer_f1('', '', 4)
     bundle, protocol, cases, histories = prepare(workspace, source, scope)
-    risk_method = fallback in {'targeted', 'adaptive_risk'}
     if risk_method:
         from .locomo_risk import PROTOCOL as RISK_PROTOCOL
         from ..memory.answer_risk import SYSTEM as SUPPORT_SYSTEM
@@ -390,6 +396,22 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                         'max_queries_per_round':2, 'full_history_reader_allowed':False}}
     settings = account_settings(copy.deepcopy(settings), workspace, profile)
     roles = roles or load_roles(None)
+    from .locomo_registration import validate_registration, scoring_identity
+    protocol['scoring_dependencies'] = scoring_identity()
+    protocol['concurrency_explicit'] = explicit_concurrency
+    protocol['benchmark_bundle_id'] = bundle.name
+    if registration:
+        registered = validate_registration(registration,settings.root,source,protocol,settings,roles,
+            fallback=fallback, concurrency=concurrency,embedding_model=embedding_model,
+            candidate_limit=candidate_limit,anchor_limit=anchor_limit,evidence_chars=evidence_chars)
+        protocol.update(registration=registered, mode='locomo_diagnostic_v3',
+                        claim='same-question diagnostic retest', unseen_generalization=False)
+        if not risk_method:
+            from .locomo_risk import PROTOCOL as RISK_PROTOCOL
+            protocol['id']=RISK_PROTOCOL+'-'+fallback+'-'+scope
+    elif risk_method:
+        protocol.update(claim='unregistered engineering diagnostic; no protocol-matched improvement claim',
+                        unseen_generalization=False, mode='locomo_diagnostic_v3')
     if risk_method:
         roles = {**roles, 'judge': replace(roles['reader'], max_tokens=2048)}
     local_policy(settings, roles, allow_remote)

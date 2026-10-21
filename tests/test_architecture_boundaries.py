@@ -97,7 +97,7 @@ def test_http_and_every_ingress_use_the_same_reader_and_kernel(tenant, channel):
         assert message["content"] == api.json()["answer"]
         assert trace["metadata"]["message_origin"] == channel
         assert trace["metadata"]["citations"] == api.json()["citations"]
-        assert trace["metadata"]["reader_calls"][0]["usage"]["total_tokens"] == 5
+        assert trace["metadata"]["llm_calls"][0]["usage"]["total_tokens"] == 5
         assert [e["content"] for e in events if e["type"] == "delta"] == ["中文"]
         assert trace["metadata"]["memory_closed_loop"]["reader"]["calls"]
     finally:
@@ -248,6 +248,8 @@ def test_business_and_facade_modules_cannot_execute_sql():
     files = [
         *ROOT.glob("memoria/api/*.py"),
         *ROOT.glob("memoria/channels/*.py"),
+        *ROOT.glob("memoria/runtime/*.py"),
+        *ROOT.glob("memoria/observability/*.py"),
         ROOT / "memoria/accounts.py",
         ROOT / "memoria/memory/kernel.py",
     ]

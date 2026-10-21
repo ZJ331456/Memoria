@@ -12,7 +12,7 @@ class PublicationPolicy:
         self.reviews = ReviewRepository(claims.store)
 
     def guard(self, result, request):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             return self._guard(result, request)
 
     def _guard(self, result, request):

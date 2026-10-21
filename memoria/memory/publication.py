@@ -12,7 +12,7 @@ def revalidate(kernel, request, result, *, answer=None):
     if answer is not None and answer != frozen["answer"]:
         reason = "post_hook_changed_answer"
     elif frozen["status"] == "answer":
-        with kernel.store._memory_transaction():
+        with kernel.store.memory_transaction():
             if isinstance(request, QueryRequest):
                 guard = CitationGuard(
                     kernel.claims,

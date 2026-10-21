@@ -76,7 +76,7 @@ def test_target_change_during_decider_await_cannot_overwrite_new_version(tmp_pat
     try:
         target=store.add_memory('我喜欢咖啡','preference')
         async def race(content,kind,candidates):
-            with store._memory_transaction():store.db.execute("UPDATE memories SET content='我喜欢红茶' WHERE id=?",(target['id'],))
+            with store.memory_transaction():store.db.execute("UPDATE memories SET content='我喜欢红茶' WHERE id=?",(target['id'],))
             return {'action':'supersede','target_id':target['id']}
         with pytest.raises(MemoryVersionConflict):
             asyncio.run(MemoryEngine(store,decider=race).remember('我不喜欢咖啡','preference',3,'reviewed_conversation'))

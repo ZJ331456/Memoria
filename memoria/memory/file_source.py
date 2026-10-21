@@ -15,7 +15,7 @@ class FileSources:
         CREATE TRIGGER IF NOT EXISTS library_file_immutable BEFORE UPDATE ON library_files
         BEGIN SELECT RAISE(ABORT,'original files are immutable'); END;
         '''
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             statement = ''
             for line in schema.splitlines(keepends=True):
                 statement += line
@@ -28,7 +28,7 @@ class FileSources:
         parsed = parse_document(filename, data, encoding)
         body = SourceInput(kind=kind, title=title or parsed.filename, content=parsed.content,
             authorship=authorship, scope=scope, session_id=session_id, origin=parsed.filename,source_time=source_time)
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             source = self.library.create(body)
             self.store.db.execute('INSERT INTO library_files VALUES(?,?,?,?,?)', (
                 source['revision']['id'], parsed.filename, parsed.manifest['file_sha256'], data,

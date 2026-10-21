@@ -102,7 +102,7 @@ def test_internal_or_legacy_source_time_is_unknown(env):
     assert data['event_time'] is None and data['source_time'] is None
     assert data['time_reason']=='missing_original_source_time'
     store=env[0]
-    with store._memory_transaction():
+    with store.memory_transaction():
         sid=store.create_session()['id']
         store.db.execute('INSERT INTO messages VALUES(?,?,?,?,?)',('legacy',sid,'user','昨天的历史内容',REF.isoformat()))
     raw=store.message_source('legacy')
@@ -156,7 +156,7 @@ def test_third_party_never_becomes_self_even_if_model_claims_durable(env):
 ])
 def test_semantic_receipts_and_clocks_cannot_be_replaced(env,operation):
     process(env,'我在2023年完成星桥项目归档。')
-    with pytest.raises(sqlite3.IntegrityError),env[0]._memory_transaction():env[0].db.execute(operation)
+    with pytest.raises(sqlite3.IntegrityError),env[0].memory_transaction():env[0].db.execute(operation)
 
 
 def add_source(env,text,source_time=None):
@@ -306,7 +306,7 @@ def test_selected_observation_withdrawal_invalidates_reader_dependency(env):
 
 def test_clock_cleanup_follows_original_source_deletion(env):
     source,row,data=process(env,'我在2023年完成星桥项目归档。')
-    with env[0]._memory_transaction():env[0].db.execute('DELETE FROM messages WHERE id=?',(source['id'],))
+    with env[0].memory_transaction():env[0].db.execute('DELETE FROM messages WHERE id=?',(source['id'],))
     assert not env[0].db.execute('SELECT 1 FROM memory_source_clocks WHERE revision_ref=?',(source['id'],)).fetchone()
     assert sem.load(env[0],'conversation',row['id']) is None
 
@@ -335,7 +335,7 @@ def test_ordinary_chat_frame_and_tool_recall_keep_event_metadata(env):
     assert '2023-01-01' in frame and 'source_time' in frame and 'recorded_at' in frame
     dependency=items[0]['retrieval']['dependency']
     assert env[0].memory_dependency_valid(dependency)
-    with env[0]._memory_transaction():env[0].db.execute("UPDATE memory_observations SET state='archived' WHERE id=?",(row['id'],))
+    with env[0].memory_transaction():env[0].db.execute("UPDATE memory_observations SET state='archived' WHERE id=?",(row['id'],))
     assert env[0].memory_dependency_valid(dependency)  # Consolidation retention isn't evidence withdrawal.
     assert sem.source_observations(env[0],'conversation',source['id'])
     env[0].undo_memory_sources([source['id']])

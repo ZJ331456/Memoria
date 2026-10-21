@@ -122,7 +122,7 @@ def test_legacy_flat_list_remains_one_conjunction(core):
     data = json.loads(row["data_json"])
     data.pop("support_groups")
     data["evidence"].append({k:v for k,v in second.items() if k != "quote"})
-    with core[0]._memory_transaction():
+    with core[0].memory_transaction():
         core[1]._append(core[1]._root(first["id"]), data, "approved", "Legacy-format fixture")
     assert len(core[1].get(first["id"])["support_groups"]) == 1
     core[0].undo_memory_sources([second["message_id"]])
@@ -149,7 +149,7 @@ def test_each_support_group_has_its_own_parent_and_cache_dependency(core,mutatio
     view=claims.compile(ViewRequest(predicates=['response_language']))
     # Invalidating the SECOND parent must invalidate its View even though the
     # legacy flat memory_id still names the FIRST parent.
-    with store._memory_transaction():
+    with store.memory_transaction():
         if mutation=='retire':store.db.execute("UPDATE memories SET status='retired' WHERE id=?",(p2['id'],))
         elif mutation=='change':store.db.execute("UPDATE memories SET content='Changed' WHERE id=?",(p2['id'],))
         else:store.db.execute('DELETE FROM memories WHERE id=?',(p2['id'],))
@@ -172,7 +172,7 @@ def test_legacy_parent_is_inherited_and_cannot_be_detached_without_new_approval(
     data=json.loads(core[1]._head(first['id'])['data_json'])
     for group in data['support_groups']:
         group.pop('memory_id');group.pop('memory_sha256')
-    with core[0]._memory_transaction():
+    with core[0].memory_transaction():
         core[1]._append(core[1]._root(first['id']),data,'approved','Legacy parent format')
         core[0].db.execute("UPDATE memories SET status='retired' WHERE id=?",(parent['id'],))
     assert core[1].access(AccessRequest(predicates=['response_language']))['path']=='clarify'

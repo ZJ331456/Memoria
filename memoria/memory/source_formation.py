@@ -178,7 +178,7 @@ class SourceFormation:
         CREATE TABLE IF NOT EXISTS library_consolidation_events(
             id INTEGER PRIMARY KEY,root_id TEXT NOT NULL,action TEXT NOT NULL,details_json TEXT NOT NULL,created_at TEXT NOT NULL);
         '''
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             statement = ''
             for line in schema.splitlines(keepends=True):
                 statement += line
@@ -242,7 +242,7 @@ class SourceFormation:
                     result['consolidation'] = await self.consolidate(observation['id'])
                 except LibraryError as exc:
                     result['consolidation']={'status':'failed','http_status':exc.status,'reason':exc.detail}
-                    with self.store._memory_transaction():
+                    with self.store.memory_transaction():
                         self._event(observation['group_key'],'consolidation_failed',{'status':exc.status})
                     break
                 if result['consolidation']['status'] not in {'insufficient_sources','incomplete_source','unknown_conditions','unknown_outcome'}:
@@ -344,7 +344,7 @@ class SourceFormation:
         result = {'status':'completed','policy':POLICY,'cached':False,'revision_id':revision['id'],
             'feedback_id':feedback['id'] if feedback else None,
             'processed_span':{'start':start,'end':end,'total':len(revision['content'])},'diagnostics':diagnostic,'observations':[]}
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             self._unchanged(source,revision,feedback)
             for index, item in items:
                 model_verdict=f'o{index}' in verdicts
@@ -522,7 +522,7 @@ class SourceFormation:
             return await self._consolidate(oid)
 
     async def _consolidate(self, oid):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             trigger = self._observation(oid)
             if not self._live(trigger,complete=False): raise LibraryError(409,'观察来源或反馈已失效')
             if not self._complete(trigger['revision_id']): return {'status':'incomplete_source'}
@@ -584,7 +584,7 @@ class SourceFormation:
                 checked.task_bound,not checked.sensitive)) and not SENSITIVE.search(proposal.content) and not SECRET.search(proposal.content):
                 if getattr(self.settings,'memory_approval_mode','llm')=='llm':status='approved'
                 else:verdict['reason']='manual_policy'
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             latest=dict(self.store.db.execute('SELECT * FROM library_consolidations WHERE id=?',(key,)).fetchone())
             if latest['status']!='active' or latest['head_id']!=previous or self._conflict(key):
                 raise LibraryError(409,'巩固等待期间状态或冲突变化，未发表旧提案')
@@ -727,7 +727,7 @@ class SourceFormation:
             return result
 
     def retire(self, key, expected_revision_id, *, session_id=None):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             root=self._root(key,session_id)
             if root['head_id']!=expected_revision_id:raise LibraryError(409,'记忆版本已变化，请刷新后重试')
             self.store.db.execute("UPDATE library_consolidations SET status='retired' WHERE id=?",(key,))

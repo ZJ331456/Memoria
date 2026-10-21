@@ -268,7 +268,7 @@ def test_claim_for_another_observation_cannot_be_published(env):
     start=0;end=text.index('，')
     from memoria.memory import formation_store
     formation_store.install(store)
-    with store._memory_transaction():
+    with store.memory_transaction():
         job=store.enqueue_memory_job(source['id'],text,'')
         receipt={'source_sha':__import__('memoria.claims',fromlist=['sha']).sha(text),
             'model':'engineering','usage':None,'observations':[{'category':'preference','topic':'语言','scope':'',

@@ -236,7 +236,7 @@ class AgentRuntime:
                 )
 
                 await self.pipeline.run(Phase.AFTER_REASONING, context)
-                with self.store._memory_transaction():
+                with self.store.memory_transaction():
                     if any(
                         not self._memory_dependency_valid(d) for d in memory_dependencies.values()
                     ):

@@ -104,7 +104,7 @@ def test_unknown_legacy_temporary_binding_stays_unknown(core):
     current = approve(core, create(core, "English", sid, {"temporary":True}))
     data = json.loads(core[1]._head(current["id"])["data_json"])
     data.pop("lifecycle")
-    with core[0]._memory_transaction():
+    with core[0].memory_transaction():
         core[1]._append(core[1]._root(current["id"]), data, "approved", "Legacy fixture")
     assert core[1].access(request(sid))["path"] == "clarify"
 

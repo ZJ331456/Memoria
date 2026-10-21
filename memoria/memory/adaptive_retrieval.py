@@ -3,6 +3,7 @@
 Model advice never changes a Claim, identity, condition, source version or time axis.
 """
 from __future__ import annotations
+from ..observability.memory_trace import fingerprint
 
 import re
 import time
@@ -258,6 +259,8 @@ async def read_adaptive(kernel, request):
             raise ContextLengthError('Shared embedding/Reader budget exhausted')
         row = {'stage': 'embedding', 'status': 'started', 'usage': None, 'request_budget': report}
         trace['calls'].append(row)
+        from .reader_calls import record_call
+        record_call(row)
         return row
 
     async def retrieve(query=None):
@@ -270,8 +273,10 @@ async def read_adaptive(kernel, request):
             {'role': 'user', 'content': canonical(packet)}], max_tokens=2048)
         if not policy.reserve_call(stage, prepared.report, reservation='answer_pipeline' if stage == 'support' else None):
             raise ContextLengthError('Shared adaptive call/input budget exhausted')
-        row = {'stage': stage, 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
+        row = {'stage': stage, 'prompt_sha256': fingerprint(prepared.messages), 'prompt_chars': len(canonical(prepared.messages)), 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
         trace['calls'].append(row)
+        from .reader_calls import record_call
+        record_call(row)
         clock = time.perf_counter()
         try:
             async with asyncio.timeout(min(kernel.settings.request_timeout_seconds, 90)):
@@ -279,7 +284,7 @@ async def read_adaptive(kernel, request):
                     from .reader_calls import notify_request
                     notify_request()
                     result = await kernel.llm.chat(prepared.messages, model=prepared.model, max_tokens=prepared.max_tokens)
-            row.update(raw=result.content, usage=result.usage or None, finish_reason=result.finish_reason, status='returned')
+            row.update(raw=result.content, usage=result.usage or None, retries=getattr(result,'retries',None), finish_reason=result.finish_reason, status='returned')
             return result
         except BaseException as exc:
             row.update(status='failed', error_type=type(exc).__name__)
@@ -373,8 +378,10 @@ async def read_adaptive(kernel, request):
                     policy.reserve_call('reader', prepared.report, reservation='answer_pipeline')
                     reader_called = True
                     clock = time.perf_counter()
-                    row = {'stage': 'reader', 'attempt': attempt+1, 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
+                    row = {'stage': 'reader', 'prompt_sha256': fingerprint(prepared.messages), 'prompt_chars': len(canonical(prepared.messages)), 'attempt': attempt+1, 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
                     trace['calls'].append(row)
+                    from .reader_calls import record_call
+                    record_call(row)
                     try:
                         async with asyncio.timeout(min(kernel.settings.request_timeout_seconds, 90)):
                             with inference_scope(observe_embedding):
@@ -382,7 +389,7 @@ async def read_adaptive(kernel, request):
                                 notify_request()
                                 result = await kernel.llm.chat(prepared.messages, model=prepared.model, max_tokens=prepared.max_tokens)
                         reader_usage = result.usage or None
-                        row.update(raw=result.content, usage=reader_usage, finish_reason=result.finish_reason, status='returned')
+                        row.update(raw=result.content, usage=reader_usage, retries=getattr(result,'retries',None), finish_reason=result.finish_reason, status='returned')
                     except BaseException as exc:
                         row.update(status='failed', error_type=type(exc).__name__)
                         raise

@@ -274,7 +274,7 @@ class AutoMemoryReviewer:
                     if hard:
                         report['reason_codes']=hard;return self.finish(row,report,key)
                 if supported_review:
-                    with self.store._memory_transaction():
+                    with self.store.memory_transaction():
                         self.assert_current(row,key)
                         self.conflict_proposal(row,report,draft,evidence)
                     report['reason_codes']=['existing_state_requires_revision' if report.get('structured_proposal') else 'model_requested_review']
@@ -293,7 +293,7 @@ class AutoMemoryReviewer:
                     try:vector,chunks=await self.memory._embed_document(row['content'])
                     except Exception:pass
                 if namespace!=self.store.embedding_namespace:vector=chunks=None
-                with self.store._memory_transaction():
+                with self.store.memory_transaction():
                     self.assert_current(row,key)
                     existing_claim=None
                     if draft:
@@ -394,7 +394,7 @@ class AutoMemoryReviewer:
             draft,binding=self.bind_assertion(row,source,verdict,model)
             rules=EvidenceVerifier().verify(self.claims,{**draft.model_dump(),'source_available':True})
             if rules['blockers']:return None  # No nonliteral/alias semantic exception for this hold.
-            with self.store._memory_transaction():
+            with self.store.memory_transaction():
                 self.assert_current(row,key)
                 self.conflict_proposal(row,report,draft,draft.evidence[0].model_dump())
             if not report.get('structured_proposal'):return None
@@ -465,7 +465,7 @@ class AutoMemoryReviewer:
         if current_key!=key:raise ClaimError(409,'原话或候选在审核期间变化')
 
     def finish(self,row,report,key,allow_changed=False):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             if not allow_changed:self.assert_current(row,key)
             current=self.store.memory_review(row['id'])
             if not current:raise ClaimError(409,'候选在审核期间被删除，未写入记忆')

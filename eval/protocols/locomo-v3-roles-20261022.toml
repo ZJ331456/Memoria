@@ -1,0 +1,18 @@
+# Public frozen generation settings. Credentials stay in the account's private model config.
+[roles.reader]
+slot = "main"
+max_tokens = 1024
+temperature = 0
+top_p = 1
+timeout_seconds = 120
+max_retries = 0
+thinking = "disabled_by_deepseek_api"
+
+[roles.judge]
+slot = "main"
+max_tokens = 2048
+temperature = 0
+top_p = 1
+timeout_seconds = 120
+max_retries = 0
+thinking = "disabled_by_deepseek_api"

@@ -48,7 +48,7 @@ class MemoryJobWorker:
                     # failure must not relabel it as failed/empty extraction or
                     # repeatedly spend the observation budget.
                     from ..store import now
-                    with self.store._memory_transaction():
+                    with self.store.memory_transaction():
                         self.store.db.execute('INSERT INTO memory_formation_events(pattern_id,action,reason,created_at) VALUES(NULL,?,?,?)',
                             ('CONSOLIDATION_FAILED',type(exc).__name__,now()))
                     logger.warning('记忆巩固未完成 job=%s type=%s',job['id'],type(exc).__name__)

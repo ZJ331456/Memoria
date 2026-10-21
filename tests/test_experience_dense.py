@@ -49,7 +49,7 @@ def test_future_public_and_revoked_vectors_filtered_before_top_one(core):
     asyncio.run(reindex_dense(core[0],core[3]))
     public=add(core,'Engineering public source.')
     asyncio.run(reindex_dense(core[0],core[3]))
-    with core[0]._memory_transaction():
+    with core[0].memory_transaction():
         core[0].db.execute('INSERT INTO dataset_imports VALUES(?,?,?,?,?)',('public','sha','{}',
             json.dumps({'source_mapping':[{'message_ids':[public['id']]}]}),'now'))
     found,diag=dense_candidates(core[0],[1.,0.],core[3].namespace,limit=1,recorded_as_of=old['created_at'])
@@ -65,7 +65,7 @@ def test_dense_maintenance_rechecks_source_and_namespace_after_await(core,mutati
         async def embed_documents(self,texts):
             if mutation=='namespace':core[0].configure_embedding('other-encoder')
             else:
-                with core[0]._memory_transaction():
+                with core[0].memory_transaction():
                     if mutation=='delete':core[0].db.execute('DELETE FROM messages WHERE id=?',(src['id'],))
                     else:core[0].db.execute("UPDATE messages SET content='changed' WHERE id=?",(src['id'],))
             return [DocumentEmbedding([1.,0.]) for text in texts]

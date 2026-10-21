@@ -113,7 +113,7 @@ class MemoryFormation:
             failure = type(exc).__name__
             raise
         finally:
-            with self.store._memory_transaction():
+            with self.store.memory_transaction():
                 self.store.db.execute('INSERT INTO memory_formation_calls VALUES(?,?,?,?,?,?,?,?,?)',
                     (call_id, stage, fingerprint, selected.model,
                      json.dumps(result.usage) if result and result.usage else None,
@@ -121,7 +121,7 @@ class MemoryFormation:
                      round((time.monotonic()-started)*1000), now()))
 
     def invalid_output(self, call_id):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             self.store.db.execute("UPDATE memory_formation_calls SET status='invalid_output' WHERE id=?", (call_id,))
 
     async def extract(self, job):
@@ -372,7 +372,7 @@ class MemoryFormation:
         if proposal.action == 'ADD' and previous:
             raise ValueError('Existing pattern must be evolved explicitly')
         pid = uuid.uuid4().hex
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             for row in unique:
                 records.live_observation(self.store, row)
             current = self.store.db.execute("SELECT id FROM memory_pattern_versions WHERE bucket=? AND status='active' ORDER BY created_at DESC LIMIT 1", (key,)).fetchone()

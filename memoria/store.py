@@ -287,7 +287,7 @@ class Store:
             self._bootstrap_vector_index()
             self.chunk_index = SQLiteVecIndex(self.db, vector_backend, self.embedding_namespace + ":source-chunks-v1")
             self._bootstrap_chunk_index()
-            from .observability.memory_trace import install as install_memory_trace
+            from .persistence.memory_trace import install as install_memory_trace
             install_memory_trace(self)
             self.db.commit()
 
@@ -301,7 +301,7 @@ class Store:
             return self._entities
 
     @contextmanager
-    def _memory_transaction(self):
+    def memory_transaction(self):
         """Serialize a lifecycle write; a caller retains ownership of its transaction."""
         with self.lock:
             owns = not self.db.in_transaction
@@ -370,7 +370,7 @@ class Store:
     def configure_embedding(self, namespace: str) -> None:
         if namespace == self.embedding_namespace:
             return
-        with self._memory_transaction():
+        with self.memory_transaction():
             self.embedding_namespace = namespace
             self.vector_index = SQLiteVecIndex(self.db, self.vector_backend, namespace)
             self._bootstrap_vector_index()
@@ -430,7 +430,7 @@ class Store:
                  "embedding": json.loads(r["embedding"])} for r in rows]
 
     def set_memory_document_embedding(self, memory_id: str, content: str, vector: list[float], chunks: list[dict]) -> bool:
-        with self._memory_transaction():
+        with self.memory_transaction():
             row = self.db.execute("SELECT content,status FROM memories WHERE id=?", (memory_id,)).fetchone()
             if not row or row["content"] != content or row["status"] != "active":
                 return False  # A concurrent correction/deletion wins over delayed backfill.
@@ -548,7 +548,7 @@ class Store:
 
     def add_message(self, session_id: str, role: str, content: str, *, source_time: str | None = None) -> dict[str, Any]:
         item = {"id": uuid.uuid4().hex, "session_id": session_id, "role": role, "content": content, "created_at": now()}
-        with self._memory_transaction():
+        with self.memory_transaction():
             self.db.execute("INSERT INTO messages VALUES (:id,:session_id,:role,:content,:created_at)", item)
             from .provenance import current_ingress
             origin=current_ingress.get()
@@ -893,7 +893,7 @@ class Store:
             return self._memory_batch(rows), total
 
     def record_index_attempts(self, items: list[dict], namespace: str, *, require_chunks: bool = False):
-        with self._memory_transaction():
+        with self.memory_transaction():
             for item in items:
                 current=self.memory(item['id'])
                 complete=bool(current and current.get('embedding') and (not require_chunks or current['kind']=='benchmark_history' or current.get('embedding_chunk_count')))
@@ -934,7 +934,7 @@ class Store:
 
     def add_memory_if_absent(self, content: str, kind: str, importance: int, source: str, embedding=None, **kwargs) -> tuple[str, dict]:
         """Model work stays outside; the final exact recheck and mutation are atomic."""
-        with self._memory_transaction():
+        with self.memory_transaction():
             ref = kwargs.get('source_ref')
             if kwargs.get('require_source'):
                 self._require_memory_source(ref)
@@ -965,7 +965,7 @@ class Store:
             "supersedes_id": supersedes_id, "last_reinforced_at": None,
             "source_ref": source_ref,
         }
-        with self._memory_transaction():
+        with self.memory_transaction():
             timestamp = now()
             item["created_at"] = item["updated_at"] = timestamp
             if self.source_revoked(source_ref):
@@ -1079,7 +1079,7 @@ class Store:
     ) -> dict[str, Any] | None:
         """Replace one active version atomically, retaining the user's correction trail."""
         timestamp = now()
-        with self._memory_transaction():
+        with self.memory_transaction():
             timestamp = now()
             previous = self.db.execute("SELECT * FROM memories WHERE id=? AND status='active'", (memory_id,)).fetchone()
             if previous is None:
@@ -1131,7 +1131,7 @@ class Store:
                                    embedding_chunks=(self.memory_chunks(memory_id) or None) if content.strip() == current["content"] else None)
 
     def set_memory_embedding(self, memory_id: str, embedding: list[float]) -> None:
-        with self._memory_transaction():
+        with self.memory_transaction():
             if not self.db.execute("SELECT 1 FROM memories WHERE id=?", (memory_id,)).fetchone():
                 return
             self._persist_embedding(memory_id, embedding)
@@ -1517,7 +1517,7 @@ class Store:
 
     def request_memory_extraction(self, source_ref: str) -> dict[str, Any]:
         """Explicit historical request; retry an empty job without erasing its receipt."""
-        with self._memory_transaction():
+        with self.memory_transaction():
             self._require_memory_source(source_ref)
             source=self.message_source(source_ref)
             row=self.db.execute('SELECT * FROM memory_jobs WHERE source_ref=?',(source_ref,)).fetchone()
@@ -1632,7 +1632,7 @@ class Store:
         content = content.strip()
         if not content or len(content) > 4000 or kind not in {'fact','preference','profile','goal','procedure'} or type(importance) is not int or not 1 <= importance <= 5:
             raise ValueError('候选内容、类型或重要度不合法')
-        with self._memory_transaction():
+        with self.memory_transaction():
             self._require_memory_source(source_ref)
             existing = self.db.execute("SELECT * FROM memory_reviews WHERE source_ref=? AND content=? AND kind=? AND status='pending'", (source_ref, content, kind)).fetchone()
             if existing:
@@ -1668,7 +1668,7 @@ class Store:
         return [{**item,'assessment':latest.get(item['id'])} for item in items]
 
     def record_review_assessment(self, review_id, input_sha256, data):
-        with self._memory_transaction():
+        with self.memory_transaction():
             self.db.execute('INSERT INTO memory_review_assessments(review_id,input_sha256,decision,data_json,created_at) VALUES(?,?,?,?,?)',
                 (review_id,input_sha256,data['decision'],json.dumps(data,ensure_ascii=False),now()))
 
@@ -1702,7 +1702,7 @@ class Store:
         if not refs:
             return {"affected_ids": [], "restored_ids": []}
         marks = ",".join("?" for _ in refs)
-        with self._memory_transaction():
+        with self.memory_transaction():
             operations = self.db.execute(f"SELECT * FROM memory_operations WHERE source_ref IN ({marks}) AND undone_at IS NULL", refs).fetchall()
             from .memory.source_support import live_groups
             # The origin may have been revoked earlier while a replacement support
@@ -1749,18 +1749,15 @@ class Store:
         return {"affected_ids": affected, "restored_ids": restored}
 
     def add_trace(self, session_id: str, status: str, steps: int, duration_ms: int, memories: list[dict], tools: list[dict], error: str | None = None, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+        from .observability.trace_metadata import compact_metadata, call_metrics
+        metadata = compact_metadata(metadata)
         item = {"id": uuid.uuid4().hex, "session_id": session_id, "status": status, "steps": steps, "duration_ms": duration_ms, "memories_json": json.dumps(memories, ensure_ascii=False), "tools_json": json.dumps(tools, ensure_ascii=False), "metadata_json": json.dumps(metadata or {}, ensure_ascii=False), "error": error, "created_at": now()}
         with self.lock:
             self.db.execute("""INSERT INTO turn_traces
                 (id,session_id,status,steps,duration_ms,memories_json,tools_json,metadata_json,error,created_at)
                 VALUES (:id,:session_id,:status,:steps,:duration_ms,:memories_json,:tools_json,:metadata_json,:error,:created_at)""", item)
             calls = (metadata or {}).get("llm_calls", [])
-            increments = {
-                "llm_requests": len(calls),
-                "llm_retries": sum(int(call.get("retries", 0) or 0) for call in calls if isinstance(call, dict)),
-                "llm_duration_ms": sum(int(call.get("duration_ms", 0) or 0) for call in calls if isinstance(call, dict)),
-                "llm_tokens": sum(int((call.get("usage") or {}).get("total_tokens", 0) or 0) for call in calls if isinstance(call, dict)),
-            }
+            increments = call_metrics(calls)
             for key, value in increments.items():
                 self.db.execute("""INSERT INTO runtime_metrics(key,value) VALUES (?,?)
                     ON CONFLICT(key) DO UPDATE SET value=value+excluded.value""", (key, value))
@@ -1802,7 +1799,7 @@ class Store:
 
     def set_temporal(self, memory_id: str, valid_at: Any = _UNSET, invalid_at: Any = _UNSET) -> dict | None:
         """Edit only the latest interval. Omitted end time is never cleared."""
-        with self._memory_transaction():
+        with self.memory_transaction():
             row = self.db.execute("SELECT * FROM memories WHERE id=?", (memory_id,)).fetchone()
             if not row:
                 return None
@@ -1817,7 +1814,7 @@ class Store:
 
     def temporal_invalidate(self, old_id: str, new_id: str, invalid_at: str | None = None) -> None:
         # Compatibility helper; normal replacement already commits both windows atomically.
-        with self._memory_transaction():
+        with self.memory_transaction():
             new = self.db.execute("SELECT valid_at FROM memories WHERE id=? AND supersedes_id=?", (new_id, old_id)).fetchone()
             if not new:
                 raise ValueError("记忆之间不存在替代关系")

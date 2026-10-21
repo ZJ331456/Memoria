@@ -84,7 +84,7 @@ def test_conversation_adapter_keeps_roles_channels_and_unknown_fact_time(core):
 def test_public_dialogue_can_be_read_without_becoming_personal_evidence(core):
     sid = core.store.create_session('Engineering corpus')['id']
     message = core.record_message(sid, 'user', '工程检索公开对话样本。')
-    with core.store._memory_transaction():
+    with core.store.memory_transaction():
         receipt = json.dumps({'source_mapping': [{'message_ids': [message['id']]}]})
         core.store.db.execute('INSERT INTO dataset_imports VALUES(?,?,?,?,?)',
             ('engineering-corpus', 'engineering-sha', '{}', receipt, message['created_at']))

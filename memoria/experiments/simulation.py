@@ -19,7 +19,9 @@ def core_fingerprint(root):
     """Freeze executable core/tests/fixtures, allowing later result documentation."""
     import hashlib
     files=sorted({*root.glob('memoria/**/*.py'), *root.glob('tests/**/*.py'),
-        *root.glob('scripts/*.py'), *root.glob('simulation/*.json')})
+        *root.glob('scripts/*.py'), *root.glob('simulation/*.json'),
+        *root.glob('tests/fixtures/*.json'), *root.glob('eval/protocols/*.json'),
+        *root.glob('eval/protocols/*.toml')})
     return hashlib.sha256(canonical({p.relative_to(root).as_posix():digest_file(p) for p in files}).encode()).hexdigest()
 
 

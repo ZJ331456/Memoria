@@ -100,7 +100,7 @@ def index_message(store, message):
 def reindex(store, limit=16):
     if type(limit) is not int or not 1 <= limit <= 64:
         raise ValueError("experience index batch must be 1..64")
-    with store._memory_transaction():
+    with store.memory_transaction():
         missing = (personal_source_sql()+" AND NOT EXISTS (SELECT 1 FROM experience_versions v "
             "WHERE v.message_id=m.id AND v.content_sha256=memoria_sha256(m.content))")
         count, oldest = store.db.execute("SELECT COUNT(*),MIN(m.created_at) FROM messages m WHERE "+missing).fetchone()
@@ -126,7 +126,7 @@ def candidates(store, query, *, limit=16, recorded_as_of=None):
         raise ValueError("experience candidate limit must be 1..64")
     scope, params = _eligible(recorded_as_of)
     marks = ",".join("?" for _ in terms)
-    with store._memory_transaction():
+    with store.memory_transaction():
         rows = store.db.execute(f"""WITH eligible AS (
             SELECT c.* FROM experience_chunks c JOIN messages m ON m.id=c.message_id WHERE {scope}
         ), corpus AS (SELECT COUNT(*) n,COALESCE(AVG(token_count),1) average FROM eligible),
@@ -147,7 +147,7 @@ def neighbors(store, anchors, *, recorded_as_of=None, limit=8):
         raise ValueError("experience neighbor limit must be 0..16")
     scope, params = _eligible(recorded_as_of)
     result, seen = [], {a["id"] for a in anchors}
-    with store._memory_transaction():
+    with store.memory_transaction():
         for anchor in anchors[:4]:
             if len(result) >= limit:
                 break
@@ -164,7 +164,7 @@ def neighbors(store, anchors, *, recorded_as_of=None, limit=8):
 
 def _materialize(claims, anchors, *, limit=32, recorded_as_of=None, lane="experience_bm25"):
     store = claims.store
-    with store._memory_transaction():
+    with store.memory_transaction():
         context = neighbors(store, anchors[:4], recorded_as_of=recorded_as_of, limit=min(8,max(0,limit-len(anchors))))
         result = []
         for rank, row in enumerate(anchors+context,1):
@@ -199,7 +199,7 @@ def _materialize(claims, anchors, *, limit=32, recorded_as_of=None, lane="experi
 
 
 def retrieve(claims, query, *, limit=32, recorded_as_of=None):
-    with claims.store._memory_transaction():
+    with claims.store.memory_transaction():
         anchors=candidates(claims.store,query,limit=min(limit,16),recorded_as_of=recorded_as_of)
         return _materialize(claims,anchors,limit=limit,recorded_as_of=recorded_as_of)
 
@@ -212,7 +212,7 @@ async def reindex_dense(store,embedder,limit=16):
     embedder=bounded_encoder(embedder)
     namespace=embedder.namespace
     scope,params=_eligible(None)
-    with store._memory_transaction():
+    with store.memory_transaction():
         rows=[dict(r) for r in store.db.execute('SELECT c.*,m.content,m.session_id,m.role,m.created_at FROM experience_chunks c '
             'JOIN messages m ON m.id=c.message_id WHERE '+scope+
             ' AND NOT EXISTS(SELECT 1 FROM experience_vectors v WHERE v.chunk_id=c.id AND v.namespace=?) '
@@ -225,7 +225,7 @@ async def reindex_dense(store,embedder,limit=16):
     if len(dimensions)!=1:raise ValueError('Experience embedding batch has mixed dimensions')
     dimension=next(iter(dimensions))
     indexed=0
-    with store._memory_transaction():
+    with store.memory_transaction():
         if store.embedding_namespace!=namespace:return {'indexed_chunks':0,'skipped':'embedding namespace changed','embedding_calls':1}
         if store.db.execute('SELECT 1 FROM experience_vectors WHERE namespace=? AND dimension!=? LIMIT 1',(namespace,dimension)).fetchone():
             raise ValueError('Experience embedding namespace changed dimension; use a new model namespace')
@@ -243,7 +243,7 @@ async def reindex_dense(store,embedder,limit=16):
 def dense_candidates(store,vector,namespace,*,limit=16,recorded_as_of=None):
     store._validate_vector(vector)
     scope,params=_eligible(recorded_as_of)
-    with store._memory_transaction():
+    with store.memory_transaction():
         rows=store.db.execute('SELECT c.*,m.session_id,m.role,m.created_at observed_at,v.embedding FROM experience_vectors v '
             'JOIN experience_chunks c ON c.id=v.chunk_id JOIN messages m ON m.id=c.message_id WHERE '+scope+
             ' AND v.namespace=? AND v.dimension=? AND v.content_sha256=c.content_sha256',(*params,namespace,len(vector))).fetchall()

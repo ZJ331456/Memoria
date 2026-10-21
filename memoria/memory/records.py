@@ -87,7 +87,6 @@ class EvidenceRecord:
 
 def excerpt(text: str, query: str, *, start: int | None = None, width: int = 800):
     """An exact bounded slice, never a fabricated quote or a token-concatenated snippet."""
-    from .lexical import token_sequence
     if start is None:
         from .source_windows import windows
         a,b=windows(text,query,width=width)[0]

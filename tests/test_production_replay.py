@@ -33,7 +33,7 @@ def packet(core):
 def test_lifecycle_watermarks_are_transactional_and_reopen_does_not_invent_history(core,tmp_path):
     before=watermark(core[0])
     with pytest.raises(RuntimeError):
-        with core[0]._memory_transaction():
+        with core[0].memory_transaction():
             core[0].add_message(core[2],'user','Engineering rollback')
             raise RuntimeError('rollback')
     assert watermark(core[0])==before

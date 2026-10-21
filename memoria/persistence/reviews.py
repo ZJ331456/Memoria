@@ -18,7 +18,7 @@ class ReviewRepository:
         from ..store import now
 
         # Caller holds its source-validation transaction; this operation joins it.
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             return bool(
                 self.store.db.execute(
                     "UPDATE memory_reviews SET content=?,kind=?,importance=?,updated_at=? WHERE id=? AND status='pending'",

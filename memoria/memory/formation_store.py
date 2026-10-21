@@ -245,7 +245,7 @@ def published(store, review_id, memory_id):
 
 def maintenance(store, timestamp=None, observation_cutoff=None):
     timestamp = timestamp or now()
-    with store._memory_transaction():
+    with store.memory_transaction():
         if observation_cutoff:
             store.db.execute("UPDATE memory_observations SET state='archived' WHERE state='active' AND observed_at<?", (observation_cutoff,))
         rows = store.db.execute("SELECT id,review_id FROM memory_pattern_versions WHERE status='active'").fetchall()

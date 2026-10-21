@@ -40,7 +40,7 @@ def test_complete_alternative_survives_first_source_loss_and_last_loss_hides_his
     at=item['created_at']
     if mutation=='revoke':store.undo_memory_sources([first['id']])
     else:
-        with store._memory_transaction():
+        with store.memory_transaction():
             if mutation=='delete':store.db.execute('DELETE FROM messages WHERE id=?',(first['id'],))
             elif mutation=='change':store.db.execute("UPDATE messages SET content='changed source' WHERE id=?",(first['id'],))
             else:
@@ -92,13 +92,13 @@ def test_support_conjunction_and_body_version_are_not_merged_into_any_fragment(c
     b=source(core,'Engineering required condition.')
     m=store.add_memory('conditioned memory','fact',source_ref=a['id'],require_source=True)
     group=live_groups(store,m['id'])[0]
-    with store._memory_transaction():
+    with store.memory_transaction():
         store.db.execute('INSERT INTO memory_support_evidence VALUES(?,?,?,?,?,?)',
             (group['id'],b['id'],sha(b['content']),b['session_id'],b['created_at'],'active'))
     assert store.memory_support_available(m['id'])
-    with store._memory_transaction():store.db.execute('DELETE FROM messages WHERE id=?',(b['id'],))
+    with store.memory_transaction():store.db.execute('DELETE FROM messages WHERE id=?',(b['id'],))
     assert not store.memory_support_available(m['id'])
-    with store._memory_transaction():store.db.execute("UPDATE memories SET content='different body' WHERE id=?",(m['id'],))
+    with store.memory_transaction():store.db.execute("UPDATE memories SET content='different body' WHERE id=?",(m['id'],))
     assert not store.memory_support_available(m['id'])
 
 
@@ -128,7 +128,7 @@ def test_linked_claim_cannot_bypass_parent_support_loss(core):
     claims.approve(draft['id'],ClaimDecision(expected_revision=draft['revision'],reason='Engineering approval'))
     store.undo_memory_sources([a['id']])
     assert claims.compile(ViewRequest(predicates=['residence']))['payload']['complete']
-    with store._memory_transaction():store.db.execute("UPDATE messages SET content='changed' WHERE id=?",(b['id'],))
+    with store.memory_transaction():store.db.execute("UPDATE messages SET content='changed' WHERE id=?",(b['id'],))
     assert not claims.compile(ViewRequest(predicates=['residence']))['payload']['complete']
 
 
@@ -150,7 +150,7 @@ def test_legacy_reinforcement_is_not_migrated_as_new_independent_support(core,tm
     m=store.add_memory('legacy preference','preference',source_ref=a['id'],require_source=True)
     b=source(core,'Engineering legacy operation with no captured evidence.')
     store.reinforce_memory(m['id'],b['id'],require_source=True)
-    with store._memory_transaction():store.db.execute('DELETE FROM memory_support_groups WHERE memory_id=?',(m['id'],))
+    with store.memory_transaction():store.db.execute('DELETE FROM memory_support_groups WHERE memory_id=?',(m['id'],))
     other=Store(tmp_path/'ordinary.db','json')
     try:
         groups=live_groups(other,m['id'])

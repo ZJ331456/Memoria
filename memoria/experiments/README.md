@@ -66,7 +66,7 @@ access_eval 用真实账号副本，0 Claim 仅为空状态开销，不证明正
 
 ## LoCoMo英文全量入口
 
-[locomo_eval.py](locomo_eval.py)的新locomo-run默认完整1986题，普通1540/对抗446独立评分；英文BM25+Dense/RRF、紧凑候选优先/邻句、英文BGE、并发4独立调用编号。已冻结locomo-smoke v1结果保留；新执行使用固定拒答策略的v2，不覆盖历史。逐题产物在账号目录，生产0写入，gold只在推理后评分。[协议和命令](../../docs/implemented/LoCoMo全量评测与英文检索修复.md)。
+[locomo_eval.py](locomo_eval.py)支持完整1986题，普通1540/对抗446分别评分，使用英文BM25+Dense/RRF和紧凑原话。旧v1/v2结果保持。当前风险方法为v3，全量必须显式传[诊断登记](../../eval/protocols/locomo-v3-diagnostic-20261022.json)、角色、并发2和英文BGE；模型/权重/输入/评分漂移会在调用前失败，不能称复现v2。未登记基线仍默认并发4、风险开发默认2；新四方法登记均为2。[当前命令与边界](../../docs/implemented/协议计量隐私与边界审查.md)。逐题产物仅在私有研究目录，gold仅后验评分。
 
 locomo-run --resume-from RUN_ID只继承同账号已停止且SHA/输入/规则/模型/reader一致的检查点，源ID/引用重验，未完成题才调用；新run保留来源代码/产物和新增/继承成本，不能伪装单一执行版本或重复调用已完成题。
 

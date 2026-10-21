@@ -81,14 +81,14 @@ class EntityCatalog:
         CREATE TRIGGER IF NOT EXISTS entity_event_immutable BEFORE UPDATE ON memory_entity_events
             BEGIN SELECT RAISE(ABORT,'entity events are immutable'); END;
         """
-        with store._memory_transaction():
+        with store.memory_transaction():
             statement=''
             for line in schema.splitlines(keepends=True):
                 statement+=line
                 if sqlite3.complete_statement(statement):store.db.execute(statement);statement=''
             from .formation_history import install as install_history
             install_history(store)
-            from ..observability.memory_trace import install as install_trace
+            from ..persistence.memory_trace import install as install_trace
             install_trace(store)
 
     def _scope(self,scope,session_id):
@@ -136,7 +136,7 @@ class EntityCatalog:
             (eid,action,revision,canonical(details),now()))
 
     def create(self,body):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             from .auto_review import SECRET
             if SECRET.search(body.canonical_name):raise LibraryError(422,'凭据不能登记为实体')
             self._scope(body.scope,body.session_id);self._anchor_scope(body.evidence,body.scope,body.session_id)
@@ -152,7 +152,7 @@ class EntityCatalog:
             return self.get(eid,session_id=body.session_id)
 
     def alias(self,eid,body):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             from .auto_review import SECRET
             if SECRET.search(body.name+' '+body.evidence.quote):raise LibraryError(422,'凭据不能登记为别名')
             entity=self._entity(eid)
@@ -175,7 +175,7 @@ class EntityCatalog:
             return self.get(eid,session_id=body.session_id)
 
     def revoke(self,eid,expected):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             entity=self._entity(eid)
             if entity['revision']!=expected:raise LibraryError(409,'实体版本已变化')
             self.store.db.execute("UPDATE memory_entities SET status='retired',revision=revision+1 WHERE id=?",(eid,))
@@ -211,7 +211,7 @@ class EntityCatalog:
             return {'matches':matches,'ambiguous':ambiguous}
 
     def bind(self,domain,target_id,target_revision,anchor,*,session_id=None,role='context'):
-        with self.store._memory_transaction():
+        with self.store.memory_transaction():
             self.source(anchor);result=self.match(anchor.quote,session_id=session_id)
             for hit in result['matches']:
                 span=anchor.model_copy(update={'start':anchor.start+hit['start'],'end':anchor.start+hit['end'],

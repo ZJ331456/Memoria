@@ -98,7 +98,22 @@ def gate_proxy(rows, details, histories):
             'independent_semantic_gold':False,'model_confidence_used':False}
 
 
-def compare(workspace, baseline_run, run_ids):
+def protocol_differences(baseline, current):
+    keys=('concurrency','verification_policy','scoring_dependencies','registration','mode',
+          'source_sha256','histories_sha256','gold_sha256','inputs_sha256')
+    same_registration=bool(baseline.get('registration')) and baseline.get('registration')==current.get('registration')
+    # Within one frozen v3 four-arm design, presence of gate/support is the treatment.
+    # Across registrations (especially v2/v3), verifier engineering is a confound.
+    expected=(baseline.get('registration') or {}).get('risk_verification_policy')
+    if same_registration and expected and all(
+        p.get('verification_policy')==(expected if p.get('fallback') in {'targeted','adaptive_risk'} else None)
+        for p in (baseline,current)):
+        keys=tuple(key for key in keys if key!='verification_policy')
+    return {key:{'baseline':baseline.get(key),'current':current.get(key)}
+            for key in keys if baseline.get(key)!=current.get(key)}
+
+
+def compare(workspace, baseline_run, run_ids, *, allow_protocol_differences=False):
     baseline_path, baseline_manifest, baseline_calls=lineage(workspace,baseline_run)
     baseline_details=read_json(baseline_path/'score.json')['details']
     methods=[]
@@ -117,14 +132,30 @@ def compare(workspace, baseline_run, run_ids):
             raise ValueError('Reader settings differ; not a matched comparison')
         if manifest['model_snapshots']!=baseline_manifest['model_snapshots']:
             raise ValueError('Embedding snapshot differs')
+        differences=protocol_differences(baseline_manifest['protocol'],manifest['protocol'])
+        if differences and not allow_protocol_differences:
+            raise ValueError('Protocol fields differ; explicitly allow a limited diagnostic comparison: '+','.join(differences))
         methods.append({'method':manifest['protocol']['fallback'],'run_id':run_id,
                         'code':manifest['code'],'protocol':{k:v for k,v in manifest['protocol'].items()
                             if k not in {'owner_user_id','case_ids'}},
+                        'protocol_differences':differences,
+                        'planned_method_differences':{'baseline':baseline_manifest['protocol'].get('fallback'),
+                            'current':manifest['protocol'].get('fallback'),
+                            'verification_policy':manifest['protocol'].get('verification_policy')},
+                        'comparison_claim':'same-question diagnostic; engineering/protocol confounds present' if differences else 'matched recorded protocol fields',
                         'metrics':metrics,'cost':token_cost(calls,len(ids)),'artifacts':manifest['artifacts']})
         if manifest['protocol']['fallback']=='adaptive_risk':
             rows={r['id']:r for r in lines(path/'cases.jsonl')}
-            bundle=workspace.path('research','benchmarks','locomo-'+manifest['protocol']['source_sha256'][:12],
-                                  'locomo-text-english-rrf-fallback-v5-'+manifest['protocol']['scope'])
+            parent=workspace.path('research','benchmarks','locomo-'+manifest['protocol']['source_sha256'][:12])
+            bundle_id=manifest['protocol'].get('benchmark_bundle_id')
+            if bundle_id:
+                bundle=parent/identifier(bundle_id)
+            else:
+                matches=[p for p in parent.iterdir() if p.is_dir() and (p/'histories.json').is_file()
+                         and digest_file(p/'histories.json')==manifest['protocol']['histories_sha256']
+                         and (p/'gold.jsonl').is_file() and digest_file(p/'gold.jsonl')==manifest['protocol']['gold_sha256']]
+                if not matches:raise ValueError('No SHA-matched frozen history/gold bundle')
+                bundle=sorted(matches)[0]
             if digest_file(bundle/'histories.json')!=manifest['protocol']['histories_sha256']:
                 raise ValueError('Frozen history changed')
             methods[-1]['gate_proxy']=gate_proxy(rows,details,read_json(bundle/'histories.json'))
@@ -147,8 +178,12 @@ def compare(workspace, baseline_run, run_ids):
             'baseline':baseline,'new_methods':methods,'same_original_case_ids':True,
             'same_reader_and_embedding_snapshots':True,'independent_human_review':False,
             'semantic_accuracy':None,'unseen_test_claim':False,'production_memory_writes':0}
+    report['comparison_limits']={'protocol_differences_allowed':allow_protocol_differences,
+        'baseline_concurrency':baseline_manifest['protocol'].get('concurrency'),
+        'method_concurrency':[m['protocol'].get('concurrency') for m in methods],
+        'engineering_and_method_effects_separated':not any(m['protocol_differences'] for m in methods)}
     target=workspace.path('reports','locomo-risk-comparison-'+run_ids[-1])
-    target.mkdir(exist_ok=False)
+    target.mkdir(parents=True,exist_ok=False)
     (target/'aggregate.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     return target,report
 

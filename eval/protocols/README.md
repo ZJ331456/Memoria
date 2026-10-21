@@ -1,5 +1,7 @@
 # 冻结研究协议与角色
 
+2026-10-22：[v3同题诊断登记](locomo-v3-diagnostic-20261022.json)与[完整角色](locomo-v3-roles-20261022.toml)固定并发2、标准输入SHA、Reader、英文BGE权重及评分依赖。全量风险方法必须显式登记；历史v2保持原字节，不宣称复现或未见泛化。仅完成预检，尚未跑新LoCoMo，见[13项审查](../../docs/implemented/协议计量隐私与边界审查.md)。
+
 [项目首页](../../README.md) · [研究工具](../../memoria/experiments/README.md) · [运行配置](../../config/README.md)
 
 这里保留历史LCCC检索/QA与LoCoMo风险回退实验的公开角色、预算及注册协议，原configs/research-*文件迁入时逐字节保留。它们是实验复现材料，不能拿来替代config/models.toml或宣称当前版本重新取得旧成绩。

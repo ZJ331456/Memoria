@@ -69,11 +69,11 @@ def benchmark_access(workspace,settings,*,repeats=3,iterations=50):
             order = recorder.manifest["protocol"]["orders"][repeat%3]
             for predicate in SLOTS:
                 request = AccessRequest(predicates=[predicate],budget_chars=16000)
-                with store._memory_transaction():
+                with store.memory_transaction():
                     reference = claims._select(request)
                 expected = canonical(reference)
                 for mode in order:
-                    with store._memory_transaction():
+                    with store.memory_transaction():
                         store.db.execute("DELETE FROM claim_views")
                     if mode=="cached":
                         build_started = time.perf_counter()
@@ -81,12 +81,12 @@ def benchmark_access(workspace,settings,*,repeats=3,iterations=50):
                         maintenance.setdefault("cached_compile_ms",[]).append((time.perf_counter()-build_started)*1000)
                     for index in range(iterations):
                         if mode=="uncached":
-                            with store._memory_transaction():
+                            with store.memory_transaction():
                                 store.db.execute("DELETE FROM claim_views")
                         elif mode=="invalidated":
                             build_started = time.perf_counter()
                             claims.compile(ViewRequest(**request.model_dump(),ttl_seconds=86400))
-                            with store._memory_transaction():
+                            with store.memory_transaction():
                                 store.db.execute("UPDATE claim_generations SET generation=generation+1 WHERE user_id=? AND subject_id='self' AND predicate=?",(workspace.owner,predicate))
                             maintenance.setdefault("compile_and_invalidate_ms",[]).append((time.perf_counter()-build_started)*1000)
                         started = time.perf_counter()
