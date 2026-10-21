@@ -7,7 +7,7 @@ from ..store import now
 from .source_support import digest
 from ..claims import canonical
 
-POLICY = 'formation-v5-bounded-coverage'
+POLICY = 'formation-v6-bounded-history'
 
 
 def install(store):
@@ -59,6 +59,8 @@ def install(store):
             statement = ''
     if 'support_group_id' not in {r[1] for r in store.db.execute('PRAGMA table_info(memory_pattern_versions)')}:
         store.db.execute('ALTER TABLE memory_pattern_versions ADD COLUMN support_group_id TEXT')
+    from .formation_history import install as install_history
+    install_history(store)
 
 
 def eligible_source(store, message_id):
@@ -79,6 +81,8 @@ def live_observation(store, row, *, allow_archived=False):
         raise ValueError('Observation source version changed')
     if source['content'][row['start']:row['end']] != row['quote']:
         raise ValueError('Observation span no longer matches')
+    from .formation_history import load
+    load(store,row['id'])
     catalog=getattr(store,'entity_catalog',None)
     if catalog and catalog.cohort('observation',row['id'],row['source_sha'])!=catalog.signature(
         'observation',row['id'],row['source_sha'],session_id=row['session_id']):
@@ -100,6 +104,7 @@ def bucket(row):
     row=dict(row)
     fields=[row['category'], row['topic'], row['scope'], row['polarity']]
     if row.get('entity_signature'):fields.append(row['entity_signature'])
+    if row.get('history_identity'):fields.append(row['history_identity'])
     return digest(json.dumps(fields, ensure_ascii=False))
 
 
@@ -108,6 +113,9 @@ def with_entities(store,row):
     if catalog:
         ids=catalog.cohort('observation',row['id'],row['source_sha'])
         if ids:row['entity_signature']=canonical(ids)
+    from .formation_history import load
+    context=load(store,row['id'],check=False)
+    if context and context['identity_key']:row['history_identity']=context['identity_key']
     return row
 
 
@@ -117,10 +125,14 @@ def stage(store, job, receipt, reviews):
     if digest(source['content']) != receipt['source_sha']:
         raise ValueError('Source changed during observation extraction')
     policy = receipt.get('policy', POLICY)
+    from . import formation_history as history
+    context=receipt.get('history_context')
+    if context:history.validate(store,source,context)
     rid = digest(job['id'] + receipt['source_sha'] + policy)
     store.db.execute('INSERT OR IGNORE INTO memory_formation_runs VALUES(?,?,?,?,?,?,?)',
                      (rid, job['id'], receipt['source_sha'], policy, receipt['model'],
                       json.dumps(receipt['usage']) if receipt['usage'] is not None else None, now()))
+    store.db.execute('INSERT OR IGNORE INTO memory_formation_history_runs VALUES(?,?)',(rid,json.dumps(context)))
     direct = []
     for index, item in enumerate(receipt['observations']):
         quote = item['quote']
@@ -133,6 +145,12 @@ def stage(store, job, receipt, reviews):
             (oid, rid, source['id'], receipt['source_sha'], source['session_id'], source['created_at'],
              item['category'], item['topic'], item['scope'], item['polarity'], item['content'], quote,
              start, start+len(quote), int(item['asserted']), int(item['durable']), item['importance']))
+        proposal={key:item.get(key,default) for key,default in (
+            ('linked_memory_ids',[]),('context_message_ids',[]),('subject_ref','unknown'),('relation','independent'))}
+        audit=receipt.get('history_audits',[{'status':'not_requested'}]*len(receipt['observations']))[index]
+        identity=history.identity(item,source,audit['status']=='verified',store)
+        store.db.execute('INSERT OR IGNORE INTO memory_observation_history VALUES(?,?,?,?,?)',
+            (oid,json.dumps(proposal),json.dumps(context),json.dumps(audit),identity))
         catalog=getattr(store,'entity_catalog',None)
         if catalog:
             from .entities import Anchor
@@ -153,7 +171,10 @@ def context_for_review(store, review_id):
     for oid in json.loads(link['observation_ids_json']):
         row = store.db.execute('SELECT * FROM memory_observations WHERE id=?', (oid,)).fetchone()
         source = live_observation(store, row)
-        observations.append(dict(row))
+        observation=dict(row)
+        from .formation_history import visible
+        observation['history']=visible(store,row['id'])
+        observations.append(observation)
         if source['id'] not in {s['id'] for s in sources}:
             sources.append(source)
     pattern = None
@@ -229,7 +250,10 @@ def maintenance(store, timestamp=None, observation_cutoff=None):
 
 def pattern_available_sql(alias):
     from .source_support import group_valid_sql
+    from .formation_history import pattern_live_sql
     return (f"({alias}.source!='consolidated_pattern' OR EXISTS(SELECT 1 FROM memory_pattern_versions p "
             f"JOIN memory_support_groups pg ON pg.id=p.support_group_id WHERE p.memory_id={alias}.id "
             "AND p.status='active' AND p.expires_at>strftime('%Y-%m-%dT%H:%M:%f+00:00','now') "
-            f"AND {group_valid_sql(alias,'pg')}))")
+            f"AND {group_valid_sql(alias,'pg')} AND {pattern_live_sql('p')} "
+            "AND NOT EXISTS(SELECT 1 FROM json_each(p.observation_ids_json) j LEFT JOIN memory_observations o ON o.id=j.value "
+            "WHERE o.id IS NULL OR o.state NOT IN ('active','archived'))))")

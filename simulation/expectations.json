@@ -560,7 +560,36 @@
           ]
         }
       }
+    },
+    "history_context": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0
+        },
+        "capability": {
+          "min_verified_history_links": 1,
+          "min_active_memories": 2,
+          "status_in": [
+            "answer"
+          ],
+          "min_citations": 1,
+          "answer_any": [
+            "快照回滚"
+          ]
+        }
+      }
+    },
+    "history_ambiguous": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0,
+          "max_active_memories": 2
+        },
+        "capability": {
+          "min_unresolved_history": 1
+        }
+      }
     }
   },
-  "fixture_revision": 3
+  "fixture_revision": 4
 }

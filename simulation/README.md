@@ -2,7 +2,7 @@
 
 2026-10-20由用户明确授权创建。**这里是虚构人物与虚构原文，仅用于功能验收，不是真实用户资料、人工gold或LoCoMo成绩。**
 
-[scenarios.json](scenarios.json)当前v5包含30组场景、40项问题检查；在原27组37项上新增六主题动态观察、六项文档事实及两证据LLM重排三组，原断言保留。[expectations.json](expectations.json)是独立的AI编写断言。输入中没有答案标签。模型先执行正式Kernel/worker/Formation/审核/Claim/View/Reader，结束后才解释断言；没有测试专用提取器、手工补批准或修改成功答案。
+[scenarios.json](scenarios.json)当前v6包含32组场景、42项问题检查；在v5的30组40项上新增唯一前文关联新事件、双项目未知指代两组，旧断言保留。[expectations.json](expectations.json)是独立的AI编写断言。输入中没有答案标签。模型先执行正式Kernel/worker/Formation/关联核验/审核/Claim/View/Reader，结束后才解释断言；没有测试专用提取器、手工补批准或修改成功答案。机制与开发失败见[历史上下文记录](../docs/implemented/有界历史上下文与观察关联.md)。
 
 ## 覆盖内容
 
@@ -22,7 +22,7 @@
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER
-.\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER --execute --allow-remote --max-calls 120 --max-input-chars 600000
+.\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER --execute --allow-remote --max-calls 128 --max-input-chars 800000
 ```
 
 只重测指定场景；本机系统代理不通时可显式选择进程内直连，仍使用原LLM主机并验证TLS，不改系统代理或config：
@@ -33,17 +33,19 @@
 .\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER --summarize
 ```
 
-每次执行创建独立目录，保留input、库、逐阶段原始输出/usage、逐题trace、JSON报告和HTML报告；调用上限覆盖观察/审核/巩固/Reader。不同执行的调用预算分别计算，用户预算应同时计入旧失败；本批次累计119次，未超过开始声明的128次总上限。默认不自动续跑、不隐藏重试。
+每次执行创建独立目录，保留input、库、逐阶段原始输出/usage、逐题trace、JSON报告和HTML报告；调用上限覆盖观察/关联核验/审核/巩固/Reader。当前默认128请求、800000输入字符，每次实际费用与历史失败均另行累计；不把单轮上限冒充跨轮总费用。首批2026-10-20的119调用是历史记录。默认不自动续跑、不隐藏重试。
 
 summarize只读取冻结产物并验SHA，选择与**当前固定输入完全相同**的最新尝试；执行失败也保留，不能筛选成功样本。输出跨版本累计清单及所有历史，不冒充一次最终版本全量重跑，也不计算研究准确率。后续变更断言/输入应登记新fixture_revision，旧快照不覆盖。
 
 ## 完整验收与历史诊断
 
-最终同一核心指纹：完整工程1205 passed（687.74秒，0失败/错误/跳过）；真模型模拟37/37（92调用、86505已知tokens、usage未知0）；实际本地BGE四路通过。详见下方实现记录；这是功能验收，不是研究准确率。
+2026-10-21最新v6：同一0076e3c3核心，完整工程1314通过/532.416秒（JUnit）、32场景42/42真实模型检查及实际BGE四路通过，零失败/错误/跳过/降级/预算阻断。最终整套118请求/132908 tokens/165.982秒；开发失败另行计入累计409请求/463925 tokens。历史关联、缺目标关系容错与当前冲突不丢弃的修复及未验证边界见[详细记录](../docs/implemented/有界历史上下文与观察关联.md)。
 
-最终验收按根[AGENTS](../AGENTS.md)执行：完整pytest tests、同一最终核心指纹的整套27组/37检查、真实本地BGE四路全部通过。核心/测试/输入变更后须重新验收；非零退出码、任何未执行/失败/预算阻断都不能称完整成功。--only只作定向诊断，summarize仍只作跨版本历史观察。
+2026-10-20历史版本：完整工程1205 passed（687.74秒，0失败/错误/跳过）；真模型模拟37/37（92调用、86505已知tokens、usage未知0）；实际本地BGE四路通过。详见下方实现记录；不替代本页最新v6验收，也不是研究准确率。
 
-当前固定输入fixture_revision=3：在原有场景上增加默认中文、面试英文、面试简洁及撤回全部来源的反例，原断言不放宽。默认验证0调用；每轮显式设置全阶段调用/输入字符上限，失败原始输出与费用保留，不隐式重试。
+最终验收按根[AGENTS](../AGENTS.md)执行：完整pytest tests、同一最终核心指纹的全部当前场景（现为32组/42检查）、真实本地BGE四路全部通过。核心/测试/输入变更后须重新验收；非零退出码、任何未执行/失败/预算阻断都不能称完整成功。--only只作定向诊断，summarize仍只作跨版本历史观察。
+
+历史v3在原有场景上增加默认中文、面试英文、面试简洁及撤回全部来源的反例，原断言保留。当前固定输入fixture_revision=6、断言revision=4；新增关联核验状态的后验计数，旧问题不删除。默认验证0调用；每轮显式设置全阶段调用/输入字符上限，失败原始输出与费用保留，不隐式重试。
 
 首批v2的跨版本累计32/34与两项缺口属于历史记录，不作为最终验收。2026-10-20补齐有限条件自动发布、候选分句/条件Span绑定与未知前提保留，以及同值自述到Claim独立来源组的自动reinforce/approve和每组父记忆依赖。精确副本不重复加独立票，单值状态冲突/未知条件/敏感时间风险仍保留辅助。
 

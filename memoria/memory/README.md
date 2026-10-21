@@ -1,5 +1,7 @@
 # Memory：记忆版本、统一访问与证据选择
 
+[formation_history.py](formation_history.py)接实际RRF历史、同会话前缀、受约束关联核验与依赖失效。历史只提供消歧/关联，不替代当前原话；未知指代不直接发布，当前明确冲突继续独立审核。[行为与边界](../../docs/implemented/有界历史上下文与观察关联.md)。
+
 [rerank.py](rerank.py)为可选的冻结候选顺序建议；Reader前核对原话、预留完整预算，失败回原排序，默认关闭。[协议与负向结果](../../docs/implemented/LLM候选重排与同预算诊断.md)区分资料库四题与个人RRF/Claim/真实长期效果。
 
 [长来源与身份约束](../../docs/implemented/身份约束与长来源引用.md)：`source_windows.py`按原文展开有限片段，保留整组支持和引用；实体身份是最终读取保护，与第四路召回开关分开。`auto_review.py`保留字面约束充分的冲突提案，负面模型意见不自动覆盖旧状态。

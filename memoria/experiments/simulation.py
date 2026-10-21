@@ -73,10 +73,14 @@ def observations_at(case, database):
     result = case.get('result', {})
     prefix = case.get('prefix', {})
     published = {}
-    observations = reviews = cards = 0
+    observations = reviews = cards = verified_history_links = unresolved_history = 0
     for source in prefix.values():
         lineage = source['lineage']
         observations += len(lineage.get('observations', []))
+        for observation in lineage.get('observations', []):
+            association=(observation.get('history') or {}).get('association',{}).get('status')
+            verified_history_links+=association=='verified'
+            unresolved_history+=association=='unresolved'
         cards += sum(o.get('status') == 'approved' for o in lineage.get('observations', []))
         reviews += sum(r.get('status') == 'pending' for r in lineage.get('reviews', []))
         if lineage['available']:
@@ -102,6 +106,7 @@ def observations_at(case, database):
         'active_source_consolidations': sum(p['kind']=='consolidation' and p.get('current') and p.get('root_status')=='active'
             and p.get('status')=='approved' for p in published.values()),
         'observations': observations, 'pending_reviews': reviews, 'approved_source_observations': cards,
+        'verified_history_links':verified_history_links,'unresolved_history':unresolved_history,
         'citations': len(result.get('citations', [])), 'selected': len(trace.get('selected', [])),
         'pending_revision': bool(result.get('access', {}).get('pending_revisions')),
         'source_available': {k: v['lineage']['available'] for k, v in prefix.items()},
@@ -252,8 +257,8 @@ def summarize_runs(root):
     return {'directory':str(directory),**summary}
 
 
-async def run_suite(workspace, settings, *, execute=False, allow_remote=False, max_calls=96,
-                    max_input_chars=500000, only=None, progress=print, network_profile='environment'):
+async def run_suite(workspace, settings, *, execute=False, allow_remote=False, max_calls=128,
+                    max_input_chars=800000, only=None, progress=print, network_profile='environment'):
     root = settings.root
     suite = load_suite(root)
     cases = [c for c in suite['cases'] if only is None or c['id'] in only]

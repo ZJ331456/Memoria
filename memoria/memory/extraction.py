@@ -51,7 +51,8 @@ def proposals(value,model,text,validate,*,quota=None):
             # Original output stays private; diagnostics never expose invalid raw objects.
             known={'duplicate_candidate','candidate_quota_exceeded','source_quote_not_unique',
                 'credential_like_observation','empty_normalized_observation','feedback_quote_missing',
-                'feedback_quote_unexpected','source_quote_not_literal'}
+                'feedback_quote_unexpected','source_quote_not_literal','history_id_not_supplied_or_duplicate',
+                'history_subject_not_supplied','history_subject_not_linked','history_relation_without_target','history_condition_mismatch'}
             reason='schema_invalid' if isinstance(exc,ValidationError) else str(exc) if str(exc) in known else 'source_constraint'
             rejected.append({'index':index,'reason':reason,'error_type':type(exc).__name__})
     return accepted,{'quota':quota,'proposed':len(rows),'accepted':len(accepted),

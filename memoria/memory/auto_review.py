@@ -13,7 +13,7 @@ from ..store import now
 from .evidence_verifier import EvidenceVerifier, THIRD_PARTY, CONDITIONAL, PLAN, NEGATIVE
 from .claim_normalizer import preference_desire, aliases
 
-VERSION = 'memory-auto-review-v6-pattern-quote-repair'
+VERSION = 'memory-auto-review-v7-history-context'
 ALIAS_BLOCKER = 'value_not_literal; semantic_or_alias_review_required'
 SECRET = re.compile(r'sk-[A-Za-z0-9_-]{16,}|(?:app[_ ]?secret|api[_ ]?key|密码|口令|验证码|私钥)\s*[:：=]\s*\S+',re.I)
 SENSITIVE = re.compile(r'病史|确诊|诊断|便秘|抑郁|过敏|药物|服药|身份证|银行卡|手机号|家庭住址|投资账户|medical|diagnos|password|secret|private key',re.I)
@@ -62,6 +62,11 @@ polarity=negative时value只写被否定的对象，如“不喝咖啡”应为v
 没有合适的12类槽位仍可保存普通记忆，claim=null不代表记忆无效。
 输入如有formation=pattern，source是多个带message_id的原话；仅可核验有“近期多次/这些对话中”等边界的推断，不能批准永久爱好/人格或疾病推断。
 模式必须claim=null；evidence_quote可为空，另返回supporting_quotes:[{"message_id":"提供的原话ID","quote":"该原话中唯一的原样证据"}]，覆盖每一条提供的原话。不能仅凭重复次数自动accept。'''
+
+
+PROMPT += '''
+history_associations只提供经过独立检查的主体/叙事线索，不是当前事实的证据。新事实和evidence_quote仍只由source支持；不能从旧记忆复制事实值、旧条件或旧结论。
+带指代的候选保留原话表达，不要求替换成历史项目名。维护某项目不等于声明project_goal；没有明确目标语义就claim=null，普通项目事实仍可审核。'''
 
 
 class AutoMemoryReviewer:
@@ -143,6 +148,18 @@ class AutoMemoryReviewer:
                          'existing':[{'content':m['content'],'kind':m['kind']} for m in existing]}
                 if is_pattern:
                     payload['required_supporting_source_ids']=[s['id'] for s in formation_context['sources']]
+                elif formation_context:
+                    from .formation_history import project,refs
+                    payload['history_associations']=[]
+                    for observation in formation_context['observations']:
+                        from .formation_history import load
+                        association=load(self.store,observation['id'])
+                        if association and association['audit']['status']=='verified':
+                            allowed=set(refs(association['proposal']))
+                            projection=project(association['context'])
+                            projection['memories']=[r for r in projection['memories'] if 'memory:'+r['id'] in allowed]
+                            projection['recent_messages']=[r for r in projection['recent_messages'] if 'message:'+r['id'] in allowed]
+                            payload['history_associations'].append({'proposal':association['proposal'],'context':projection})
                 report['model_called']=True
                 report['reviewer']='llm'
                 result=await self.llm.chat([{'role':'system','content':PROMPT},{'role':'user','content':canonical(payload)}],
@@ -210,6 +227,11 @@ class AutoMemoryReviewer:
                     try:
                         draft, binding = self.bind_assertion(row, source, verdict, selected.model)
                         report['condition_binding'] = binding
+                        if draft.predicate=='project_goal' and not re.search(r'目标|计划|打算|准备|希望|致力|旨在|目的|goal|plan|aim',quote,re.I):
+                            # Maintaining a project is a fact, not evidence of a goal.
+                            # Retain independent ordinary admission instead of inventing a slot.
+                            report['structured_downgrade']='project_fact_is_not_explicit_goal'
+                            draft=None
                     except (ValueError, ClaimError):
                         reasons.append('complex_condition_or_candidate_binding')
                 # A review decision may be Supported precisely because an old state
@@ -234,6 +256,13 @@ class AutoMemoryReviewer:
                     report['reason_codes']=['existing_state_requires_revision' if report.get('structured_proposal') else 'model_requested_review']
                     return self.finish(row,report,key)
                 report.update(decision='accept',reason_codes=['model_supported_low_risk'],semantic_judgment='model_NLI_not_world_verification')
+                associations=[o.get('history') for o in (formation_context or {}).get('observations',[]) if o.get('history')]
+                revisions=[{k:a[k] for k in ('linked_memory_ids','context_message_ids','subject_ref','relation')}
+                    for a in associations if a['association']['status']=='verified' and a['relation']=='revision_candidate']
+                if revisions and draft is None:
+                    report.update(decision='review',reason_codes=['history_revision_requires_review'],
+                        history_revision_proposals=revisions)
+                    return self.finish(row,report,key)
                 vector=chunks=None
                 namespace=self.store.embedding_namespace
                 if self.memory.embedder and self.memory.embedder.enabled:

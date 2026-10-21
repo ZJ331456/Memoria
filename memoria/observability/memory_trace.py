@@ -47,7 +47,8 @@ STAGES = {
     'entity':('memory_entities','memory_entity_aliases','memory_entity_mentions','memory_entity_cohorts','memory_entity_events'),
     "source": ("messages", "memory_source_revocations", "dataset_imports"),
     "extraction": ("memory_jobs","memory_extraction_diagnostics"),
-    "formation": ("memory_formation_runs", "memory_observations", "memory_pattern_versions", "memory_formation_candidates","memory_formation_calls"),
+    "formation": ("memory_formation_runs", "memory_observations", "memory_pattern_versions", "memory_formation_candidates","memory_formation_calls",
+        "memory_observation_history","memory_formation_history_runs"),
     "review": ("memory_reviews","memory_review_assessments"),
     "memory": ("memories", "memory_operations", "memory_validity_intervals", "memory_source_dependencies",
                "memory_support_groups", "memory_support_evidence"),
@@ -267,6 +268,10 @@ def source_lineage(kernel, references):
                     item['jobs']=rows('SELECT id,status,attempts,extracted_count,staged_count FROM memory_jobs WHERE source_ref=?',(sid,))
                     observations=rows('''SELECT id,run_id,category,topic,scope,polarity,start,end,asserted,durable,state,
                         source_sha,observed_at FROM memory_observations WHERE message_id=? ORDER BY rowid LIMIT 64''',(sid,))
+                    from ..memory.formation_history import visible
+                    for observation in observations:
+                        try:observation['history']=visible(store,observation['id'])
+                        except ValueError:observation['history']={'association':{'status':'stale'}}
                     item['observations']=observations
                     for review in rows('SELECT id FROM memory_reviews WHERE source_ref=? ORDER BY rowid LIMIT 64',(sid,)):
                         review=store.memory_review(review['id'])

@@ -1357,7 +1357,113 @@
           }
         ]
       }
+    },
+    {
+      "id": "history_context",
+      "title": "同会话历史关联与新事件独立证据",
+      "areas": [
+        "formation",
+        "history",
+        "association",
+        "source_support"
+      ],
+      "max_calls": 12,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture; history_context",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "m1",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s1",
+            "content": "我维护星桥项目，主要采用模块化架构。"
+          },
+          {
+            "id": "m2",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s1",
+            "content": "这个项目的故障恢复模块固定采用快照回滚。"
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "故障恢复模块采用什么方式？",
+              "mode": "rrf",
+              "selector": "topk",
+              "include_experiences": false,
+              "top_k": 3,
+              "budget_chars": 8000
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "history_ambiguous",
+      "title": "两个项目并存时未知指代不得发布",
+      "areas": [
+        "formation",
+        "history",
+        "association",
+        "source_support"
+      ],
+      "max_calls": 12,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture; history_ambiguous",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "m1",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s1",
+            "content": "我维护星桥项目。"
+          },
+          {
+            "id": "m2",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s1",
+            "content": "我也维护海岚项目。"
+          },
+          {
+            "id": "m3",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s1",
+            "content": "这个项目的备份模块采用增量快照。"
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "我的名字是什么？",
+              "include_experiences": false
+            }
+          }
+        ]
+      }
     }
   ],
-  "fixture_revision": 5
+  "fixture_revision": 6
 }
