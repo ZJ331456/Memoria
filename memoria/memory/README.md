@@ -14,6 +14,8 @@ Kernel.answer将个人Claim/View Reader与library来源Reader接入同一核心�
 
 ## 文件映射
 
+[extraction.py](extraction.py)共用对话/资料的有界候选额度、逐项隔离与原文覆盖诊断，原始输出在账号库私有保存；[说明与验收](../../docs/implemented/观察提取额度与覆盖诊断.md)。机械覆盖不是语义召回或批准条件。
+
 | 文件 | 职责 |
 | --- | --- |
 | [document_parser.py](document_parser.py) | 有界TXT/Markdown/CSV/JSON/JSONL/DOCX文本解析、编码、行/段落/表格位置与明确限制 |

@@ -519,6 +519,28 @@
           "min_active_source_consolidations": 1
         }
       }
+    },
+    "dynamic_observations": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0,
+          "max_active_memories": 0
+        },
+        "capability": {
+          "min_observations": 6
+        }
+      }
+    },
+    "dynamic_source_observations": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0
+        },
+        "capability": {
+          "min_observations": 6,
+          "min_approved_source_observations": 6
+        }
+      }
     }
   },
   "fixture_revision": 3

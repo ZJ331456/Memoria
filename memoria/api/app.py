@@ -489,6 +489,12 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
                 result.append(dict(row))
         return result
 
+    @app.get('/api/memory-extraction-diagnostics', tags=['memory layers'],summary='当前有效来源的提取覆盖与逐项失败，不是语义召回率')
+    def extraction_diagnostics(limit: int=Query(default=20,ge=1,le=100),session_id: str|None=None):
+        from ..memory.extraction import visible
+        if session_id and not store.session(session_id):raise HTTPException(404,'会话不存在')
+        with store.lock:return visible(store,session_id=session_id,limit=limit)
+
     @app.get('/api/memory-patterns', tags=['memory layers'], summary='当前账号可核对的跨会话模式与演化版本')
     def formation_patterns(limit: int = Query(default=50, ge=1, le=200)):
         from ..memory.formation_store import pattern_sources

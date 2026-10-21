@@ -1226,7 +1226,84 @@
           }
         ]
       }
+    },
+    {
+      "id": "dynamic_observations",
+      "title": "六个独立主题动态观察与不固化",
+      "areas": [
+        "observation",
+        "admission"
+      ],
+      "max_calls": 4,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture; dynamic_observations",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "m1",
+            "kind": "message",
+            "session": "s1",
+            "actor": "synthetic:subject",
+            "role": "user",
+            "content": "本次请帮我查找量子计算入门资料；本次请帮我查找园艺种植资料；本次请帮我查找陶艺制作资料；本次请帮我查找天文观测资料；本次请帮我查找海洋生态资料；本次请帮我查找古典建筑资料。"
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "我的工作习惯是什么？",
+              "include_experiences": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "dynamic_source_observations",
+      "title": "六项文档事实独立抽取与审核",
+      "areas": [
+        "library",
+        "subject",
+        "claim"
+      ],
+      "max_calls": 4,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture; dynamic_source_observations",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": null,
+        "events": [
+          {
+            "id": "d1",
+            "kind": "source",
+            "body": {
+              "kind": "document",
+              "title": "虚构项目清单",
+              "content": "Aster部署要求先备份；Boreal提交要求代码审查；Cedar恢复要求保留快照；Dahlia上线要求监控；Elm文档要求版本标记；Fjord测试要求回归检查。",
+              "authorship": "external"
+            }
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "我现在住在哪里？",
+              "include_experiences": false
+            }
+          }
+        ]
+      }
     }
   ],
-  "fixture_revision": 3
+  "fixture_revision": 4
 }

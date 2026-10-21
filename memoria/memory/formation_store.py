@@ -7,10 +7,12 @@ from ..store import now
 from .source_support import digest
 from ..claims import canonical
 
-POLICY = 'formation-v4-entity-cohort'
+POLICY = 'formation-v5-bounded-coverage'
 
 
 def install(store):
+    from .extraction import install as install_extraction
+    install_extraction(store)
     schema = '''
         CREATE TABLE IF NOT EXISTS memory_formation_runs(
             id TEXT PRIMARY KEY,job_id TEXT NOT NULL,source_sha TEXT NOT NULL,policy TEXT NOT NULL,

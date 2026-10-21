@@ -2,7 +2,7 @@
 
 2026-10-20由用户明确授权创建。**这里是虚构人物与虚构原文，仅用于功能验收，不是真实用户资料、人工gold或LoCoMo成绩。**
 
-[scenarios.json](scenarios.json)包含27组场景、37项问题检查；[expectations.json](expectations.json)是独立的AI编写断言。输入中没有答案标签。模型先执行正式Kernel/worker/Formation/审核/Claim/View/Reader，结束后才解释断言；没有测试专用提取器、手工补批准或修改成功答案。
+[scenarios.json](scenarios.json)当前v4包含29组场景、39项问题检查；在原27组37项上新增六主题动态观察、六项文档事实两组，原断言保留。[expectations.json](expectations.json)是独立的AI编写断言。输入中没有答案标签。模型先执行正式Kernel/worker/Formation/审核/Claim/View/Reader，结束后才解释断言；没有测试专用提取器、手工补批准或修改成功答案。
 
 ## 覆盖内容
 
@@ -22,7 +22,7 @@
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER
-.\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER --execute --allow-remote --max-calls 96 --max-input-chars 500000
+.\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER --execute --allow-remote --max-calls 112 --max-input-chars 600000
 ```
 
 只重测指定场景；本机系统代理不通时可显式选择进程内直连，仍使用原LLM主机并验证TLS，不改系统代理或config：
