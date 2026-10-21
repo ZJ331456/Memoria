@@ -536,7 +536,7 @@ class Store:
             from .memory.processing import message_origin
             return {**dict(row),'origin':message_origin(self,message_id)}
 
-    def add_message(self, session_id: str, role: str, content: str) -> dict[str, Any]:
+    def add_message(self, session_id: str, role: str, content: str, *, source_time: str | None = None) -> dict[str, Any]:
         item = {"id": uuid.uuid4().hex, "session_id": session_id, "role": role, "content": content, "created_at": now()}
         with self._memory_transaction():
             self.db.execute("INSERT INTO messages VALUES (:id,:session_id,:role,:content,:created_at)", item)
@@ -545,6 +545,10 @@ class Store:
             if origin:
                 self.db.execute('INSERT INTO message_origins VALUES(?,?,?,?)',
                     (item['id'],origin['channel'],origin['event_ref'],item['created_at']))
+            from .memory.observation_semantics import record_clock
+            inherited=origin if origin and role=='user' and source_time is None else {}
+            record_clock(self,'conversation',item['id'],item['id'],content,role,item['created_at'],source_time or inherited.get('source_time'),
+                live=bool(origin and origin['channel'] in {'chat','api'}),basis_override=inherited.get('source_time_basis'))
             self.db.execute("INSERT INTO messages_fts(id,content) VALUES (?,?)", (item["id"], item["content"]))
             from .memory.experience import index_message
             index_message(self, item)
@@ -838,6 +842,10 @@ class Store:
             'content_sha256': hashlib.sha256(item['content'].encode()).hexdigest()}
 
     def memory_dependency_valid(self, snapshot: dict, *, as_of: str | None = None) -> bool:
+        if 'observation_refs' in snapshot:
+            from .memory.temporal_evidence import valid
+            if not valid(self,snapshot['observation_refs']):return False
+            snapshot={k:v for k,v in snapshot.items() if k!='observation_refs'}
         if snapshot.get('dependency_type')=='message':
             with self.lock:
                 row=self.db.execute('SELECT * FROM messages WHERE id=?',(snapshot['id'],)).fetchone()

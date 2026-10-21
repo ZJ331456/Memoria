@@ -13,7 +13,7 @@ from ..store import now
 from .evidence_verifier import EvidenceVerifier, THIRD_PARTY, CONDITIONAL, PLAN, NEGATIVE
 from .claim_normalizer import preference_desire, aliases
 
-VERSION = 'memory-auto-review-v7-history-context'
+VERSION = 'memory-auto-review-v8-subject-event-clocks'
 ALIAS_BLOCKER = 'value_not_literal; semantic_or_alias_review_required'
 SECRET = re.compile(r'sk-[A-Za-z0-9_-]{16,}|(?:app[_ ]?secret|api[_ ]?key|密码|口令|验证码|私钥)\s*[:：=]\s*\S+',re.I)
 SENSITIVE = re.compile(r'病史|确诊|诊断|便秘|抑郁|过敏|药物|服药|身份证|银行卡|手机号|家庭住址|投资账户|medical|diagnos|password|secret|private key',re.I)
@@ -68,8 +68,27 @@ PROMPT += '''
 history_associations只提供经过独立检查的主体/叙事线索，不是当前事实的证据。新事实和evidence_quote仍只由source支持；不能从旧记忆复制事实值、旧条件或旧结论。
 带指代的候选保留原话表达，不要求替换成历史项目名。维护某项目不等于声明project_goal；没有明确目标语义就claim=null，普通项目事实仍可审核。'''
 
+PROMPT += '''\nformation_context的semantics由当前原话和来源时钟生成；event_time是事件/计划提及的区间，source_time是原始对话时间，recorded_at是系统记录时间，不能互换。
+核验当前事实与temporal_quote的关系，不要把别的事件或标题日期借给当前事实。计划/假设/问题/否定不能批准成已完成事实，未知时间不能猜日期。
+普通事件和计划可以是有边界的普通记忆，不能因此升级为当前状态Claim；tool/任务报告也不代表工具独立验证。'''
+
 
 class AutoMemoryReviewer:
+    @staticmethod
+    def bounded_event(context,verdict,is_pattern):
+        """Date-aware ordinary evidence is not an automatic state transition."""
+        if is_pattern or not context or verdict.claim is not None:return False
+        observations=context.get('observations',[])
+        if len(observations)!=1:return False
+        item=observations[0];meta=item.get('semantics')
+        if not meta or meta['subject_ref']!='self' or meta['source_role']!='user' or not meta['event_time']:return False
+        if meta['event_status'] not in {'asserted','planned','negated'} or meta['condition_scope']['status']!='unconditional':return False
+        from .temporal_query import parse_query
+        if parse_query(item['quote'])['predicates']:return False  # Existing state slots keep their revision protocol.
+        from ..store import normalize_time
+        if meta['event_status']!='planned' and normalize_time(meta['event_time']['lower'])>normalize_time(meta['source_time'] or meta['source_recorded_at']):return False
+        return True
+
     def __init__(self, store, claims, memory, llm, mode='llm'):
         self.store,self.claims,self.memory,self.llm,self.mode=store,claims,memory,llm,mode
         self.lock=asyncio.Lock()
@@ -194,7 +213,7 @@ class AutoMemoryReviewer:
                         from ..llm.types import IncompleteResponseError
                         raise IncompleteResponseError(result.finish_reason or 'tool_calls')
                     verdict=Verdict.model_validate_json(raw)
-                report.update(assessment=verdict.assessment)
+                report.update(assessment=verdict.assessment,time_supported=verdict.time_supported)
                 if verdict.decision=='reject' or verdict.assessment=='Contradicted' or not verdict.durable:
                     # A negative NLI decision cannot authorize publication. It must
                     # also not silently erase a source-bound conflicting assertion.
@@ -213,9 +232,14 @@ class AutoMemoryReviewer:
                 # default preference just because another clause has an exception.
                 if verdict.claim is None and (CONDITIONAL.search(source['content']) or CONTEXT.search(source['content'])):
                     reasons.append('complex_condition')
-                if TEMPORAL.search(source['content']):reasons.append('temporal_or_transition_requires_review')
-                if PLAN.search(source['content']) and not preference_desire(verdict.claim.predicate if verdict.claim else '',source['content']):reasons.append('plan_or_hypothesis')
-                if NEGATIVE.search(source['content']) and verdict.claim is None:reasons.append('unbound_negation')
+                ordinary_event=self.bounded_event(formation_context,verdict,is_pattern)
+                if formation_context and not is_pattern and any(
+                    (o.get('semantics') or {}).get('event_status') in {'hypothetical','question'}
+                    for o in formation_context['observations']):reasons.append('non_assertion_cannot_publish_fact')
+                if TEMPORAL.search(source['content']) and not ordinary_event:reasons.append('temporal_or_transition_requires_review')
+                if PLAN.search(source['content']) and not ordinary_event and not preference_desire(verdict.claim.predicate if verdict.claim else '',source['content']):reasons.append('plan_or_hypothesis')
+                if NEGATIVE.search(source['content']) and verdict.claim is None and not ordinary_event:reasons.append('unbound_negation')
+                if ordinary_event:report['ordinary_event_semantics']='source_bound_event_or_plan; not approved current state'
                 quote=verdict.evidence_quote
                 if is_pattern:
                     if not self.complete_pattern_quotes(verdict,formation_context):

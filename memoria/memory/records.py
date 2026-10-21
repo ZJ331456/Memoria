@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator,model_validator
 
 Domain = Literal['memory', 'conversation', 'library']
 
@@ -19,6 +19,23 @@ class MemorySearch(BaseModel):
     memory_mode: Literal['keyword', 'bm25', 'dense', 'rrf'] = 'rrf'
     use_entities: bool | None = None
     entity_type: Literal['person','project','organization','place','concept'] | None = None
+    event_start: str | None = Field(default=None,max_length=64)
+    event_end: str | None = Field(default=None,max_length=64)
+    recorded_as_of: str | None = Field(default=None,max_length=64)
+    subject_ref: str | None = Field(default=None,max_length=120)
+
+    @field_validator('event_start','event_end','recorded_as_of')
+    @classmethod
+    def times(cls,value):
+        from .observation_semantics import aware_time
+        return aware_time(value)
+
+    @model_validator(mode='after')
+    def ordered_interval(self):
+        from ..store import normalize_time
+        if bool(self.event_start)!=bool(self.event_end):raise ValueError('Provide both half-open event interval bounds')
+        if self.event_start and normalize_time(self.event_start)>=normalize_time(self.event_end):raise ValueError('Event interval must be ordered')
+        return self
 
     @field_validator('query')
     @classmethod
@@ -94,11 +111,13 @@ class SourceReaders:
                 return None
             eligible = row[0]
         start, end, content = (0, len(source['content']), source['content']) if full else excerpt(source['content'], query)
+        from .observation_semantics import message_clock,public_clock,source_observations
         return EvidenceRecord('conversation', mid, 'message_quote', content, start, end,
             f'[message:{mid}:{start}:{end}]',
             {'role': source['role'], 'session_id': source['session_id'], 'origin': source['origin'],
              'personal_evidence_eligible': bool(eligible),
-             'recorded_at': source['created_at'], 'fact_time': None}, self.store.message_dependency(source))
+             'recorded_at': source['created_at'], 'fact_time': None,'source_clock':public_clock(message_clock(self.store,source)),
+             'observations':source_observations(self.store,'conversation',mid,start=start,end=end)}, self.store.message_dependency(source))
 
     def memory(self, item: dict, query: str = '', *, full=False):
         dependency=self.store.memory_dependency(item)
@@ -112,23 +131,34 @@ class SourceReaders:
             start, end = base + start, base + end
         else:
             start, end, content = excerpt(item['content'], query)
+        from .observation_semantics import source_observations
+        source=self.store.memory_source(item['id'])
         return EvidenceRecord('memory', item['id'], 'derived_memory', content, start, end,
             f"[memory:{item['id']}:{start}:{end}]",
             {'kind': item['kind'], 'source': item.get('source'), 'source_ref': item.get('source_ref'),
              'recorded_at': item.get('created_at'), 'valid_at': item.get('valid_at'),
+             'observations':source_observations(self.store,'conversation',source['message_id']) if source else [],
              'retrieval': {k: v for k, v in item.get('retrieval', {}).items() if k in (
                  'score', 'keyword_rank', 'bm25_rank', 'vector_rank', 'vector_similarity','entity_rank')},
              'entity_identity':self.store.entity_catalog.evidence(lookup) if dependency.get('entity_lookup') else []},
             dependency)
 
-    @staticmethod
-    def library_hit(item: dict):
+    def library_hit(self,item: dict):
         if item.get('representation')=='consolidated_memory':
             return EvidenceRecord('library',item['source_id'],'consolidated_memory',item['quote'],0,len(item['quote']),
                 item['citation'],{'group':item['group'],'applicability':item['applicability'],
                     'support':item['support'],'independence':item['independence'],'revision_id':item['revision_id']},item['dependency'])
+        from .observation_semantics import library_clock,public_clock,source_observations
+        from .library import LibraryError
+        temporal={}
+        try:
+            source=self.library._source(item['source_id'],active=False);revision=self.library._revision(item['revision_id'])
+            temporal={'source_clock':public_clock(library_clock(self.library,source,revision)),
+                'observations':source_observations(self.store,'library',revision['id'],start=item['start'],end=item['end'],library=self.library)}
+        except LibraryError:pass  # The existing selection/dependency gate rejects this stale candidate.
         return EvidenceRecord('library', item['source_id'], 'source_quote', item['quote'], item['start'], item['end'],
             item['citation'], {'kind': item['kind'], 'title': item['title'], 'authorship': item['authorship'],
                 'scope': item['scope'], 'revision_id': item['revision_id'], 'sha': item['sha'],
                 'knowledge_cards': item['knowledge_cards'], 'file_location': item.get('file_location'),
+                **temporal,
                 'entity_identity':item.get('entity_identity',[])}, item['dependency'])

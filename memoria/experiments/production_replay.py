@@ -306,7 +306,7 @@ async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allo
             'max_input_chars':max_input_chars,'max_output_tokens_per_call':1800,'max_retries':0,
             'retrieval_profile':'configured_local_embedding' if local_embeddings else 'explicit_lexical_no_embedding',
             'source_binding':'declared isolated subject; not independently verified','subject_key':document.subject_key,
-            'time_policy':'original_time retained as provenance; runtime recorded time is not backdated; no clock simulation',
+            'time_policy':'original_time is an explicit source clock for relative event dates; runtime recorded time is not backdated; no clock simulation',
             'gold_read':False,'production_writes':0},seed=None)
     write_json(recorder.path/'input.json',document.model_dump(mode='json'))
     run_settings=copy.deepcopy(configured);run_settings.database=recorder.path/'isolated-memory.db'
@@ -386,7 +386,7 @@ async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allo
                     sid=sessions.setdefault(step.session, None)
                     if sid is None:sid=sessions[step.session]=store.create_session('Isolated source session')['id']
                     with message_ingress('internal'):
-                        message=kernel.record_message(sid,step.role,step.content)
+                        message=kernel.record_message(sid,step.role,step.content,source_time=step.original_time)
                     sources[step.id]={'domain':'conversation','id':message['id']}
                     if step.role=='user':
                         if kernel.memory_worker is None:raise ValueError('Production memory worker unavailable')

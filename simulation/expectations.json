@@ -589,7 +589,73 @@
           "min_unresolved_history": 1
         }
       }
+    },
+    "event_relative_source": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0
+        },
+        "capability": {
+          "status_in": [
+            "answer"
+          ],
+          "min_citations": 1,
+          "min_active_memories": 1,
+          "min_dated_observations": 1,
+          "min_distinct_time_observations": 1,
+          "answer_any": [
+            "蓝杉归档"
+          ]
+        }
+      }
+    },
+    "document_original_clock": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0
+        },
+        "capability": {
+          "status_in": [
+            "answer"
+          ],
+          "min_citations": 1,
+          "min_approved_source_observations": 1,
+          "min_dated_observations": 1,
+          "min_distinct_time_observations": 1,
+          "answer_any": [
+            "2023年1月1日",
+            "2023-01-01",
+            "2023 年 1 月 1 日"
+          ]
+        }
+      }
+    },
+    "document_unknown_clock": {
+      "q1": {
+        "safety": {
+          "max_active_claims": 0,
+          "max_dated_observations": 0
+        },
+        "capability": {
+          "status_in": [
+            "answer",
+            "clarify",
+            "abstain"
+          ],
+          "min_unknown_time_observations": 1,
+          "answer_any": [
+            "无法",
+            "不能",
+            "未提供",
+            "未知",
+            "不明",
+            "不确定",
+            "不足",
+            "缺少"
+          ]
+        }
+      }
     }
   },
-  "fixture_revision": 4
+  "fixture_revision": 5
 }

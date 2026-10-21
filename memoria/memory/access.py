@@ -41,6 +41,11 @@ def infer_query(text: str) -> QueryRequest | None:
         return None
     question = re.sub(r"(?:没(?:有)?|不(?:是)?|无论|不管|随便)(?:[^，。！？?；;]{0,8})什么", "", text)
     parsed = parse_query(text)
+    event_query=TemporalQueryParser().parse(text)
+    if (event_query['intent']=='history' and re.search(r'我|本人',text)
+        and re.search(r'完成|交付|归档|做过|发生|经历|项目|任务',text)
+        and re.search(r'什么|哪些|何时|哪天|什么时候|有没有|吗|[？?]',text)):
+        return QueryRequest(query=text)
     if parsed["predicates"] and re.search(r"我|我的", text) and re.search(r"哪里|在哪|什么|何时|什么时候|哪种|哪所|有哪些|是多少", question):
         return QueryRequest(query=text)
     return None
@@ -83,6 +88,45 @@ class MemoryAccessOrchestrator:
     def __init__(self, claims: ClaimMemory, engine, llm=None, reader_tokenizer=None):
         self.claims, self.engine, self.llm = claims, engine, llm
         self.reader_tokenizer = reader_tokenizer
+
+    def event_sources(self,candidates,request,parsed,rejected):
+        """Attach source-bound ordinary-event semantics; no event becomes a Claim state."""
+        from .observation_semantics import source_observations,matches
+        from .temporal_evidence import references
+        event_start=parsed['range_start'] if parsed['axis']=='fact' else None
+        event_end=parsed['range_end'] if parsed['axis']=='fact' else None
+        cutoff=request.recorded_as_of or (parsed['range_end'] if parsed['axis']=='recorded' else None)
+        exclusive_cutoff=bool(not request.recorded_as_of and parsed['axis']=='recorded' and parsed['range_end'])
+        subject=request.subject_id if request.subject_id!='self' or re.search(r'我|本人',request.query) else None
+        filtering=bool(event_start or cutoff)
+        result=[]
+        for candidate in candidates:
+            if candidate['kind']!='source':result.append(candidate);continue
+            data=candidate['data'];mid=data['evidence']['message_id'];source=self.claims.store.message_source(mid)
+            if not source:continue
+            intervals=data.get('source_window',{}).get('intervals') or [(e['start'],e['end']) for e in [data['evidence']]+data.get('support_evidence',[])]
+            rows=[o for o in source_observations(self.claims.store,'conversation',mid) if all(
+                any(a<=e['start'] and e['end']<=b for a,b in intervals) for e in o['evidence_ref'])]
+            if filtering:
+                memory=self.claims.store.memory(data['memory_id']) if data.get('source_type')!='experience' else None
+                too_late=cutoff and (normalize_time(source['created_at'])>normalize_time(cutoff) or
+                    (memory and normalize_time(memory['updated_at'])>normalize_time(cutoff)))
+                if too_late:
+                    rejected.append({'id':candidate['id'],'reason':'source_or_memory_recorded_after_cutoff'});continue
+                rows=[o for o in rows if matches(o,event_start=event_start,event_end=event_end,recorded_as_of=cutoff,subject_ref=subject)]
+                if exclusive_cutoff:rows=[o for o in rows if normalize_time(o['recorded_at'])<normalize_time(cutoff)]
+                if not rows:
+                    rejected.append({'id':candidate['id'],'reason':'observation_event_time_or_subject_unknown_or_outside_query'});continue
+                for o in rows:
+                    a=min(e['start'] for e in o['evidence_ref']);b=max(e['end'] for e in o['evidence_ref'])
+                    span={**data['evidence'],'start':a,'end':b,'quote':source['content'][a:b]}
+                    result.append({**candidate,'id':candidate['id']+':event:'+o['observation_id'],'data':{**data,
+                        'text':span['quote'],'evidence':span,'support_evidence':[],
+                        'source_window':{'partial':a!=0 or b!=len(source['content']),'source_chars':len(source['content']),'intervals':[(a,b)]},
+                        'observations':[o],'observation_refs':references([o],'conversation')}})
+            else:
+                result.append({**candidate,'data':{**data,'observations':rows,'observation_refs':references(rows,'conversation')}})
+        return result
 
     def timeline(self, request: QueryRequest, parsed: dict) -> list[dict]:
         """Source-valid revisions; proposals are labelled and never turned into states."""
@@ -207,9 +251,9 @@ class MemoryAccessOrchestrator:
         state_mode = request.mode in {"unified", "claim"}
         if parsed["requires_clarification"]:
             path, reason = "clarify", parsed["reason"]
-        elif history_range and not state_mode:
+        elif history_range and not state_mode and parsed['predicates']:
             path, reason = "clarify", "source_lane_requires_explicit_fact_instant; calendar_range_not_supported"
-        elif history_range:
+        elif history_range and parsed['predicates']:
             with timings.measure("access.timeline"):
                 timeline = self.timeline(request, parsed)
             path, reason = "history", "revision_timeline; not a point-in-time answer"
@@ -232,10 +276,10 @@ class MemoryAccessOrchestrator:
                 path, reason = "retrieve", "general_source_query"
             supplement = request.mode not in {"claim"} and (request.mode != "unified" or not state or not state["payload"]["complete"])
             # Raw memories have no recorded-time dimension. Never use them to answer past knowledge.
-            if supplement and not request.recorded_as_of:
+            if supplement and (not request.recorded_as_of or not parsed['predicates']):
                 diag = {}
                 with timings.measure("access.semantic"):
-                    memories = await self.engine.retrieve(request.query, limit=request.candidate_limit, as_of=request.fact_as_of,
+                    memories = await self.engine.retrieve(request.query, limit=request.candidate_limit, as_of=request.recorded_as_of or request.fact_as_of,
                                                           expand_graph=False, mode="rrf" if request.mode == "unified" else request.mode,
                                                           diagnostics=diag, timings=timings,use_entities=request.use_entities,
                                                           session_id=request.session_id,entity_type=request.entity_type)
@@ -250,7 +294,7 @@ class MemoryAccessOrchestrator:
                             rejected.append({"id": item["id"], "reason": "memory_changed_during_retrieval"})
                             continue
                         intervals = self.claims.store.memory_validity(item["id"])
-                        fact = request.fact_as_of or datetime.now().astimezone().isoformat()
+                        fact = request.recorded_as_of or request.fact_as_of or datetime.now().astimezone().isoformat()
                         fact = normalize_time(fact)
                         if not any(i["valid_at"] <= fact and (i["invalid_at"] is None or fact < i["invalid_at"]) for i in intervals):
                             rejected.append({"id": item["id"], "reason": "inactive_at_requested_time"})
@@ -301,6 +345,7 @@ class MemoryAccessOrchestrator:
                 candidates.extend(experiences)
                 diag["experiences"] = experience_diag
                 reason += "; original experiences are not approved current state"
+            candidates=self.event_sources(candidates,request,parsed,rejected)
             if state:
                 # Experience query encoding can await after ordinary retrieval.
                 refreshed = self.claims.access(args)

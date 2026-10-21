@@ -108,7 +108,10 @@ class ChannelHub:
                                 self.state.update(self.app,message_id,'ignored');return
                             self.state.mark_timing(self.app,message_id,'generation_started_at')
                             from ..provenance import message_ingress
-                            with message_ingress(self.channel,digest(self.app+':'+message_id)):
+                            from datetime import datetime
+                            from ..memory.temporal_resolver import ZONE
+                            source_time=datetime.fromtimestamp(packet['created'],ZONE).isoformat()
+                            with message_ingress(self.channel,digest(self.app+':'+message_id),source_time=source_time):
                                 result=await tenant.state.chat_turn(session,text,request_id=self.channel+'-'+digest(message_id)[:24])
                         reply=result['message']['content']
             self.state.update(self.app,message_id,'generated',reply=reply,owner=owner,session=session)

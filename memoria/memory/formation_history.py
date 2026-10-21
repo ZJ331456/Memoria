@@ -132,9 +132,11 @@ def _memory(store, current, item):
     entities = catalog.cohort('memory', item['id'], digest(item['content'])) if catalog else []
     if entities and catalog.signature('memory', item['id'], digest(item['content']), session_id=current['session_id']) != entities:
         raise ValueError('Historical entity scope or source changed')
+    from .observation_semantics import message_clock,public_clock
     return {'id': item['id'], 'content': item['content'][:600], 'content_truncated': len(item['content']) > 600,
             'source_id': source['id'], 'session_id': source['session_id'], 'recorded_at': item['updated_at'],
             'source_excerpt': excerpt(source['content'], current['content']), 'scopes': scopes,
+            'source_clock':public_clock(message_clock(store,source)),
             'entity_ids': entities, 'dependency': dep, 'source_dependency': store.message_dependency(source)}
 
 
@@ -150,6 +152,7 @@ async def collect(store, engine, current):
             (SELECT rowid FROM messages WHERE id=?) AND m.created_at<=? AND '''+personal_source_sql('m')+
             ' ORDER BY m.rowid DESC LIMIT 8', (current['session_id'], current['id'], current['created_at'])).fetchall()
         from .auto_review import SECRET, SENSITIVE, THIRD_PARTY
+        from .observation_semantics import message_clock,public_clock
         for row in reversed(recent):
             source = dict(row)
             if SECRET.search(source['content']) or SENSITIVE.search(source['content']) or THIRD_PARTY.search(source['content']):
@@ -159,6 +162,7 @@ async def collect(store, engine, current):
                 continue
             context['recent_messages'].append({'id': source['id'], 'session_id': source['session_id'],
                 'role': 'user', 'recorded_at': source['created_at'], 'excerpt': excerpt(source['content'], current['content']),
+                'source_clock':public_clock(message_clock(store,source)),
                 'scopes': scopes, 'dependency': store.message_dependency(source)})
         context['recent_messages'] = context['recent_messages'][-4:]
         # Theme labels remain only a low-trust vocabulary aid, with live prefix checks.

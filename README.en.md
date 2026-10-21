@@ -10,6 +10,8 @@ Memoria connects original evidence, review, conditions and revisions so that bou
 
 The current scope is a local research prototype and a controlled-pilot foundation. Longitudinal quality, positive profile-view benefits and commercial readiness remain unverified.
 
+[Ordinary observation semantics](docs/implemented/普通观察主体与事件时间.md) now preserve subject, source role, epistemic status and event intervals separately from original-source and recording timestamps. Conversation and document readers use the same metadata; unknown dates remain unknown. This is functional coverage, with extraction and longitudinal quality still unverified.
+
 ## Architecture
 
 The [MemoryKernel](docs/implemented/独立记忆核心与多来源接口.md) can be used without a chat runtime or web server. Conversation quotes, derived memories, documents and task results share a bounded evidence interface while retaining their authorship, scope and revision rules. Chat and task applications are clients of this core; documents do not automatically become personal facts.

@@ -33,7 +33,7 @@ def model(service, *, alter=None, action=None):
                 'applicability':'仅限所给资料中的Memoria部署，未验证普适性'}]}
         elif prompt==VERIFY:
             output={'verdicts':[{'id':c['id'],'assessment':'Supported','attribution_preserved':True,
-                'conditions_preserved':True,'task_bound':True,'sensitive':False} for c in data['candidates']]}
+                'conditions_preserved':True,'task_bound':True,'sensitive':False,'time_supported':True} for c in data['candidates']]}
         elif prompt==CONSOLIDATE:
             previous=data['existing']
             output={'action':action or ('REINFORCE' if previous else 'ADD'),

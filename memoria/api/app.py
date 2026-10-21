@@ -487,7 +487,8 @@ def _create_tenant_app(config_path: str | Path | None = None, *, tenant_settings
                 except ValueError:
                     continue
                 from ..memory.formation_history import visible
-                result.append({**dict(row),'history':visible(store,row['id'])})
+                from ..memory.observation_semantics import load
+                result.append({**dict(row),'history':visible(store,row['id']),'semantics':load(store,'conversation',row['id'])})
         return result
 
     @app.get('/api/memory-extraction-diagnostics', tags=['memory layers'],summary='当前有效来源的提取覆盖与逐项失败，不是语义召回率')

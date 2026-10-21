@@ -45,10 +45,10 @@ def read_visibility(messages):
 
 STAGES = {
     'entity':('memory_entities','memory_entity_aliases','memory_entity_mentions','memory_entity_cohorts','memory_entity_events'),
-    "source": ("messages", "memory_source_revocations", "dataset_imports"),
+    "source": ("messages", "memory_source_revocations", "dataset_imports","memory_source_clocks"),
     "extraction": ("memory_jobs","memory_extraction_diagnostics"),
     "formation": ("memory_formation_runs", "memory_observations", "memory_pattern_versions", "memory_formation_candidates","memory_formation_calls",
-        "memory_observation_history","memory_formation_history_runs"),
+        "memory_observation_history","memory_formation_history_runs","memory_observation_semantics"),
     "review": ("memory_reviews","memory_review_assessments"),
     "memory": ("memories", "memory_operations", "memory_validity_intervals", "memory_source_dependencies",
                "memory_support_groups", "memory_support_evidence"),
@@ -83,7 +83,7 @@ def install(store):
             if table not in tables:
                 continue
             columns = [r[1] for r in store.db.execute(f"PRAGMA table_info({table})")]
-            key = next((c for c in ("id", "memory_id", "message_id", "user_id") if c in columns), columns[0])
+            key = next((c for c in ("id", "memory_id", "message_id", "user_id","observation_id","revision_ref") if c in columns), columns[0])
             for operation in ("INSERT", "UPDATE", "DELETE"):
                 alias = "OLD" if operation == "DELETE" else "NEW"
                 when = " WHEN " + " OR ".join(f"OLD.{c} IS NOT NEW.{c}" for c in columns) if operation == "UPDATE" else ""
@@ -265,11 +265,15 @@ def source_lineage(kernel, references):
                         personal_claim_eligible=eligible,role=source['role'],session_id=source['session_id'],
                         recorded_at=source['created_at'],source_sha256=hashlib.sha256(source['content'].encode()).hexdigest(),
                         origin=dict(origin) if origin else {'channel':'unknown'})
+                    from ..memory.observation_semantics import message_clock,public_clock
+                    item['source_clock']=public_clock(message_clock(store,source))
                     item['jobs']=rows('SELECT id,status,attempts,extracted_count,staged_count FROM memory_jobs WHERE source_ref=?',(sid,))
                     observations=rows('''SELECT id,run_id,category,topic,scope,polarity,start,end,asserted,durable,state,
                         source_sha,observed_at FROM memory_observations WHERE message_id=? ORDER BY rowid LIMIT 64''',(sid,))
                     from ..memory.formation_history import visible
                     for observation in observations:
+                        from ..memory.observation_semantics import load
+                        observation['semantics']=load(store,'conversation',observation['id'])
                         try:observation['history']=visible(store,observation['id'])
                         except ValueError:observation['history']={'association':{'status':'stale'}}
                     item['observations']=observations
@@ -311,12 +315,16 @@ def source_lineage(kernel, references):
                 source=store.db.execute('SELECT * FROM library_sources WHERE id=?',(sid,)).fetchone()
                 if source:
                     raw=kernel.library._revision(source['head_id'])
+                    from ..memory.observation_semantics import library_clock,public_clock
+                    item['source_clock']=public_clock(library_clock(kernel.library,dict(source),raw))
                     item.update(available=source['status']=='active',kind=source['kind'],authorship=source['authorship'],
                         scope=source['scope'],session_id=source['session_id'],revision_id=raw['id'],
                         source_sha256=raw['sha'],recorded_at=raw['created_at'])
                     item['observations']=rows('''SELECT o.id,o.card_id,o.revision_id,o.group_json,c.status,c.start,c.end,
                         o.subject_start,o.subject_end FROM library_observations o JOIN library_cards c ON c.id=o.card_id
                         WHERE o.source_id=? ORDER BY o.rowid LIMIT 64''',(sid,))
+                    from ..memory.observation_semantics import load
+                    for observation in item['observations']:observation['semantics']=load(store,'library',observation['id'])
                     item['reviews']=[{'id':r['card_id'],'status':r['status']} for r in item['observations']]
                     item['published']=[{'kind':'source_observation','id':r['id'],'revision_id':r['revision_id'],
                         'available':kernel.library.formation.card_available(r['card_id'])} for r in item['observations']]

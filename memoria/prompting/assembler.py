@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from dataclasses import dataclass, field
 
 
@@ -263,6 +264,9 @@ class PromptAssembler:
         for memory in memories:
             kind = memory.get("kind") or "fact"
             memory_id = memory.get("id") or "?"
+            if memory.get('observation_semantics'):
+                lines.append(f"- [{memory_id}] 来源语义（事件/计划区间非当前状态；未知时间不猜，source_time非recorded_at）："+
+                    json.dumps(memory['observation_semantics'],ensure_ascii=False,separators=(',',':')))
             if memory.get("retrieval_excerpts"):
                 for part in memory["retrieval_excerpts"]:
                     lines.append(f"- [{memory_id}] ({kind}) [原文片段 {part['start']}:{part['end']}] {part['text']}")

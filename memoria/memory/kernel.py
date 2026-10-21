@@ -55,13 +55,13 @@ class MemoryKernel:
     def ingest_file(self, filename: str, data: bytes, **metadata):
         return self.library.files.ingest(filename, data, **metadata)
 
-    def record_message(self, session_id: str, role: str, content: str):
+    def record_message(self, session_id: str, role: str, content: str, *, source_time: str | None = None):
         """Native conversation adapter; provenance continues to come from trusted message_ingress."""
         if role not in {'user', 'assistant', 'system', 'tool'}:
             raise LibraryError(422, '消息角色非法')
         if not self.store.session(session_id):
             raise LibraryError(404, '会话不存在')
-        return self.store.add_message(session_id, role, content)
+        return self.store.add_message(session_id, role, content,source_time=source_time)
 
     async def access(self, request):
         """Current/historical personal state keeps the existing Claim/time/condition authority."""
@@ -131,6 +131,8 @@ class MemoryKernel:
         try:
             if dependency.get('entity_lookup') and not self.entities.dependency_valid(dependency['entity_lookup']):return False
             dependency={k:v for k,v in dependency.items() if k!='entity_lookup'}
+            from .temporal_evidence import valid
+            if not valid(self.store,dependency.get('observation_refs',[]),self.library):return False
             kind = dependency.get('dependency_type', 'memory')
             if kind == 'library_consolidation':
                 return self.library.formation.dependency_valid(dependency,session_id=session_id)
@@ -199,7 +201,7 @@ class MemoryKernel:
         lanes = {}
         for domain in request.domains:
             if domain == 'memory':
-                items = await self.memory.retrieve(request.query, request.limit, mode=request.memory_mode,
+                items = await self.memory.retrieve(request.query, request.limit, mode=request.memory_mode,as_of=request.recorded_as_of,
                     use_entities=entity_enabled,session_id=request.session_id,entity_type=request.entity_type)
                 lanes[domain] = [self.readers.memory(item, request.query) for item in items]
             elif domain == 'conversation':
@@ -216,6 +218,13 @@ class MemoryKernel:
                     for channel in (consolidated,items):
                         if rank<len(channel):mixed.append(channel[rank])
                 lanes[domain] = [self.readers.library_hit(item) for item in mixed[:request.limit]]
+        from .temporal_evidence import filter_records,references
+        temporal_rejected=[]
+        for domain,lane in lanes.items():
+            from dataclasses import replace
+            filtered,reasons=filter_records(lane,request);temporal_rejected.extend(reasons)
+            lanes[domain]=[replace(r,dependency={**r.dependency,'observation_refs':references(r.provenance['observations'],
+                'conversation' if r.domain in {'memory','conversation'} else 'library')}) if r.provenance.get('observations') else r for r in filtered]
         identity_rejected=[]
         if identity_lookup['resolution']['entity_ids']:
             from dataclasses import replace
@@ -245,7 +254,7 @@ class MemoryKernel:
         response = {'evidence': [], 'dependencies': [], 'policy': READ_POLICY,
             'selection': {'strategy': 'source_rank_round_robin', 'candidate_count': sum(map(len, lanes.values())),
                           'selected_count': 0, 'skipped_budget': 0, 'skipped_stale': 0,
-                          'identity_rejected':identity_rejected},
+                          'identity_rejected':identity_rejected,'temporal_rejected':temporal_rejected},
             'budget': {'unit': 'serialized_json_chars', 'limit': request.budget_chars, 'used': 0}}
 
         def size():
@@ -260,6 +269,11 @@ class MemoryKernel:
             capture['candidate_dependencies']=[r.dependency for lane in lanes.values() for r in lane]
             capture['identity_rejected']=list(identity_rejected)
         response['selection']['identity_rejected_count']=len(identity_rejected)
+        response['selection']['temporal_rejected_count']=len(temporal_rejected)
+        response['selection']['temporal_diagnostics_truncated']=False
+        while response['selection']['temporal_rejected'] and size()>request.budget_chars-32:
+            response['selection']['temporal_rejected'].pop()
+            response['selection']['temporal_diagnostics_truncated']=True
         response['selection']['identity_diagnostics_truncated']=False
         while response['selection']['identity_rejected'] and size()>request.budget_chars-32:
             response['selection']['identity_rejected'].pop()

@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--user', required=True, help='Existing account for its configured model; no production-history access')
     parser.add_argument('--execute', action='store_true')
     parser.add_argument('--allow-remote', action='store_true')
-    parser.add_argument('--max-calls', type=int, default=128)
+    parser.add_argument('--max-calls', type=int, default=144)
     parser.add_argument('--max-input-chars', type=int, default=800000)
     parser.add_argument('--only', nargs='+')
     parser.add_argument('--direct-http',action='store_true',help='Bypass system proxy for configured LLM hosts in this process only; TLS verification remains enabled')

@@ -252,6 +252,14 @@ class MemoryEngine:
                     item["retrieval_excerpts"] = [
                         {**part,"text":item["content"][part["start"]:part["end"]]}
                         for part in item["retrieval"]["chunks"]]
+            source=self.store.memory_source(item['id'])
+            if source:
+                from .observation_semantics import source_observations
+                from .temporal_evidence import references
+                semantics=source_observations(self.store,'conversation',source['message_id'])
+                if semantics:
+                    item['observation_semantics']=semantics
+                    item['retrieval']['dependency']['observation_refs']=references(semantics,'conversation')
             result.append(item)
         timers.since("memory.fusion_and_graph", fusion_started)
         return result

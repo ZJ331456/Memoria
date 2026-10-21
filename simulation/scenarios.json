@@ -1463,7 +1463,133 @@
           }
         ]
       }
+    },
+    {
+      "id": "event_relative_source",
+      "title": "历史对话相对日期不得使用重放入库时间",
+      "areas": [
+        "formation",
+        "subject",
+        "temporal",
+        "source_support",
+        "reader"
+      ],
+      "max_calls": 6,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional three-clock test; event_relative_source",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "m1",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s1",
+            "original_time": "2023-03-02T10:00:00+08:00",
+            "content": "我昨天完成了蓝杉归档模块的交付，这是需要记住的一段项目经历。"
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "2023年3月我交付过什么模块？",
+              "include_experiences": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "document_original_clock",
+      "title": "旧资料的昨天依赖原始文档时间而非上传时间",
+      "areas": [
+        "formation",
+        "subject",
+        "temporal",
+        "source_support",
+        "reader"
+      ],
+      "max_calls": 5,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional three-clock test; document_original_clock",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "d1",
+            "kind": "source",
+            "form": true,
+            "body": {
+              "kind": "document",
+              "title": "Memoria工程日志",
+              "content": "Memoria昨天完成了工程检索的配置校验。",
+              "authorship": "external",
+              "source_time": "2023-01-02T10:00:00+08:00"
+            }
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "knowledge",
+            "request": {
+              "query": "这份资料中，Memoria工程检索的配置校验具体是哪一天完成的？"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "document_unknown_clock",
+      "title": "原始文档时间未知时不得将上传日期当昨天的锚点",
+      "areas": [
+        "formation",
+        "subject",
+        "temporal",
+        "source_support",
+        "reader"
+      ],
+      "max_calls": 5,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional three-clock test; document_unknown_clock",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "d1",
+            "kind": "source",
+            "form": true,
+            "body": {
+              "kind": "document",
+              "title": "Memoria旧日志",
+              "content": "Memoria昨天完成了工程检索的配置校验。",
+              "authorship": "external"
+            }
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "knowledge",
+            "request": {
+              "query": "这份资料有没有提供足够信息确定Memoria工程检索配置校验完成的具体年月日？"
+            }
+          }
+        ]
+      }
     }
   ],
-  "fixture_revision": 6
+  "fixture_revision": 7
 }

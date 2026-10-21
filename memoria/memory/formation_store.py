@@ -7,7 +7,7 @@ from ..store import now
 from .source_support import digest
 from ..claims import canonical
 
-POLICY = 'formation-v6-bounded-history'
+POLICY = 'formation-v7-subject-event-clocks'
 
 
 def install(store):
@@ -61,6 +61,8 @@ def install(store):
         store.db.execute('ALTER TABLE memory_pattern_versions ADD COLUMN support_group_id TEXT')
     from .formation_history import install as install_history
     install_history(store)
+    from .observation_semantics import install as install_semantics
+    install_semantics(store)
 
 
 def eligible_source(store, message_id):
@@ -105,6 +107,7 @@ def bucket(row):
     fields=[row['category'], row['topic'], row['scope'], row['polarity']]
     if row.get('entity_signature'):fields.append(row['entity_signature'])
     if row.get('history_identity'):fields.append(row['history_identity'])
+    if row.get('semantic_subject'):fields.extend([row['semantic_subject'],row['semantic_modality']])
     return digest(json.dumps(fields, ensure_ascii=False))
 
 
@@ -116,6 +119,12 @@ def with_entities(store,row):
     from .formation_history import load
     context=load(store,row['id'],check=False)
     if context and context['identity_key']:row['history_identity']=context['identity_key']
+    from .observation_semantics import load as semantic_load,projection
+    data=semantic_load(store,'conversation',row['id'])
+    if data:
+        row['semantics']=projection(data)
+        row['semantic_subject']=data['subject_ref'] if data['subject_ref']!='unknown' else 'unresolved:'+row['message_id']
+        row['semantic_modality']='nonassertion' if data['event_status'] in {'unknown','question'} else data['event_status']
     return row
 
 
@@ -151,6 +160,8 @@ def stage(store, job, receipt, reviews):
         identity=history.identity(item,source,audit['status']=='verified',store)
         store.db.execute('INSERT OR IGNORE INTO memory_observation_history VALUES(?,?,?,?,?)',
             (oid,json.dumps(proposal),json.dumps(context),json.dumps(audit),identity))
+        from . import observation_semantics as semantics
+        semantics.save(store,'conversation',oid,semantics.build(store,'conversation',source,source,item,history_audit=audit))
         catalog=getattr(store,'entity_catalog',None)
         if catalog:
             from .entities import Anchor
@@ -174,6 +185,9 @@ def context_for_review(store, review_id):
         observation=dict(row)
         from .formation_history import visible
         observation['history']=visible(store,row['id'])
+        from .observation_semantics import load,projection
+        data=load(store,'conversation',row['id'])
+        observation['semantics']=projection(data) if data else None
         observations.append(observation)
         if source['id'] not in {s['id'] for s in sources}:
             sources.append(source)

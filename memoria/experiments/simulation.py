@@ -74,10 +74,12 @@ def observations_at(case, database):
     prefix = case.get('prefix', {})
     published = {}
     observations = reviews = cards = verified_history_links = unresolved_history = 0
+    semantics_rows=[]
     for source in prefix.values():
         lineage = source['lineage']
         observations += len(lineage.get('observations', []))
         for observation in lineage.get('observations', []):
+            if observation.get('semantics'):semantics_rows.append(observation['semantics'])
             association=(observation.get('history') or {}).get('association',{}).get('status')
             verified_history_links+=association=='verified'
             unresolved_history+=association=='unresolved'
@@ -107,6 +109,11 @@ def observations_at(case, database):
             and p.get('status')=='approved' for p in published.values()),
         'observations': observations, 'pending_reviews': reviews, 'approved_source_observations': cards,
         'verified_history_links':verified_history_links,'unresolved_history':unresolved_history,
+        'dated_observations':sum(o['event_time'] is not None for o in semantics_rows),
+        'unknown_time_observations':sum(o['event_time'] is None for o in semantics_rows),
+        'planned_observations':sum(o['event_status']=='planned' for o in semantics_rows),
+        'distinct_time_observations':sum(bool(o['event_time'] and o['source_time'] and
+            o['event_time']['lower']!=o['source_time'] and o['source_time']!=o['source_recorded_at']) for o in semantics_rows),
         'citations': len(result.get('citations', [])), 'selected': len(trace.get('selected', [])),
         'pending_revision': bool(result.get('access', {}).get('pending_revisions')),
         'source_available': {k: v['lineage']['available'] for k, v in prefix.items()},
@@ -257,15 +264,15 @@ def summarize_runs(root):
     return {'directory':str(directory),**summary}
 
 
-async def run_suite(workspace, settings, *, execute=False, allow_remote=False, max_calls=128,
+async def run_suite(workspace, settings, *, execute=False, allow_remote=False, max_calls=144,
                     max_input_chars=800000, only=None, progress=print, network_profile='environment'):
     root = settings.root
     suite = load_suite(root)
     cases = [c for c in suite['cases'] if only is None or c['id'] in only]
     if not cases or (only and set(only) != {c['id'] for c in cases}):
         raise ValueError('Unknown or empty synthetic selection')
-    if type(max_calls) is not int or not 1 <= max_calls <= 128:
-        raise ValueError('Use a total ceiling of 1..128 calls')
+    if type(max_calls) is not int or not 1 <= max_calls <= 144:
+        raise ValueError('Use a total ceiling of 1..144 calls')
     if type(max_input_chars) is not int or not 1000 <= max_input_chars <= 1000000:
         raise ValueError('Invalid total character ceiling')
     if not execute:

@@ -24,8 +24,9 @@ def document_import_router(kernel):
         authorship: Literal['self', 'external', 'unknown'] = 'unknown',
         scope: Literal['personal', 'working'] = 'personal',
         session_id: str | None = Query(default=None, min_length=1, max_length=64),
-        encoding: Literal['auto', 'utf-8', 'utf-16', 'gb18030'] = 'auto'):
-        if set(request.query_params) - {'filename','title','kind','authorship','scope','session_id','encoding'}:
+        encoding: Literal['auto', 'utf-8', 'utf-16', 'gb18030'] = 'auto',
+        source_time: str | None = Query(default=None,max_length=64)):
+        if set(request.query_params) - {'filename','title','kind','authorship','scope','session_id','encoding','source_time'}:
             raise LibraryError(422, '不接受额外导入参数，账号由正式登录决定')
         chunks, size = [], 0
         async for chunk in request.stream():
@@ -34,8 +35,11 @@ def document_import_router(kernel):
                 raise LibraryError(413, '单文件上限1 MiB')
             chunks.append(chunk)
         try:
+            from ..memory.observation_semantics import aware_time
+            try:source_time=aware_time(source_time)
+            except ValueError as exc:raise LibraryError(422,'原始资料时间必须包含时区，不得填上传时间作为原始时间') from exc
             return await run_in_threadpool(kernel.ingest_file, filename, b''.join(chunks),
-                title=title, kind=kind, authorship=authorship, scope=scope, session_id=session_id, encoding=encoding)
+                title=title, kind=kind, authorship=authorship, scope=scope, session_id=session_id, encoding=encoding,source_time=source_time)
         except DocumentParseError as exc:
             raise LibraryError(422, str(exc)) from exc
 

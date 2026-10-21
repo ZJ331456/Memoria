@@ -9,7 +9,7 @@ import time
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..store import now
 from ..prompting.reader_budget import ReaderBudget
@@ -33,6 +33,13 @@ class SourceInput(BaseModel):
     scope: Literal['personal', 'working'] = 'personal'
     session_id: str | None = Field(default=None, max_length=64)
     origin: str = Field(default='', max_length=500)
+    source_time: str | None = Field(default=None,max_length=64)
+
+    @field_validator('source_time')
+    @classmethod
+    def original_time(cls,value):
+        from .observation_semantics import aware_time
+        return aware_time(value)
 
 
 class RevisionInput(BaseModel):
@@ -40,6 +47,8 @@ class RevisionInput(BaseModel):
     expected_revision_id: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1, max_length=160)
     content: str = Field(min_length=1, max_length=120000)
+    source_time: str | None = Field(default=None,max_length=64)
+    _time=field_validator('source_time')(SourceInput.original_time.__func__)
 
 
 class FeedbackInput(BaseModel):
@@ -129,6 +138,8 @@ class EvidenceLibrary:
         self.files = FileSources(self)
         from .source_formation import SourceFormation
         self.formation = SourceFormation(self)
+        from .observation_semantics import install as install_semantics
+        with store._memory_transaction():install_semantics(store)
         from ..observability.memory_trace import install
         with self.store._memory_transaction():install(self.store)
 
@@ -151,12 +162,15 @@ class EvidenceLibrary:
     def _event(self, sid, action):
         self.store.db.execute('INSERT INTO library_events(source_id,action,created_at) VALUES(?,?,?)', (sid, action, now()))
 
-    def _append(self, sid, title, content, previous=None):
+    def _append(self, sid, title, content, previous=None,source_time=None):
         if not title.strip() or not content.strip():
             raise LibraryError(422, '标题和资料正文不能为空')
         rid = uuid.uuid4().hex
         self.store.db.execute('INSERT INTO library_revisions VALUES(?,?,?,?,?,?,?)',
             (rid, sid, previous, title, content, digest(content), now()))
+        from .observation_semantics import library_role,record_clock
+        revision=self._revision(rid)
+        record_clock(self.store,'library',sid,rid,content,library_role(self._source(sid)),revision['created_at'],source_time)
         for start in range(0, len(content), 720):
             quote = content[start:start+800]
             rowid = self.store.db.execute('INSERT INTO library_chunks(revision_id,start,end,quote) VALUES(?,?,?,?)',
@@ -178,7 +192,7 @@ class EvidenceLibrary:
             sid = uuid.uuid4().hex
             self.store.db.execute('INSERT INTO library_sources VALUES(?,?,?,?,?,?,?,?,?)',
                 (sid, body.kind, body.authorship, body.scope, body.session_id, body.origin, '', 'active', now()))
-            self._append(sid, body.title, body.content)
+            self._append(sid, body.title, body.content,source_time=body.source_time)
             self._event(sid, 'create')
             return self.detail(sid)
 
@@ -188,8 +202,9 @@ class EvidenceLibrary:
             if source['head_id'] != body.expected_revision_id:
                 raise LibraryError(409, '资料已更新，请重新核对当前版本')
             current = self._revision(source['head_id'])
-            if (current['title'],current['content']) != (body.title,body.content):
-                self._append(sid,body.title,body.content,source['head_id']); self._event(sid,'revise')
+            from .observation_semantics import library_clock
+            if (current['title'],current['content'],library_clock(self,source,current)['source_time']) != (body.title,body.content,body.source_time):
+                self._append(sid,body.title,body.content,source['head_id'],body.source_time); self._event(sid,'revise')
             return self.detail(sid)
 
     def retract(self, sid):
@@ -230,7 +245,9 @@ class EvidenceLibrary:
             for card in cards:
                 card['available']=card['status']=='approved' and card['feedback_id']==(feedback['id'] if feedback else None) and self.formation.card_available(card['id'])
                 card.update(self.formation.card_provenance(card['id']))
-            return {**source,'revision':self._revision(source['head_id']),'versions':versions,'feedback':feedback,'cards':cards,
+            from .observation_semantics import library_clock
+            return {**source,'revision':self._revision(source['head_id']),'source_clock':library_clock(self,source,self._revision(source['head_id'])),
+                    'versions':versions,'feedback':feedback,'cards':cards,
                     'file':self.files.manifest(source['head_id'])}
 
     def version(self, sid, rid):

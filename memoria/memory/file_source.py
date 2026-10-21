@@ -23,11 +23,11 @@ class FileSources:
                     self.store.db.execute(statement); statement = ''
 
     def ingest(self, filename, data, *, title='', kind='document', authorship='unknown',
-               scope='personal', session_id=None, encoding='auto'):
+               scope='personal', session_id=None, encoding='auto',source_time=None):
         from .library import SourceInput
         parsed = parse_document(filename, data, encoding)
         body = SourceInput(kind=kind, title=title or parsed.filename, content=parsed.content,
-            authorship=authorship, scope=scope, session_id=session_id, origin=parsed.filename)
+            authorship=authorship, scope=scope, session_id=session_id, origin=parsed.filename,source_time=source_time)
         with self.store._memory_transaction():
             source = self.library.create(body)
             self.store.db.execute('INSERT INTO library_files VALUES(?,?,?,?,?)', (

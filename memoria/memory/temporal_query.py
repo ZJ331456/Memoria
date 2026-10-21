@@ -111,7 +111,15 @@ class TemporalQueryParser:
     """Expose both time axes without replacing intervals by manufactured points."""
     def parse(self, text: str, reference: datetime | None = None) -> dict:
         result = parse_query(text, reference)
-        result["parser"] = "zh-calendar-context-rules-v3"
+        from .temporal_resolver import TemporalResolver
+        time_result=TemporalResolver().resolve_event(text,reference or datetime.now(LOCAL_ZONE))
+        event=time_result['event_time']
+        if event and result['reason'] in {'current_or_general_query','calendar_range; not a point assertion',
+                'recorded_calendar_range; knowledge timeline not a guessed cutoff','ambiguous_time_requires_clarification',
+                'unsupported_time_expression','multiple_time_expressions'} and not result['subject_requires_clarification']:
+            result.update(intent='history' if result['intent']!='transition' else 'transition',requires_clarification=False,
+                precision=event.precision,range_start=event.lower,range_end=event.upper,reason='shared_source_calendar_interval')
+        result["parser"] = "zh-calendar-context-rules-v4"
         result["temporal_intent"] = ("transition" if result["intent"] == "transition" else
             "historical_knowledge" if result["intent"] == "history" and result["axis"] == "recorded" else
             "historical_fact" if result["intent"] == "history" else "current")
