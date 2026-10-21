@@ -29,7 +29,7 @@ def source_spans(item):
     for entry in entries:
         if not isinstance(entry, dict):
             continue
-        for field in ("evidence", "condition_evidence"):
+        for field in ("evidence", "condition_evidence", "support_evidence"):
             evidence = entry.get(field, [])
             for e in evidence if isinstance(evidence, list) else [evidence]:
                 if not isinstance(e, dict):

@@ -290,13 +290,14 @@ class EvidenceLibrary:
         rows,lookup=catalog.candidates('library',query,session_id=session_id,entity_type=entity_type,limit=limit)
         if lookup['resolution']['ambiguous']:return []
         if not rows:return lexical
-        from .records import excerpt
+        from .source_windows import windows
         hits=[]
         for row in rows:
             source=self._source(row['id']);revision=self._revision(source['head_id']);feedback=self._feedback(revision['id'])
             mentions=self.store.db.execute("SELECT anchor_json FROM memory_entity_mentions WHERE domain='library' AND target_id=? AND target_revision=? ORDER BY rowid",(row['id'],revision['id'])).fetchall()
             position=json.loads(mentions[0][0])['start'] if mentions else 0
-            start,end,quote=excerpt(revision['content'],query,start=max(0,position-100))
+            start,end=windows(revision['content'],query,width=800,hint=position)[0]
+            quote=revision['content'][start:end]
             dependency={'dependency_type':'library','id':row['id'],'revision_id':revision['id'],'sha':revision['sha'],
                 'feedback_id':feedback['id'] if feedback else None,
                 'entity_lookup':catalog.dependency(lookup,'library',row['id'],revision['id'],row['entity_ids'])}

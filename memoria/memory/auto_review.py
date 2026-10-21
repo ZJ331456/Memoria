@@ -13,7 +13,7 @@ from ..store import now
 from .evidence_verifier import EvidenceVerifier, THIRD_PARTY, CONDITIONAL, PLAN, NEGATIVE
 from .claim_normalizer import preference_desire, aliases
 
-VERSION = 'memory-auto-review-v4-conditions-support'
+VERSION = 'memory-auto-review-v5-literal-conflict-hold'
 ALIAS_BLOCKER = 'value_not_literal; semantic_or_alias_review_required'
 SECRET = re.compile(r'sk-[A-Za-z0-9_-]{16,}|(?:app[_ ]?secret|api[_ ]?key|密码|口令|验证码|私钥)\s*[:：=]\s*\S+',re.I)
 SENSITIVE = re.compile(r'病史|确诊|诊断|便秘|抑郁|过敏|药物|服药|身份证|银行卡|手机号|家庭住址|投资账户|medical|diagnos|password|secret|private key',re.I)
@@ -50,6 +50,7 @@ PROMPT = '''你是长期记忆的证据审核员。输入原话、候选和既�
 只返回JSON，字段必须齐全：
 {"decision":"accept|review|reject","assessment":"Supported|Contradicted|Insufficient","durable":true,"self_related":true,"conditions_preserved":true,"time_supported":true,"sensitive":false,"evidence_quote":"原话中唯一出现的原样片段","claim":null}
 Supported必须同时支持候选全文及可选claim的主体、属性和值；不是可信度打分，也不是现实核验。
+assessment只比较当前候选和当前source；existing可能过期，不能当作否定新原话的真值。原话支持新值但与旧值冲突时应decision=review,assessment=Supported，而非用Contradicted丢弃变化。
 claim可选，原话明确表达本人当前状态时填写{"predicate":"槽位","value":"短值","polarity":"positive|negative","scope":{}}。
 槽位限residence,occupation,school,response_language,response_detail,diet,work_habit,hobby,learning_goal,project_goal,time_preference,budget。
 英文语言名称等可以规范化；不要把整句话塞入value。一次只核对candidate及其observation，不把同一原话中其他事实填入本候选。
@@ -153,6 +154,10 @@ class AutoMemoryReviewer:
                 verdict=Verdict.model_validate_json(raw)
                 report.update(assessment=verdict.assessment)
                 if verdict.decision=='reject' or verdict.assessment=='Contradicted' or not verdict.durable:
+                    # A negative NLI decision cannot authorize publication. It must
+                    # also not silently erase a source-bound conflicting assertion.
+                    held=self.hold_literal_conflict(row,source,verdict,selected.model,report,key,is_pattern)
+                    if held is not None:return held
                     report.update(decision='reject',reason_codes=['not_supported_or_not_durable']);return self.finish(row,report,key)
                 reasons=[]
                 if verdict.decision!='accept' or verdict.assessment!='Supported':reasons.append('insufficient_support')
@@ -296,6 +301,26 @@ class AutoMemoryReviewer:
                     'existing_state_requires_revision' if isinstance(exc,ClaimError) and 'existing_state_requires_revision' in str(exc)
                     else 'source_or_candidate_changed' if isinstance(exc,ClaimError) else 'model_or_publish_failed'])
                 return self.finish(row,report,key,allow_changed=True)
+
+    def hold_literal_conflict(self,row,source,verdict,model,report,key,is_pattern):
+        from .evidence_verifier import mentions
+        if (is_pattern or verdict.claim is None or not all((verdict.durable,verdict.self_related,
+                verdict.conditions_preserved,verdict.time_supported)) or verdict.sensitive
+                or THIRD_PARTY.search(source['content']) or SENSITIVE.search(source['content'])
+                or not verdict.evidence_quote or source['content'].count(verdict.evidence_quote)!=1
+                or not mentions(verdict.claim.predicate,verdict.claim.value,row['content'])):return None
+        try:
+            draft,binding=self.bind_assertion(row,source,verdict,model)
+            rules=EvidenceVerifier().verify(self.claims,{**draft.model_dump(),'source_available':True})
+            if rules['blockers']:return None  # No nonliteral/alias semantic exception for this hold.
+            with self.store._memory_transaction():
+                self.assert_current(row,key)
+                self.conflict_proposal(row,report,draft,draft.evidence[0].model_dump())
+            if not report.get('structured_proposal'):return None
+            report.update(decision='review',reason_codes=['literal_conflict_requires_review'],
+                condition_binding=binding,semantic_judgment='negative_model_judgment_retained; literal_hold_only')
+            return self.finish(row,report,key)
+        except (ValueError,ClaimError):return None
 
     def bind_assertion(self, row, source, verdict, model):
         """LLM semantic acceptance + finite independent source/condition binding."""

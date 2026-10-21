@@ -162,8 +162,12 @@ class MemoryAccessOrchestrator:
         parsed = TemporalQueryParser().parse(request.query)
         catalog=getattr(self.claims.store,'entity_catalog',None)
         entities_enabled=request.use_entities if request.use_entities is not None else getattr(self.engine,'entity_enabled',False)
-        if catalog and entities_enabled and catalog.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type)['resolution']['ambiguous']:
+        identity_lookup=catalog.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type) if catalog else None
+        if identity_lookup and identity_lookup['resolution']['ambiguous']:
             parsed.update(requires_clarification=True,subject_requires_clarification=True,reason='ambiguous_entity_identity')
+        identity_required=bool(identity_lookup and identity_lookup['resolution']['entity_ids'])
+        if identity_required and (request.fact_as_of or request.recorded_as_of or parsed['intent'] in {'history','transition'}):
+            parsed.update(requires_clarification=True,subject_requires_clarification=True,reason='historical_entity_identity_not_established')
         routing = {"origin":"rules", "model_calls":0}
         if request.use_query_model:
             from .query_router import route_slots
@@ -181,7 +185,7 @@ class MemoryAccessOrchestrator:
         if any(k in request.context and (type(request.context[k]) != type(v) or request.context[k] != v) for k, v in inferred_context.items()):
             parsed.update(requires_clarification=True, reason="explicit_context_conflicts_with_query")
         # Ambiguous entity wording needs explicit pseudonymous identity, never guessed self.
-        if parsed["subject_requires_clarification"] and request.subject_id != "self":
+        if parsed["subject_requires_clarification"] and request.subject_id != "self" and parsed['reason']=='subject_requires_explicit_entity_id':
             parsed["subject_requires_clarification"] = False
             if parsed["reason"] == "subject_requires_explicit_entity_id":
                 parsed.update(requires_clarification=False, reason="explicit_subject")
@@ -261,12 +265,26 @@ class MemoryAccessOrchestrator:
                         except ClaimError:
                             rejected.append({"id": item["id"], "reason": "source_unavailable_revoked_or_public"})
                             continue
+                        if identity_required:
+                            from .entities import Anchor
+                            bound=catalog.source_binding(identity_lookup,Anchor(domain='conversation',source_id=ref,
+                                start=0,end=min(len(text),4000),quote=text[:4000],sha256=sha(text)))
+                            if not bound['dependency']:
+                                rejected.append({'id':item['id'],'reason':'entity_identity_'+bound['status']});continue
+                            item={**item,'retrieval':{**item['retrieval'],'entity_dependency':bound['dependency']}}
+                        from .source_windows import windows
+                        hint=bound['dependency']['literal_anchors'][0]['start'] if identity_required else None
+                        slices=sorted(windows(text,request.query,hint=hint))
+                        spans=[{**evidence,'start':a,'end':b,'quote':text[a:b]} for a,b in slices]
+                        selected_text='\n[… omitted source interval …]\n'.join(e['quote'] for e in spans)
                         candidates.append({"id": item["id"], "kind": "source", "score": item["retrieval"]["score"],
                                            "covers": [], "source_ids": [ref], "data": {
-                                               "memory_id": item["id"], "text": text,
+                                               "memory_id": item["id"], "text": selected_text,
                                                "memory_dependency": self.claims.store.memory_dependency(current),
-                                               "unverified_retrieval_hint": item.get("retrieval_excerpt", item["content"]),
-                                               "evidence": {**evidence, "quote": text}, "retrieval": item["retrieval"],
+                                               "unverified_retrieval_hint": item.get("retrieval_excerpt", item["content"])[:300],
+                                               "evidence": spans[0], "support_evidence":spans[1:],
+                                               "source_window":{"partial":slices!=[(0,len(text))],'source_chars':len(text),'intervals':slices},
+                                               "retrieval": item["retrieval"],
                                                "entity_identity": catalog.evidence(item["retrieval"]["entity_dependency"])
                                                    if catalog and item["retrieval"].get("entity_dependency") else [],
                                                "approved_personal_state": False, "semantic_support_verified": False}})
@@ -302,7 +320,17 @@ class MemoryAccessOrchestrator:
                     source = candidate["data"]
                     e = source["evidence"]
                     try:
-                        self.claims._evidence({"evidence":[e]})
+                        self.claims._evidence({"evidence":[e]+source.get('support_evidence',[])})
+                        if identity_required and not source.get('retrieval',{}).get('entity_dependency'):
+                            from .entities import Anchor
+                            bound=catalog.source_binding(identity_lookup,Anchor(domain='conversation',source_id=e['message_id'],
+                                start=e['start'],end=e['end'],quote=e['quote'],sha256=e['content_sha256']))
+                            if not bound['dependency']:
+                                rejected.append({'id':candidate['id'],'reason':'entity_identity_'+bound['status']});continue
+                            source['retrieval']={**source.get('retrieval',{}),'entity_dependency':bound['dependency']}
+                            source['entity_identity']=catalog.evidence(bound['dependency'])
+                        if source.get('retrieval',{}).get('entity_dependency') and not catalog.dependency_valid(source['retrieval']['entity_dependency']):
+                            raise ClaimError(409,'entity binding changed')
                         mid = source.get("memory_id")
                         if mid and not self.claims.store.memory_dependency_valid(source["memory_dependency"],as_of=request.fact_as_of):
                             raise ClaimError(409,"parent source unavailable")

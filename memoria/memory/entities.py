@@ -274,6 +274,24 @@ class EntityCatalog:
     def dependency(self,lookup,domain,target_id,revision,entity_ids):
         return {'lookup':lookup,'domain':domain,'target_id':target_id,'revision':revision,'entity_ids':entity_ids}
 
+    def source_binding(self,lookup,anchor):
+        """Read-only literal attribution, including sources predating entity indexing."""
+        text,_,_=self.source(anchor)
+        found=self.match(text,session_id=lookup['session_id'],entity_type=lookup['entity_type'])
+        all_found=self.match(text,session_id=lookup['session_id'])
+        ambiguous_names={a['name'] for a in all_found['ambiguous']}
+        wanted=set(lookup['resolution']['entity_ids']);anchors={}
+        for hit in found['matches']:
+            if hit['entity_id'] not in wanted or hit['entity_id'] in anchors:continue
+            if key(text[hit['start']:hit['end']]) in ambiguous_names:continue
+            anchors[hit['entity_id']]=anchor.model_copy(update={'start':hit['start'],
+                'end':hit['end'],'quote':text[hit['start']:hit['end']]}).model_dump()
+        if not anchors:
+            other=self.match(text,session_id=lookup['session_id'])
+            return {'status':'ambiguous' if other['ambiguous'] else 'incompatible' if other['matches'] else 'unestablished','dependency':None}
+        snapshot={'lookup':lookup,'entity_ids':sorted(anchors),'literal_anchors':list(anchors.values())}
+        return {'status':'supported_literal_identity','dependency':snapshot}
+
     def evidence(self,snapshot):
         """Bundle the literal identity bridge with its target, never a generated fact."""
         if not self.dependency_valid(snapshot):return []
@@ -282,10 +300,17 @@ class EntityCatalog:
         result=[]
         for eid in snapshot['entity_ids']:
             entity=self._entity(eid);alias_ids={m['alias_id'] for m in matches if m['entity_id']==eid}
-            alias_ids.update(r[0] for r in self.store.db.execute('''SELECT alias_id FROM memory_entity_mentions
-                WHERE domain=? AND target_id=? AND target_revision=? AND entity_id=?''',
-                (snapshot['domain'],snapshot['target_id'],snapshot['revision'],eid)))
+            if 'literal_anchors' in snapshot:
+                for anchor in snapshot['literal_anchors']:
+                    alias_ids.update(m['alias_id'] for m in self.match(anchor['quote'],session_id=session,
+                        entity_type=lookup['entity_type'])['matches'] if m['entity_id']==eid)
+            else:
+                alias_ids.update(r[0] for r in self.store.db.execute('''SELECT alias_id FROM memory_entity_mentions
+                    WHERE domain=? AND target_id=? AND target_revision=? AND entity_id=?''',
+                    (snapshot['domain'],snapshot['target_id'],snapshot['revision'],eid)))
             anchors={entity['anchor_json']}
+            anchors.update(canonical(a) for a in snapshot.get('literal_anchors',[]) if any(m['entity_id']==eid
+                for m in self.match(a['quote'],session_id=session,entity_type=lookup['entity_type'])['matches']))
             for aid in sorted(alias_ids):
                 row=self.store.db.execute('SELECT * FROM memory_entity_aliases WHERE id=?',(aid,)).fetchone()
                 if row and self.live(entity,dict(row),session_id=session):anchors.add(row['anchor_json'])
@@ -296,6 +321,16 @@ class EntityCatalog:
 
     def dependency_valid(self,snapshot):
         try:
+            if 'literal_anchors' in snapshot:
+                if not self.lookup_valid(snapshot['lookup']) or snapshot['lookup']['resolution']['ambiguous']:return False
+                ids=set();lookup=snapshot['lookup']
+                for anchor in snapshot['literal_anchors']:
+                    self.source(anchor)
+                    if self.match(anchor['quote'],session_id=lookup['session_id'])['ambiguous']:return False
+                    found=self.match(anchor['quote'],session_id=lookup['session_id'],entity_type=lookup['entity_type'])
+                    if found['ambiguous']:return False
+                    ids.update(m['entity_id'] for m in found['matches'])
+                return bool(snapshot['entity_ids']) and set(snapshot['entity_ids']).issubset(ids & set(lookup['resolution']['entity_ids']))
             return (self.lookup_valid(snapshot['lookup']) and not snapshot['lookup']['resolution']['ambiguous'] and
                 set(snapshot['entity_ids']).issubset(self.signature(snapshot['domain'],snapshot['target_id'],snapshot['revision'],
                     session_id=snapshot['lookup']['session_id'],entity_type=snapshot['lookup']['entity_type'])) and bool(snapshot['entity_ids']))

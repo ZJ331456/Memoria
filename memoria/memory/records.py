@@ -66,12 +66,9 @@ def excerpt(text: str, query: str, *, start: int | None = None, width: int = 800
     """An exact bounded slice, never a fabricated quote or a token-concatenated snippet."""
     from .lexical import token_sequence
     if start is None:
-        lowered = text.lower()
-        position = lowered.find(query.lower())
-        if position < 0:
-            positions = [lowered.find(t.lower()) for t in token_sequence(query)[:32]]
-            position = min((p for p in positions if p >= 0), default=0)
-        start = max(0, position - width // 4)
+        from .source_windows import windows
+        a,b=windows(text,query,width=width)[0]
+        return a,b,text[a:b]
     start = min(max(0, start), max(0, len(text) - width))
     return start, min(len(text), start + width), text[start:start + width]
 

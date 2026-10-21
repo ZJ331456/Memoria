@@ -64,9 +64,11 @@ class CitationGuard:
                             self.experience_snapshots[source['message_id']]=item['source_dependency']
                         else:
                             eid='source:'+mid+':'+source['content_sha256']
+                            if item.get('source_window',{}).get('partial'):
+                                eid+=f":{source['start']}:{source['end']}"
                             memory=claims.store.memory(mid)
                             self.source_snapshots[mid]=self._memory_snapshot(memory)
-                        self.catalog[eid]={'kind':'source','eligible':True,'data':item,'spans':[source]}
+                        self.catalog[eid]={'kind':'source','eligible':True,'data':item,'spans':[source]+item.get('support_evidence',[])}
                     ids.append(eid)
                 evidence.append({'id':candidate['id'],'kind':candidate['kind'],'data':candidate['data'],'citation_ids':ids})
         self.packet=canonical({'access_path':access['path'],'parsed':access['parsed'],'evidence':evidence,
@@ -197,9 +199,13 @@ async def read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=
         from .evidence_sufficiency import EvidenceSufficiency, SYSTEM as SUFFICIENCY_SYSTEM
         from .answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM
         from .verification import verify, support_envelope
-        evidence = [{'id': eid, 'text':'\n'.join(e['quote'] for e in item['spans']),
-                     'source_texts':[e['quote'] for e in item['spans']]}
-                    for eid,item in guard.catalog.items() if item['eligible']]
+        evidence=[]
+        for eid,item in guard.catalog.items():
+            if not item['eligible']:continue
+            quotes=[e['quote'] for e in item['spans']]
+            quotes.extend(e['quote'] for identity in item['data'].get('entity_identity',[]) for e in identity['evidence'])
+            quotes=list(dict.fromkeys(quotes))
+            evidence.append({'id':eid,'text':'\n'.join(quotes),'source_texts':quotes})
         policy = AdaptiveFallback(evidence_budgets=(6000,), max_calls=5)
         risk_checks = {'checks':[], 'usage':[], 'mode':'quoted_gate_and_support',
                        'contract_errors':[], 'adaptive_retrieval_enabled':False,'semantic_entailment_verified':False}

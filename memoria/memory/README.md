@@ -1,5 +1,7 @@
 # Memory：记忆版本、统一访问与证据选择
 
+[长来源与身份约束](../../docs/implemented/身份约束与长来源引用.md)：`source_windows.py`按原文展开有限片段，保留整组支持和引用；实体身份是最终读取保护，与第四路召回开关分开。`auto_review.py`保留字面约束充分的冲突提案，负面模型意见不自动覆盖旧状态。
+
 Kernel.answer将个人Claim/View Reader与library来源Reader接入同一核心；来源lineage、实际选择/引用/调用和逐题归因见[生产闭环](../../docs/implemented/生产记忆闭环与逐题归因.md)。不把全部Observation转成Claim，不用原LoCoMo成绩验证未经过的机制。
 
 [EvidenceLibrary](library.py)保存原生笔记/文档/任务结果与不可变修订，结合反馈提炼有限知识观察；不写个人Claim，search_library遵守原预算与来源版本复核。见[实现边界](../../docs/implemented/多来源资料与任务反馈记忆.md)。

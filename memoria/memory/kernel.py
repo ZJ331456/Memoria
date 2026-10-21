@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 
-from ..claims import ClaimMemory
+from ..claims import ClaimMemory, sha
 from .access import MemoryAccessOrchestrator
 from .auto_review import AutoMemoryReviewer
 from .embedding import EmbeddingClient
@@ -91,7 +91,7 @@ class MemoryKernel:
                     except (ClaimError,KeyError):continue
                     pending.append({'review_id':row['id'],'claim_id':target['id'],'revision_id':target['revision_id'],
                         'source_ref':row['source_ref'],
-                        'reason':'supported_conflicting_assertion_awaits_revision_review'})
+                        'reason':'source_bound_conflicting_assertion_awaits_revision_review'})
         if pending:
             reason=result['reason']
             if 'unresolved revision proposal' not in reason:reason+='; unresolved revision proposal'
@@ -187,7 +187,8 @@ class MemoryKernel:
         """Interleave source ranks, rather than comparing incomparable BM25/cosine scores."""
         self._check_session(request.session_id)
         entity_enabled=self.memory.entity_enabled if request.use_entities is None else request.use_entities
-        if entity_enabled and self.entities.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type)['resolution']['ambiguous']:
+        identity_lookup=self.entities.lookup(request.query,session_id=request.session_id,entity_type=request.entity_type)
+        if identity_lookup['resolution']['ambiguous']:
             if capture is not None:capture.update(candidates=[],candidate_dependencies=[])
             packet={'evidence':[],'dependencies':[],'policy':READ_POLICY,
                 'selection':{'strategy':'source_rank_round_robin','candidate_count':0,'selected_count':0,'skipped_budget':0,'skipped_stale':0,'reason':'ambiguous_entity_identity'},
@@ -215,9 +216,36 @@ class MemoryKernel:
                     for channel in (consolidated,items):
                         if rank<len(channel):mixed.append(channel[rank])
                 lanes[domain] = [self.readers.library_hit(item) for item in mixed[:request.limit]]
+        identity_rejected=[]
+        if identity_lookup['resolution']['entity_ids']:
+            from dataclasses import replace
+            from .entities import Anchor
+            for domain,lane in lanes.items():
+                retained=[]
+                for record in lane:
+                    try:
+                        if record.representation=='consolidated_memory':
+                            identity_rejected.append({'id':record.source_id,'reason':'entity_identity_unestablished'});continue
+                        if domain=='library':
+                            a=Anchor(domain='library',source_id=record.source_id,revision_id=record.dependency['revision_id'],
+                                start=record.start,end=record.end,quote=record.content,sha256=record.dependency['sha'])
+                        else:
+                            source=self.store.memory_source(record.source_id) if domain=='memory' else self.store.message_source(record.source_id)
+                            if not source:raise LibraryError(409,'No original source')
+                            text=source['content']
+                            a=Anchor(domain='conversation',source_id=source['message_id'],start=0,end=min(4000,len(text)),quote=text[:4000],sha256=sha(text))
+                        bound=self.entities.source_binding(identity_lookup,a)
+                        if not bound['dependency']:
+                            identity_rejected.append({'id':record.source_id,'reason':'entity_identity_'+bound['status']});continue
+                        retained.append(replace(record,dependency={**record.dependency,'entity_lookup':bound['dependency']},
+                            provenance={**record.provenance,'entity_identity':self.entities.evidence(bound['dependency'])}))
+                    except LibraryError:
+                        identity_rejected.append({'id':record.source_id,'reason':'entity_source_unavailable'})
+                lanes[domain]=retained
         response = {'evidence': [], 'dependencies': [], 'policy': READ_POLICY,
             'selection': {'strategy': 'source_rank_round_robin', 'candidate_count': sum(map(len, lanes.values())),
-                          'selected_count': 0, 'skipped_budget': 0, 'skipped_stale': 0},
+                          'selected_count': 0, 'skipped_budget': 0, 'skipped_stale': 0,
+                          'identity_rejected':identity_rejected},
             'budget': {'unit': 'serialized_json_chars', 'limit': request.budget_chars, 'used': 0}}
 
         def size():
@@ -230,6 +258,13 @@ class MemoryKernel:
         if capture is not None:
             capture['candidates']=[r.public() for lane in lanes.values() for r in lane]
             capture['candidate_dependencies']=[r.dependency for lane in lanes.values() for r in lane]
+            capture['identity_rejected']=list(identity_rejected)
+        response['selection']['identity_rejected_count']=len(identity_rejected)
+        response['selection']['identity_diagnostics_truncated']=False
+        while response['selection']['identity_rejected'] and size()>request.budget_chars-32:
+            response['selection']['identity_rejected'].pop()
+            response['selection']['identity_diagnostics_truncated']=True
+        if size()>request.budget_chars:raise LibraryError(413,'身份保护元数据超过预算')
         with self.store.lock:
             self._check_session(request.session_id)  # Vector calls may have yielded while a session was deleted.
             for rank in range(max(map(len, lanes.values()), default=0)):
