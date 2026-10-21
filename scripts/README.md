@@ -1,5 +1,7 @@
 # Scripts：本机管理员与研究入口
 
+[evaluate_llm_rerank.py](evaluate_llm_rerank.py)默认0调用验证；执行须`--execute --allow-remote --max-calls 12`，只测预声明四题、固定资料库候选与字符预算。保留真实Token/延迟及负向结果，[完整说明](../docs/implemented/LLM候选重排与同预算诊断.md)。
+
 [根启动教程](../README.md) · [研究计划](../docs/plans/长期陪伴记忆研究与实验计划书.md)
 
 以下命令从仓库根运行，解释器统一为`.\.venv\Scripts\python.exe`。这里是本机管理工具；Web接口不接受任意脚本、文件路径或他人研究输入。--help只显示参数，不代表模型调用成功。

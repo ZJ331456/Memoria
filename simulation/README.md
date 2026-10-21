@@ -2,7 +2,7 @@
 
 2026-10-20由用户明确授权创建。**这里是虚构人物与虚构原文，仅用于功能验收，不是真实用户资料、人工gold或LoCoMo成绩。**
 
-[scenarios.json](scenarios.json)当前v4包含29组场景、39项问题检查；在原27组37项上新增六主题动态观察、六项文档事实两组，原断言保留。[expectations.json](expectations.json)是独立的AI编写断言。输入中没有答案标签。模型先执行正式Kernel/worker/Formation/审核/Claim/View/Reader，结束后才解释断言；没有测试专用提取器、手工补批准或修改成功答案。
+[scenarios.json](scenarios.json)当前v5包含30组场景、40项问题检查；在原27组37项上新增六主题动态观察、六项文档事实及两证据LLM重排三组，原断言保留。[expectations.json](expectations.json)是独立的AI编写断言。输入中没有答案标签。模型先执行正式Kernel/worker/Formation/审核/Claim/View/Reader，结束后才解释断言；没有测试专用提取器、手工补批准或修改成功答案。
 
 ## 覆盖内容
 
@@ -22,7 +22,7 @@
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER
-.\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER --execute --allow-remote --max-calls 112 --max-input-chars 600000
+.\.venv\Scripts\python.exe scripts/test_memory_scenarios.py --user YOUR_USER --execute --allow-remote --max-calls 120 --max-input-chars 600000
 ```
 
 只重测指定场景；本机系统代理不通时可显式选择进程内直连，仍使用原LLM主机并验证TLS，不改系统代理或config：
@@ -48,3 +48,6 @@ summarize只读取冻结产物并验SHA，选择与**当前固定输入完全相
 首批v2的跨版本累计32/34与两项缺口属于历史记录，不作为最终验收。2026-10-20补齐有限条件自动发布、候选分句/条件Span绑定与未知前提保留，以及同值自述到Claim独立来源组的自动reinforce/approve和每组父记忆依赖。精确副本不重复加独立票，单值状态冲突/未知条件/敏感时间风险仍保留辅助。
 
 详细机制、各轮失败/耗时、完整最终验收与部署范围见[实现记录](../docs/implemented/模拟场景功能验收与缺口.md#条件自动发布与独立来源强化2026-10-20)和[研究计划56](../docs/plans/长期陪伴记忆研究与实验计划书.md#56-条件准入与独立来源自动强化2026-10-20)。runs中的report.html可在本机浏览器打开；原始返回/库/账号信息不提交远程。模拟功能验收不代表真实长期效果、抽取F1或LoCoMo新成绩。
+
+
+LLM重排新增场景必须实际applied、两项证据均选入，最终回答同时包含两项必要值。固定四题公开资料库配对另见[LLM重排诊断](../docs/implemented/LLM候选重排与同预算诊断.md)，不能与虚构功能断言或旧LoCoMo全量成绩合并。

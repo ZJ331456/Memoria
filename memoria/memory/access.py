@@ -64,6 +64,7 @@ class QueryRequest(Strict):
     candidate_limit: int = Field(default=32, ge=1, le=64, strict=True)
     use_query_model: bool = Field(default=False, strict=True)
     use_answer_risk: bool = Field(default=False, strict=True)
+    use_llm_rerank: bool = Field(default=False, strict=True)
     include_experiences: bool = Field(default=True, strict=True)
     experience_mode: Literal["bm25", "dense", "rrf"] = "bm25"
     use_entities: bool | None = None

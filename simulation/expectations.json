@@ -541,6 +541,25 @@
           "min_approved_source_observations": 6
         }
       }
+    },
+    "llm_rerank": {
+      "q1": {
+        "safety": {
+          "reader_called": true
+        },
+        "capability": {
+          "status_in": [
+            "answer"
+          ],
+          "min_selected": 2,
+          "min_active_memories": 2,
+          "reranking_applied": true,
+          "answer_all": [
+            "快照",
+            "哈希"
+          ]
+        }
+      }
     }
   },
   "fixture_revision": 3

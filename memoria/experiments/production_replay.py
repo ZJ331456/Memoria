@@ -324,9 +324,11 @@ async def execute_closed_loop(workspace,settings,input_path,*,execute=False,allo
         from ..memory.formation import OBSERVE_PROMPT,CONSOLIDATE_PROMPT
         from ..memory.auto_review import PROMPT as REVIEW_PROMPT
         from ..memory.source_formation import OBSERVE,VERIFY,CONSOLIDATE,CHECK_CONSOLIDATION
+        from ..memory.rerank import SYSTEM as RERANK_SYSTEM
         stage={OBSERVE_PROMPT:'observation_extract',CONSOLIDATE_PROMPT:'pattern_consolidate',REVIEW_PROMPT:'memory_admission',
             OBSERVE:'source_observe',VERIFY:'source_verify',CONSOLIDATE:'source_consolidate',
-            CHECK_CONSOLIDATION:'source_consolidation_verify'}.get(messages[0]['content'],'reader' if phase['stage']=='question' else phase['stage'])
+            CHECK_CONSOLIDATION:'source_consolidation_verify',RERANK_SYSTEM:'evidence_rerank'}.get(messages[0]['content'],'reader' if phase['stage']=='question' else phase['stage'])
+        if messages[0]['content'].startswith(REVIEW_PROMPT+'\n'):stage='memory_admission'
         entry={'id':cid,**phase,'stage':stage,'status':'started','usage':None,'input_chars':len(text),
             'input_sha256':fingerprint(messages),'max_tokens':kwargs['max_tokens'],'model':getattr(kwargs.get('model'),'model',None)}
         calls.append(entry)

@@ -460,3 +460,6 @@ memory-access、claim-views、memory-query、memory-answer接受可选session_id
 
 
 GET `/api/memory-extraction-diagnostics?limit=20&session_id=...`：仅当前账号、当前有效来源的提取额度、逐项拒绝与字面片段覆盖诊断；不返回模型原始输出。它不是语义召回率。[约束说明](观察提取额度与覆盖诊断.md)。
+
+
+`POST /api/memory-answer`的QueryRequest、`POST /api/memory-kernel/knowledge-answer`的KnowledgeAnswer新增`use_llm_rerank`（默认false），仅Reader回答时对有界原话候选池重排；普通访问/搜索不隐式调用。完整预算、默认关闭理由和真实四题成本见[重排协议](LLM候选重排与同预算诊断.md)。

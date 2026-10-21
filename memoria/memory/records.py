@@ -36,6 +36,7 @@ class MemorySearch(BaseModel):
 
 
 class KnowledgeAnswer(MemorySearch):
+    use_llm_rerank: bool = False
     domains: list[Domain]=Field(default_factory=lambda:['library'],min_length=1,max_length=1)
 
     @field_validator('domains')

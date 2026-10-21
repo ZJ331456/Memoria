@@ -13,7 +13,7 @@ from ..store import now
 from .evidence_verifier import EvidenceVerifier, THIRD_PARTY, CONDITIONAL, PLAN, NEGATIVE
 from .claim_normalizer import preference_desire, aliases
 
-VERSION = 'memory-auto-review-v5-literal-conflict-hold'
+VERSION = 'memory-auto-review-v6-pattern-quote-repair'
 ALIAS_BLOCKER = 'value_not_literal; semantic_or_alias_review_required'
 SECRET = re.compile(r'sk-[A-Za-z0-9_-]{16,}|(?:app[_ ]?secret|api[_ ]?key|密码|口令|验证码|私钥)\s*[:：=]\s*\S+',re.I)
 SENSITIVE = re.compile(r'病史|确诊|诊断|便秘|抑郁|过敏|药物|服药|身份证|银行卡|手机号|家庭住址|投资账户|medical|diagnos|password|secret|private key',re.I)
@@ -141,6 +141,8 @@ class AutoMemoryReviewer:
                          'condition_clauses': [] if is_pattern else ConditionParser().context(source['content'],
                              [(o['start'],o['end']) for o in formation_context['observations']] if formation_context else None),
                          'existing':[{'content':m['content'],'kind':m['kind']} for m in existing]}
+                if is_pattern:
+                    payload['required_supporting_source_ids']=[s['id'] for s in formation_context['sources']]
                 report['model_called']=True
                 report['reviewer']='llm'
                 result=await self.llm.chat([{'role':'system','content':PROMPT},{'role':'user','content':canonical(payload)}],
@@ -152,6 +154,29 @@ class AutoMemoryReviewer:
                     from ..llm.types import IncompleteResponseError
                     raise IncompleteResponseError(result.finish_reason or 'tool_calls')
                 verdict=Verdict.model_validate_json(raw)
+                if (is_pattern and verdict.decision=='accept' and verdict.assessment=='Supported' and verdict.claim is None
+                        and all((verdict.durable,verdict.self_related,verdict.conditions_preserved,verdict.time_supported))
+                        and not verdict.sensitive and not self.complete_pattern_quotes(verdict,formation_context)):
+                    # Repair a missing contract once, never supply model quotes ourselves
+                    # or promote a negative semantic decision into acceptance.
+                    self.assert_current(row,key)
+                    report['attempts']=[{'usage':report['usage'],'raw':raw,'finish_reason':result.finish_reason}]
+                    from ..prompting.reader_budget import ReaderBudget
+                    meter=getattr(self.llm,'reader_budget',None) or ReaderBudget(self.llm.settings)
+                    repair=await meter.prepare([{'role':'system','content':PROMPT+'\n重新返回完整审核JSON。上一轮支持组格式不完整；supporting_quotes必须逐一覆盖required_supporting_source_ids，每个quote须来自对应原文，claim必须null。保持独立判断，不因补全请求改变事实；证据不足应review/reject。'},
+                        {'role':'user','content':canonical(payload)}],selected=selected,max_tokens=min(2400,700+120*len(formation_context['sources'])),temperature=0,top_p=1)
+                    self.assert_current(row,key)
+                    report['model_calls']=2
+                    result=await self.llm.chat(repair.messages,model=repair.model,max_tokens=repair.max_tokens,temperature=0,top_p=1)
+                    raw=re.sub(r'^```(?:json)?\s*|\s*```$','',result.content.strip())
+                    report['attempts'].append({'usage':result.usage or None,'raw':raw,'finish_reason':result.finish_reason})
+                    report['usage']={'total_tokens':sum((a['usage'] or {}).get('total_tokens',0) for a in report['attempts'])}
+                    report['usage_unknown_calls']=sum(not a['usage'] for a in report['attempts'])
+                    report['finish_reason']=result.finish_reason
+                    if result.finish_reason not in {None,'stop'} or result.tool_calls:
+                        from ..llm.types import IncompleteResponseError
+                        raise IncompleteResponseError(result.finish_reason or 'tool_calls')
+                    verdict=Verdict.model_validate_json(raw)
                 report.update(assessment=verdict.assessment)
                 if verdict.decision=='reject' or verdict.assessment=='Contradicted' or not verdict.durable:
                     # A negative NLI decision cannot authorize publication. It must
@@ -176,11 +201,7 @@ class AutoMemoryReviewer:
                 if NEGATIVE.search(source['content']) and verdict.claim is None:reasons.append('unbound_negation')
                 quote=verdict.evidence_quote
                 if is_pattern:
-                    supplied = {s['id']:s for s in formation_context['sources']}
-                    quotes = verdict.supporting_quotes
-                    if (len(quotes) != len(supplied) or {q.get('message_id') for q in quotes} != set(supplied)
-                        or any(set(q) != {'message_id','quote'} or not q.get('quote') or
-                               supplied[q['message_id']]['content'].count(q['quote']) != 1 for q in quotes)):
+                    if not self.complete_pattern_quotes(verdict,formation_context):
                         reasons.append('complete_pattern_evidence_not_verified')
                     if verdict.claim is not None:reasons.append('inferred_pattern_cannot_become_claim')
                 elif not quote or source['content'].count(quote)!=1:reasons.append('quote_not_unique_or_missing')
@@ -301,6 +322,13 @@ class AutoMemoryReviewer:
                     'existing_state_requires_revision' if isinstance(exc,ClaimError) and 'existing_state_requires_revision' in str(exc)
                     else 'source_or_candidate_changed' if isinstance(exc,ClaimError) else 'model_or_publish_failed'])
                 return self.finish(row,report,key,allow_changed=True)
+
+    @staticmethod
+    def complete_pattern_quotes(verdict,context):
+        supplied={s['id']:s for s in context['sources']};quotes=verdict.supporting_quotes
+        return (bool(supplied) and len(quotes)==len(supplied) and {q.get('message_id') for q in quotes}==set(supplied)
+            and all(set(q)=={'message_id','quote'} and q.get('quote')
+                and supplied[q['message_id']]['content'].count(q['quote'])==1 for q in quotes))
 
     def hold_literal_conflict(self,row,source,verdict,model,report,key,is_pattern):
         from .evidence_verifier import mentions

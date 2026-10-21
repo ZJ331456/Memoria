@@ -1,5 +1,7 @@
 # Memory：记忆版本、统一访问与证据选择
 
+[rerank.py](rerank.py)为可选的冻结候选顺序建议；Reader前核对原话、预留完整预算，失败回原排序，默认关闭。[协议与负向结果](../../docs/implemented/LLM候选重排与同预算诊断.md)区分资料库四题与个人RRF/Claim/真实长期效果。
+
 [长来源与身份约束](../../docs/implemented/身份约束与长来源引用.md)：`source_windows.py`按原文展开有限片段，保留整组支持和引用；实体身份是最终读取保护，与第四路召回开关分开。`auto_review.py`保留字面约束充分的冲突提案，负面模型意见不自动覆盖旧状态。
 
 Kernel.answer将个人Claim/View Reader与library来源Reader接入同一核心；来源lineage、实际选择/引用/调用和逐题归因见[生产闭环](../../docs/implemented/生产记忆闭环与逐题归因.md)。不把全部Observation转成Claim，不用原LoCoMo成绩验证未经过的机制。
@@ -12,7 +14,7 @@ Kernel.answer将个人Claim/View Reader与library来源Reader接入同一核心�
 
 2026-10-16新增[形成、巩固与演化](../../docs/implemented/记忆形成巩固与演化.md)：[formation.py](formation.py)负责观察、跨会话归纳和核心投影，[formation_store.py](formation_store.py)保存来源版本与操作，[formation_settings.py](formation_settings.py)验证参数。单次行为不直接成为永久偏好；完整支持组经独立模型审核后进入原普通记忆，只允许同组自动模式受约束演化。
 
-[entities.py](entities.py)提供来源约束实体目录、别名/同名消歧、原文关联及巩固身份检查。实体RRF与资料补召默认关闭，可用`use_entities=true`逐请求启用；别名原话随证据计入预算并在Reader发布前复核。[分阶段实现与验收](../../docs/implemented/实体身份与实体召回.md)区分实体登记、模型事实审核及召回实验，类型匹配不等同于三路候选的权限过滤。
+[entities.py](entities.py)提供来源约束实体目录、别名/同名消歧、原文关联及巩固身份检查。实体RRF与资料补召默认关闭，可用`use_entities=true`逐请求启用；别名原话随证据计入预算并在Reader发布前复核。[分阶段实现与验收](../../docs/implemented/实体身份与实体召回.md)区分实体登记、模型事实审核及召回实验，实体身份保护独立于召回开关，账号/作用域权限另行验证。
 
 ## 文件映射
 

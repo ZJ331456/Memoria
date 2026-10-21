@@ -95,6 +95,7 @@ def observations_at(case, database):
     return {'execution': case['status'], 'status': result.get('status'),
         'path': result.get('access', {}).get('path'), 'answer': result.get('answer', ''),
         'reader_called': result.get('reader_called'), 'validation': result.get('validation', {}),
+        'reranking_applied': result.get('access',{}).get('reranking',{}).get('status')=='applied',
         'active_claims': len(claims), 'claim_values': values,
         'active_memories': sum(p['kind'] == 'memory' and p['status'] == 'active' for p in published.values()),
         'active_patterns': sum(p['kind'] == 'pattern' and p['status'] == 'active' for p in published.values()),
@@ -117,10 +118,12 @@ def check_observation(actual, expected):
             ok = actual[key[4:]] >= value
         elif key.startswith('max_'):
             ok = actual[key[4:]] <= value
-        elif key in {'reader_called', 'pending_revision'}:
+        elif key in {'reader_called', 'pending_revision','reranking_applied'}:
             ok = actual[key] is value
         elif key == 'answer_any':
             ok = any(word.casefold() in actual['answer'].casefold() for word in value)
+        elif key == 'answer_all':
+            ok = all(word.casefold() in actual['answer'].casefold() for word in value)
         elif key == 'claim_predicate':
             ok = any(row['predicate'] == value for row in actual['claim_values'])
         elif key == 'source_available':

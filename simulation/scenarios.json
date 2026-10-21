@@ -1303,7 +1303,61 @@
           }
         ]
       }
+    },
+    {
+      "id": "llm_rerank",
+      "title": "有证据重排与完整Reader预算",
+      "areas": [
+        "formation",
+        "retrieval",
+        "rerank",
+        "reader",
+        "budget"
+      ],
+      "max_calls": 8,
+      "input": {
+        "schema_version": 1,
+        "provenance": "[SYNTHETIC] User-authorized fictional functional fixture, not real person/history/research gold; llm_rerank",
+        "allowed_purposes": [
+          "memory_processing",
+          "evaluation"
+        ],
+        "subject_key": "synthetic:subject",
+        "events": [
+          {
+            "id": "m1",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s1",
+            "content": "我维护的演练项目在故障恢复时使用快照回滚。"
+          },
+          {
+            "id": "m2",
+            "kind": "message",
+            "role": "user",
+            "actor": "synthetic:subject",
+            "session": "s2",
+            "content": "我维护的演练项目在恢复完成后执行哈希校验。"
+          },
+          {
+            "id": "q1",
+            "kind": "question",
+            "target": "personal",
+            "request": {
+              "query": "演练项目的故障恢复和恢复后校验分别怎么做？",
+              "mode": "rrf",
+              "selector": "topk",
+              "top_k": 2,
+              "candidate_limit": 8,
+              "include_experiences": false,
+              "use_llm_rerank": true,
+              "budget_chars": 8000
+            }
+          }
+        ]
+      }
     }
   ],
-  "fixture_revision": 4
+  "fixture_revision": 5
 }

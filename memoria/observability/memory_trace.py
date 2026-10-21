@@ -21,6 +21,12 @@ def record_read(request,candidates,selected):
     if reads is not None and len(reads)<16:
         reads.append({'request_sha256':fingerprint(request),'candidates':candidates,'selected':selected})
 
+def record_reranked_read(request,selected,reranking):
+    reads=_active_reads.get()
+    if reads and reads[-1]['request_sha256']==fingerprint(request):
+        read=reads[-1];read['pre_rerank_selected']=read['selected'];read['selected']=selected
+        read['reranking']={k:reranking.get(k) for k in ('status','calls','usage','elapsed_ms','reason')}
+
 
 def read_visibility(messages):
     texts=[m.get('content','') for m in messages if isinstance(m.get('content'),str)]
@@ -110,6 +116,7 @@ def capture(request, result, owner, before, after, coverage_by_id):
         "changed_stages": [s for s in before["epochs"] if before["epochs"][s] != after["epochs"][s]],
         "quality": "unscored", "gold_read": False,
         "replay_scope": "frozen candidate selection; not rerunning extraction or reader"}
+    if 'reranking' in result:trace['reranking_sha256']=fingerprint(result['reranking'])
     trace["trace_sha256"] = fingerprint(trace)
     return trace
 
@@ -132,6 +139,14 @@ def replay(packet, owner, *, budgets=None):
     if set(trace["coverage_by_id"]) != {c["id"] for c in packet["candidates"]}:
         raise ValueError("Captured coverage does not match candidate IDs")
     pool = [{**c, "covers":trace["coverage_by_id"][c["id"]]} for c in packet["candidates"]]
+    if 'reranking_sha256' in trace:
+        advice=packet.get('reranking')
+        if fingerprint(advice)!=trace['reranking_sha256']:raise ValueError('Reranking capture fingerprint mismatch')
+        if advice['status']=='applied':
+            order=[r['id'] for r in advice['decision']['ranking']]
+            if len(order)!=len(pool) or set(order)!={c['id'] for c in pool}:raise ValueError('Reranking pool mismatch')
+            scores={mid:len(order)-i for i,mid in enumerate(order)}
+            pool=[{**c,'score':scores[c['id']]} for c in pool]
     limits = budgets or [request.get("evidence_budget") or request["budget_chars"]]
     if len(limits) > 8 or any(type(b) is not int or not 256 <= b <= 16000 for b in limits):
         raise ValueError("Use at most eight evidence budgets in 256..16000")
@@ -351,6 +366,7 @@ def answer_trace(kernel, request, result, *, calls=None):
         'reader':{'called':result.get('reader_called',False),'status':result.get('status'),
             'budget':result.get('reader_budget'),'usage':result.get('usage'), 'calls':calls or [],
             'validation':result.get('validation'),'citations':citations},
+        'reranking':{k:access.get('reranking',{}).get(k) for k in ('status','calls','usage','elapsed_ms','reason','decision')},
         'answer_sha256':fingerprint(result.get('answer','')),
         'quality':'unscored','gold_read':False,'semantic_correctness':None}
     trace['trace_sha256']=fingerprint(trace)
