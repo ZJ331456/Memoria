@@ -63,12 +63,11 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 ## README 图表复现
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py --aggregate PATH_TO_ARCHIVED_JSON
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py --aggregate PATH_TO_ARCHIVED_JSON --check
+.\.venv\Scripts\python.exe scripts/render_project_diagrams.py
+.\.venv\Scripts\python.exe scripts/render_project_diagrams.py --check
 ```
 
-旧结果已退役；渲染器仅在显式提供归档文件时使用。仅读取公开历史聚合表/注册协议/实现报告，生成PNG/SVG与SHA清单；不读取私有原话/gold，不调用模型或产生新评分。数据口径见[图表说明](../assets/evaluation/README.md)。后台维护、备份恢复与完整注销仍是计划任务。
+按所有者品牌包生成当前架构与记忆生命周期，不调用模型。旧LCCC与LoCoMo四方法绘图脚本已删除；历史代码可通过Git追溯。新双组评估只导出无原文/逐题答案的公开聚合，原始中间文件不推送。
 
 ## 同池证据选择
 
@@ -90,18 +89,21 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 
 `locomo-run --resume-from RUN --retry-errors`：仅对停止run的执行/回退错误恢复，完整分母继承，递归保留祖先调用/成本；未带resume-from则拒绝。
 
-`render_locomo_risk_chart.py`只读取公开四方法聚合，生成质量/拒答和已知Token双面板PNG/SVG及SHA指纹，不读私有gold或增加模型调用；完整1986题结果与负面取舍见[评测图说明](../assets/evaluation/README.md#p0四方法全量消融2026-10-14)。`locomo-compare`离线核验同题/Reader/BGE与祖先调用费用，不覆盖同名冻结比较目录。
+旧四方法图表与专用绘图器已退役；历史协议仅供研究追溯，不作为当前主入口。
 
 本机未提交账号管理：manage_users.py新增set-role USER --role user|superadmin、disable-login USER。角色变更撤销会话，保留最后超管；停用只撤销登录，不删除个人数据。set-password继续隐藏输入12–128字符，无短密码例外。[权限边界](../docs/implemented/用户登录与数据隔离.md#本机qin账号与超级管理员2026-10-14仅本地未提交)。
 
 ## 项目说明与框架图
 
-`render_project_diagrams.py`重绘根assets/images内的英文架构PNG/字体轮廓化SVG，保留已选定的ImageGen海报PNG并封装嵌入位图的SVG，更新四幅产物、提示词和实现来源的指纹；`--check`核对指纹。它不会重新调用ImageGen或覆盖海报PNG。`render_locomo_risk_chart.py --check`校验当前全量聚合与图表，`render_eval_charts.py --check`校验LCCC保留图。三个本地渲染器不读取私有原话或调用模型；海报的独立创意生成与素材类型见[assets](../assets/README.md)。旧基线单独绘图脚本随重复结果移除。
+`render_project_diagrams.py`按品牌包离线绘制当前架构与记忆生命周期，导出PNG/SVG及来源指纹；`--check`验证资产和来源。旧ImageGen海报被替换，零新增图像或研究模型调用。
 
-[config](../config/README.md)按system/models/feishu/mcp各自统一，实际文件忽略、example公开，无local目录；冻结研究登记在eval/protocols。protect_local_data.ps1默认保护data及config，其他自定义私密路径需显式-Directory。详见[配置目录与模型后端](../docs/implemented/配置目录与模型后端.md)。
+[config](../config/README.md)按system/models/bot/mcp各自统一，实际文件忽略、example公开，无local目录；冻结研究登记在eval/protocols。protect_local_data.ps1默认保护data及config，其他自定义私密路径需显式-Directory。详见[配置目录与模型后端](../docs/implemented/配置目录与模型后端.md)。
 
 `test_memory_scenarios.py --user USER`默认0调用验证用户授权的[模拟场景](../simulation/README.md)；显式执行受总调用/字符上限约束，支持指定场景复测、仅进程直连、真实离线BGE和零调用累计清单。全部输出在忽略的simulation/runs，不写生产库、不作为研究成绩。
 
 ## 双组评估与零调用估算
 
 research.py --user USERNAME eval-benchmark --dataset data/benchmarks/locomo/raw/locomo10.json --conversations 10 默认只估算，不调用模型。完整上下文Baseline与生产Kernel使用同模型、独立LLM二分类；实际执行另需execute、allow-remote、请求和费用上限，先看[成本与协议](../docs/implemented/双组内核评估与费用估算.md)。
+
+
+正式顺序全量使用eval/protocols/kernel-vs-context-judge-v3-ordered-histories.json，参数--concurrency 1 --history-concurrency 8；先Memoria整组再Baseline，连续欠费停止新请求。publish_eval_summary.py --run PRIVATE_RUN --update-readme流式读取大检查点，只发布分类计数、阶段成本及失败汇总；不复制原文/逐题答案，前测单独计费。中间记录留`data/users/<UUID>/experiments`。

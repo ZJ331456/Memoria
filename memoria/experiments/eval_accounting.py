@@ -42,10 +42,13 @@ class EvaluationClient(LLMClient):
             raise ValueError("Unpriced evaluation model")
         self.recorder, self.max_calls, self.max_cost_usd = recorder, max_calls, max_cost_usd
         self.rows, self.reserved_usd = [], 0.0
+        self.halt_reason, self.billing_failures = None, 0
 
     async def _invoke(self, stream, messages, model=None, max_tokens=None, tools=None,
                       **generation):
         selected = model or self.settings.main
+        if self.halt_reason:
+            raise EvaluationBudgetExceeded(self.halt_reason)
         output = max_tokens if max_tokens is not None else self.settings.max_tokens
         payload = {"messages": messages, "tools": tools, "model": selected.model,
                    "max_tokens": output}
@@ -54,6 +57,7 @@ class EvaluationClient(LLMClient):
         rate = PRICING[selected.model]["peak"]
         reserved = (upper_tokens*rate["miss"] + output*rate["output"]) / 1e6
         if len(self.rows) >= self.max_calls or self.reserved_usd + reserved > self.max_cost_usd:
+            self.halt_reason = "request_or_cost_cap"
             raise EvaluationBudgetExceeded("Evaluation request/cost cap reached before send")
         row = {"call": len(self.rows)+1, **context.get(), "model": selected.model,
                "started_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -73,6 +77,7 @@ class EvaluationClient(LLMClient):
             method = super().chat_stream if stream else super().chat
             result = await method(messages, model=selected, max_tokens=output, tools=tools,
                                   **generation)
+            self.billing_failures = 0
             row.update(usage=result.usage or None, raw=result.content,
                        request_budget=getattr(result, "budget", None),
                        finish_reason=result.finish_reason, retries=getattr(result, "retries", None))
@@ -85,6 +90,16 @@ class EvaluationClient(LLMClient):
             return result
         except BaseException as exc:
             row["error"] = type(exc).__name__
+            # Backend errors retain the HTTP code but are not typed HTTP exceptions.
+            message = str(exc).lower()
+            if any(value in message for value in ("http 402", "insufficient balance", "insufficient_balance")):
+                self.billing_failures += 1
+                row["billing_failure"] = True
+                if self.billing_failures >= 2:
+                    self.halt_reason = "repeated_insufficient_balance"
+            elif "http 401" in message or "http 403" in message:
+                self.halt_reason = "provider_authorization_failed"
+            row["halt_reason"] = self.halt_reason
             raise
         finally:
             row["elapsed_ms"] = (time.perf_counter()-started)*1000
@@ -103,6 +118,7 @@ class EvaluationClient(LLMClient):
         for row in self.rows:
             groups.setdefault((row.get("arm", "unknown"), row.get("stage", "unknown")), []).append(row)
         return {"all_calls": len(self.rows), "retained_upper_peak_usd": self.reserved_usd,
+                "halt_reason": self.halt_reason,
                 "cap_usd": self.max_cost_usd, "cap_calls": self.max_calls,
                 "groups": [{"arm": arm, "stage": stage, "usage": cache_summary(rows),
                             "cost": cost_bounds(cache_summary(rows), self.settings.main.model)}

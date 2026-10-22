@@ -9,6 +9,10 @@
     "memoria-logo-lockup.svg": {
       "source": "memoria-brand-kit/01-logo-lockups/memoria-logo-lockup.svg",
       "sha256": "0ed48a93a5c72ffaa2cfab334648339dcf943ba6b166abe6f39605abc51e1a7e"
+    },
+    "mascot-memory.png": {
+      "source": "memoria-brand-kit/03-mascot-stickers/01-memory-orb-transparent.png",
+      "sha256": "ce54715481bcff03f254cdc65805afaad3364f339870c55dfefa1ff8dc16753e"
     }
   }
 }

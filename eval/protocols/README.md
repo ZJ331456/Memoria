@@ -1,3 +1,7 @@
+当前正式：[v3方法顺序／历史并发](kernel-vs-context-judge-v3-ordered-histories.json)，先完整Memoria再Baseline，最多8个隔离历史。v2串行前测保留本机，不混入正式质量；输入、Judge、模型与预算保持显式登记。
+
+已中止的串行前测：[v2串行登记](kernel-vs-context-judge-v2-serial.json)先Memoria全1986题，再Baseline；全局请求/费用保护、连续两次欠费停止，完整分母与私有账本保留。v1提案原字节不变，不混称同一并发协议。
+
 # 冻结研究协议与角色
 
 [双组评估v1提案](kernel-vs-context-judge-v1.json)：完整历史Baseline vs生产Kernel＋同模型，独立LLM二分类，主1540/对抗446题；本轮仅0调用估算，付费执行待预算。核对输入SHA、模型、Reader/字节预算与Judge提示SHA，不把提案当作成绩。

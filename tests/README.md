@@ -1,6 +1,6 @@
 # 工程测试导航
 
-2026-10-23缓存/双组审查：test_eval_framework.py、test_eval_review.py覆盖错误分母、同题ID、外部作者、原生Kernel Reader、输入修订、默认0调用、注册SHA和预算/费用账本；test_deepseek_cache.py覆盖Token加权、围栏与保守子集。均为工程输入/替身，不是LoCoMo效果。用户本轮禁止新增付费调用，完整真实模型模拟待预算，不能宣称本轮完整核心验收。
+2026-10-23缓存/双组审查：test_eval_framework.py、test_eval_review.py覆盖错误分母、同题ID、外部作者、原生Kernel Reader、输入修订、默认0调用、注册SHA和预算/费用账本；test_deepseek_cache.py覆盖Token加权、围栏与保守子集。均为工程输入/替身，不是LoCoMo效果。本轮已授权双组全量效果评估；工程测试仍全部使用替身/隔离输入，未额外付费重跑完整模拟，不宣称本轮完整核心功能验收。
 [项目首页](../README.md) · [核心模块](../memoria/README.md) · [真实研究](../memoria/experiments/README.md)
 
 临时输入、隔离账号/数据库和模型/传输故障替身只验证工程行为，不写入生产、不作为真实用户数据或研究成绩。正式效果结果由真实来源、冻结协议和独立评分记录说明。
@@ -110,3 +110,6 @@ TLS新增CA优先级/缓存轮换/目录变化/冷载不阻塞/缺失失败测�
 
 
 [入口与边界检查](test_architecture_boundaries.py)新增21项：5类消息入口与HTTP同一Kernel Reader、状态工具同一发布策略、钩子/来源/元数据失效、未批准历史隔离、任务局部请求观察器、schema_only拒绝服务、业务层不得直接SQL或另造Reader，以及文件/函数大小约束。[68个原租户契约](fixtures/tenant_routes_v1.json)冻结自567ff219；路径、方法、处理器名和响应状态必须保留。最终仍须完整pytest、完整固定模拟和实际本地BGE四路通过，不能只运行此文件。
+
+
+2026-10-23新增test_eval_serial.py：连续欠费熔断、完整方法先后、独立历史并发隔离/上限；test_eval_publication.py：公开聚合不包含问题/gold/答案/prompt/账号路径、完整分母和私有路径边界。完整工程1557通过（JUnit680.501秒），最终评估/导出器与调度定向33项通过。真实LoCoMo质量结果含397个执行/评分失败，与工程测试通过分别报告。

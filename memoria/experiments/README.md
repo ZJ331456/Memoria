@@ -1,3 +1,5 @@
+最新全量采用v3-ordered-histories：Memoria整组优先，随后Baseline；同方法最多8段隔离历史并发，各历史内顺序答题。连续两次欠费后停止新请求，未执行保留分母，原始文件不推送。当前不支持自动续跑。
+
 # Experiments：来源、标注、runner 与评分
 
 当前效果入口eval-benchmark只比较完整历史Baseline与生产Kernel＋同模型，默认0调用估算；[实现与费用](../../docs/implemented/双组内核评估与费用估算.md)。必须显式execute及费用/请求上限才执行，原始账本/检查点/隔离库留账号私有目录。旧LoCoMo/LCCC工具仅用于历史复现，不作为当前分数。

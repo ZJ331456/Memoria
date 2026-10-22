@@ -76,11 +76,12 @@ class ArmRunner:
     earlier question's sources and the arms would no longer answer the same question.
     """
 
-    def __init__(self, system, *, judge: LlmJudge | None = None, name: str | None = None, checkpoint=None):
+    def __init__(self, system, *, judge: LlmJudge | None = None, name: str | None = None, checkpoint=None, stop_reason=None):
         self.system = system
         self.judge = judge
         self.name = name or getattr(system, "name", "arm")
         self.checkpoint = checkpoint
+        self.stop_reason = stop_reason or (lambda: None)
 
     async def run(self, items, *, ground_truth_field: str = "ground_truth") -> list[ArmResult]:
         results: list[ArmResult] = []
@@ -93,6 +94,12 @@ class ArmRunner:
                 ground_truth=getattr(item, ground_truth_field),
                 group=item.group,
             )
+            if reason := self.stop_reason():
+                result.error = "not_run:" + reason
+                results.append(result)
+                if self.checkpoint:
+                    self.checkpoint(result)
+                continue
             try:
                 reset = getattr(self.system, "reset", None)
                 with phase(self.name, "formation", item.id):
@@ -103,6 +110,8 @@ class ArmRunner:
                     drain = getattr(self.system, "drain", None)
                     if drain is not None:
                         await drain()
+                if reason := self.stop_reason():
+                    raise RuntimeError("evaluation_stopped:" + reason)
                 with phase(self.name, "answer_and_support", item.id):
                     answer = await self.system.answer(item.question)
             except Exception as exc:  # a failing item is reported, never silently dropped
@@ -211,6 +220,7 @@ async def run_arms(
     concurrency: int = 1,
     judge: LlmJudge | None = None,
     checkpoint=None,
+    stop_reason=None,
 ) -> dict[str, list[ArmResult]]:
     """Run every arm over the same items. Arms are independent of each other."""
     items = list(items)  # A generator must not disappear after the first arm.
@@ -219,10 +229,49 @@ async def run_arms(
 
     async def run_one(name: str, system: Any) -> tuple[str, list[ArmResult]]:
         async with semaphore:
-            runner = ArmRunner(system, judge=judge, name=name, checkpoint=checkpoint)
+            runner = ArmRunner(system, judge=judge, name=name, checkpoint=checkpoint, stop_reason=stop_reason)
             return name, await runner.run(items)
 
-    outcomes = await asyncio.gather(*(run_one(name, system) for name, system in arms.items()))
+    if concurrency == 1:
+        # Explicit ordering: finish all Memoria items before spending on Baseline.
+        outcomes = []
+        for name, system in arms.items():
+            outcomes.append(await run_one(name, system))
+    else:
+        outcomes = await asyncio.gather(*(run_one(name, system) for name, system in arms.items()))
     for name, values in outcomes:
         results[name] = values
+    return results
+
+
+async def run_ordered_histories(factories, items, *, concurrency, judge=None,
+                                checkpoint=None, stop_reason=None):
+    """Bounded parallel independent histories, with entire arms strictly ordered.
+
+    A system/kernel is never shared by two concurrent questions. Source hashes
+    (including role/text/time) define isolation; gold never controls grouping.
+    """
+    import hashlib
+    from ..llm.deepseek_cache import canonical
+    items = list(items)
+    groups = {}
+    for item in items:
+        signature = hashlib.sha256(canonical(item.sources).encode()).hexdigest()
+        groups.setdefault(signature, []).append(item)
+    results = {}
+    for name, factory in factories.items():
+        semaphore = asyncio.Semaphore(concurrency)
+        async def run_history(signature, group):
+            async with semaphore:
+                system = factory(signature)
+                try:
+                    return await ArmRunner(system, name=name, judge=judge,
+                        checkpoint=checkpoint, stop_reason=stop_reason).run(group)
+                finally:
+                    close = getattr(system, 'close', None)
+                    if close:
+                        close()
+        completed = await asyncio.gather(*(run_history(key, group) for key, group in groups.items()))
+        by_id = {row.id: row for group in completed for row in group}
+        results[name] = [by_id[item.id] for item in items]
     return results

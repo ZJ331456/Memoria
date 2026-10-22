@@ -1,37 +1,18 @@
 {
   "renderer": "scripts/render_project_diagrams.py",
-  "renderer_sha256": "88d90a2967cabd69b49cb014aefbacb43fe4e4bae7342ca1ec3f97ca50ecc255",
+  "renderer_sha256": "8fdb97439144e1c664d668b825455926ceadebf11365004a4f493c3e3294312f",
+  "architecture_source": "docs/implemented/\u7cfb\u7edf\u67b6\u6784\u4e0e\u5b9e\u73b0\u8bf4\u660e.md",
+  "architecture_source_sha256": "de532e3962d8b418fcd8d4a3243b2ec5cdc7881810da710bf39361b6e54d7960",
+  "mascot_sha256": "ce54715481bcff03f254cdc65805afaad3364f339870c55dfefa1ff8dc16753e",
   "language": "en",
-  "font_family": "Segoe UI",
-  "architecture_source": "docs/implemented/系统架构与实现说明.md",
-  "architecture_source_sha256": "5ce727370bfeb914c630cd591b4a11cdebcf65ebbb04e3550eeceb5b75866ef4",
-  "architecture_source_hash_format": "utf-8-lf",
-  "poster": {
-    "creation_tool": "built-in image_gen",
-    "image_generation_calls": 2,
-    "prompt": "assets/images/memoria-overview.prompt.txt",
-    "prompt_sha256": "beddb40aa42af51aa928f461af246db4ac95eaf18d63b15036ddcb3529c729e1",
-    "svg_type": "embedded-raster",
-    "size": [
-      1672,
-      941
-    ]
-  },
-  "architecture": {
-    "svg_type": "outlined-vector",
-    "size": [
-      2880,
-      2208
-    ],
-    "design": "English layered flow / parallel Claim and ordinary-memory access"
-  },
+  "svg_type": "outlined text with embedded owner mascot",
   "render_model_calls": 0,
   "research_model_calls": 0,
   "new_scores": 0,
   "files": {
-    "memoria-overview.png": "b0629bf41d8fa15be04a4276b25408d93c625cceac153b86d97096a47555d13e",
-    "memoria-overview.svg": "7d325e6549f72fb95fe59adc5ea2762e475d5bc409fc2cff7fc2b836c9a02794",
-    "memoria-architecture.png": "ce16e11f6643dfb2d215a385f8ff8eeb96e39e50856405c7b0ca53206e8fe7a3",
-    "memoria-architecture.svg": "6af39cff63fa277b7854dc5892f6ebab7261018e9a53fab7778f465992fb95ba"
+    "memoria-architecture.png": "46cd6fddc4ae6f29e9ad49f961003d13385826ff5965a7ebd2c728db0f5d54a7",
+    "memoria-architecture.svg": "232f53522425e70bf7997a2c74e1313c9f645ed088b3f0b767cde6dc3827f3a2",
+    "memoria-overview.png": "0bfa1651c7bc923c9317b76ffe35a30fb1bd2372c0716e8739168558a83b145d",
+    "memoria-overview.svg": "0d595976aceda50d647396ca97199288c0d7a2f9d970b2ce81969493c4014fe0"
   }
 }

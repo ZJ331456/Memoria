@@ -2,7 +2,7 @@
 
 <p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 
-2026-10-23: [Two-arm kernel evaluation and offline cost planning](docs/implemented/双组内核评估与费用估算.md). No new paid calls or full run; current scores are pending. Old published result assets are retired with immutable Git provenance. Cache replay is experimental; production verifier/repair fallbacks remain conservative.
+2026-10-23: The first current [two-arm full evaluation](docs/implemented/双组内核评估与费用估算.md) has executed all planned questions: the entire Memoria arm first, then the full/truncated-context baseline. Independent histories are isolated and bounded in concurrency; repeated insufficient balance stops new requests. Only current aggregate results are published; raw checkpoints, prompts, answers and SQLite remain private.
 
 **Source-backed memory for long-term companionship.**
 
@@ -10,7 +10,7 @@
 
 Memoria connects original evidence, review, conditions and revisions so that bounded-context answers can use traceable, applicable memories. It includes independent Chat and Memory Studio interfaces, an authenticated HTTP API, and research tools. The current backend uses DeepSeek with local BGE embeddings. Local Qwen and other OpenAI-compatible configurations remain supported.
 
-![Memoria — Memory that stays in context.](assets/images/memoria-overview.png)
+![Memoria — source-to-memory lifecycle.](assets/images/memoria-overview.png)
 
 The current scope is a local research prototype and a controlled-pilot foundation. Longitudinal quality, positive profile-view benefits and commercial readiness remain unverified.
 
@@ -28,7 +28,7 @@ The [MemoryKernel](docs/implemented/独立记忆核心与多来源接口.md) can
 
 Claims use typed slots and conditions; ordinary memories use BM25, Dense and RRF retrieval. Evidence budgets and dependency checks constrain publication. Recognized compound recall questions use the bounded sufficiency loop; simple reads retain their existing path. See [implementation and limits](docs/implemented/系统架构与实现说明.md). [Poster PNG](assets/images/memoria-overview.png) · [Vector architecture SVG](assets/images/memoria-architecture.svg).
 
-Account-local watermarks, frozen-copy/fixed-pool replay, complete source groups, optional original-experience Dense/RRF, and conservative narrative-update vetoes are now available. The [implementation and tiny budget diagnostic](docs/implemented/生产重放与普通来源支持.md) separate engineering evidence from unverified quality; the complete LoCoMo results below remain frozen.
+Account-local watermarks, frozen-copy/fixed-pool replay, complete source groups, optional original-experience Dense/RRF, and conservative narrative-update vetoes are now available. The [implementation and tiny budget diagnostic](docs/implemented/生产重放与普通来源支持.md) separate engineering evidence from unverified quality; historical scores remain retired from current presentation.
 
 ## Getting started
 
@@ -66,13 +66,18 @@ Both interfaces require normal account registration/login; there are no default 
 
 ## Two-arm LoCoMo evaluation
 
-The proposed v1 compares raw full history (declared oldest-turn truncation when needed) with the production MemoryKernel and the same DeepSeek Flash model. Binary LLM judging uses an adapted permissive rubric; categories 1–4 (1,540 questions) form the primary score, with 446 adversarial questions reported separately.
+The completed [registered full run](eval/protocols/kernel-vs-context-judge-v3-ordered-histories.json) finishes Memoria first, then the full/truncated-context baseline. Same DeepSeek Flash backbone, non-thinking, 1,024-token Reader output. Up to eight independent histories run concurrently inside one arm; questions remain serial inside each history.
 
-**No v1 scores exist yet.** The owner requested an estimate before any full paid run. The planning scenario is USD15.37–30.74 including formation, verification, answers and judging; this is not a billing guarantee. [Protocol](eval/protocols/kernel-vs-context-judge-v1.json) · [Limits and estimate](docs/implemented/双组内核评估与费用估算.md) · [Retired records](assets/evaluation/README.md)
+Main categories: single-hop841, multi-hop282, open-domain96 and temporal321; Overall is correct/1,540. The446 adversarial cases are supplementary. Independent binary LLM judging uses a frozen adapted permissive rubric, with failures and unknowns retained in the planned denominator. It is not the old Token F1 metric.
+
+See the [live/final classification table](README.md#locomo-全量评测) and [public aggregate](assets/evaluation/current.json). Pending methods are not plotted as measured zero scores. Raw prompts, per-question answers, failures, ledgers and isolated databases remain local. Repeated insufficient balance stops new calls; no automatic top-up or hidden retry.
+
+This is a same-question development retest of the native external-source Kernel path. It does not automatically activate personal Claim/View or Dense/RRF, prove longitudinal understanding, or isolate a single mechanism. The serial preflight stays separate from full-run quality and retains its cost. [Detailed limits](docs/implemented/双组内核评估与费用估算.md).
+
 
 ## Repository
 
-[Production closed-loop diagnostics](docs/implemented/生产记忆闭环与逐题归因.md) now re-execute the real formation, admission, Claim/View or source Reader on an isolated chronological prefix. Cases preserve source/version lineage, candidates, selection, citations, usage and failures; labels are read only afterward. Existing LoCoMo scores still describe its separate PrefixRetriever protocol.
+[Production closed-loop diagnostics](docs/implemented/生产记忆闭环与逐题归因.md) now re-execute the real formation, admission, Claim/View or source Reader on an isolated chronological prefix. Cases preserve source/version lineage, candidates, selection, citations, usage and failures; labels are read only afterward. Legacy PrefixRetriever results are retired; the current full run uses the native Kernel path.
 
 - `assets/`: project diagrams, retained result summaries and source manifests.
 - `docs/implemented/`: current behavior, operations, evidence and limitations.
@@ -88,4 +93,4 @@ Routine memories now use model-led admission: extraction, a separate evidence re
 
 Runtime settings live in [config/](config/README.md): system.toml, models.toml, bot.toml and mcp.toml, each with a public example. Actual files are ignored; there is no local subdirectory. One model file selects cloud/local LLMs and API/process-local BGE embeddings, including UUID-owned account overrides. Encrypted credentials and OAuth remain in private data storage. [Configuration guide](docs/implemented/配置目录与模型后端.md).
 
-Engineering review at core4c8025b72f5c: 1,552 tests, zero failures/errors/skips; real local BGE 4/4 without Dense/RRF fallback. No new paid model calls. The real-model functional suite was not rerun under the budget hold, so complete core acceptance remains pending.
+Engineering review at core4c8025b72f5c: 1,552 tests, zero failures/errors/skips; real local BGE 4/4 without Dense/RRF fallback. This historical engineering receipt predates the new evaluation runner. Full research results and engineering acceptance are reported separately.

@@ -1,7 +1,7 @@
 {
   "date": "2026-10-23",
-  "current_scores": null,
-  "reason": "retire old presentation; new two-arm protocol pending budget",
+  "current_scores": "current.json",
+  "reason": "old presentation retired; first current full evaluation is kernel-vs-context-llm-judge-v3-ordered-histories",
   "archive_commit": "1142dea16e21b14482b6e7e16cb2da4ea2b3d9ff",
   "private_raw_ledgers_untouched": true,
   "files": [
