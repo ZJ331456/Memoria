@@ -49,13 +49,14 @@ def lineage(workspace, run_id, seen=None):
 
 
 def token_cost(calls, denominator):
+    from ..llm.deepseek_cache import cache_summary
     known = [c['usage'] for c in calls if c.get('usage') is not None]
     totals = {k: sum(u.get(k, 0) or 0 for u in known) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
     return {'cases': denominator, 'attempts': len(calls), 'known_usage_calls': len(known),
             'unknown_usage_calls': len(calls)-len(known), 'failed_calls': sum(bool(c.get('error')) for c in calls),
             'tokens_known': totals, 'mean_known_tokens_per_case': totals['total_tokens']/denominator if denominator else None,
             'scope': 'recorded lineage attempts incl engineering retries; missing/in-flight usage is not zero cost',
-            'monetary_cost': None}
+            'deepseek_cache':cache_summary(calls),'monetary_cost': None}
 
 
 def gate_proxy(rows, details, histories):
@@ -99,12 +100,15 @@ def gate_proxy(rows, details, histories):
 
 
 def protocol_differences(baseline, current):
-    keys=('concurrency','verification_policy','scoring_dependencies','registration','mode',
+    keys=('concurrency','verification_policy','scoring_dependencies','registration','mode','cache_layout',
           'source_sha256','histories_sha256','gold_sha256','inputs_sha256')
     same_registration=bool(baseline.get('registration')) and baseline.get('registration')==current.get('registration')
     # Within one frozen v3 four-arm design, presence of gate/support is the treatment.
     # Across registrations (especially v2/v3), verifier engineering is a confound.
     expected=(baseline.get('registration') or {}).get('risk_verification_policy')
+    study=(baseline.get('registration') or {}).get('cache_layout_study')
+    if same_registration and study and all(p.get('cache_layout') in study['allowed_layouts'] for p in (baseline,current)):
+        keys=tuple(key for key in keys if key!='cache_layout')
     if same_registration and expected and all(
         p.get('verification_policy')==(expected if p.get('fallback') in {'targeted','adaptive_risk'} else None)
         for p in (baseline,current)):
@@ -141,6 +145,8 @@ def compare(workspace, baseline_run, run_ids, *, allow_protocol_differences=Fals
                         'protocol_differences':differences,
                         'planned_method_differences':{'baseline':baseline_manifest['protocol'].get('fallback'),
                             'current':manifest['protocol'].get('fallback'),
+                            'cache_layout':{'baseline':baseline_manifest['protocol'].get('cache_layout'),
+                                            'current':manifest['protocol'].get('cache_layout')},
                             'verification_policy':manifest['protocol'].get('verification_policy')},
                         'comparison_claim':'same-question diagnostic; engineering/protocol confounds present' if differences else 'matched recorded protocol fields',
                         'metrics':metrics,'cost':token_cost(calls,len(ids)),'artifacts':manifest['artifacts']})

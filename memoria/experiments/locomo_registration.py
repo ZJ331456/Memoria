@@ -36,7 +36,8 @@ def validate_registration(
     embedding_model,
     candidate_limit,
     anchor_limit,
-    evidence_chars
+    evidence_chars,
+    cache_layout="legacy"
 ):
     from .locomo_risk import PROTOCOL
 
@@ -54,6 +55,17 @@ def validate_registration(
         or fallback not in registration["methods"]
     ):
         raise ValueError("Invalid diagnostic registration claim/method")
+    study = registration.get("cache_layout_study")
+    if cache_layout != "legacy" and (not study or cache_layout not in study["allowed_layouts"]):
+        raise ValueError(
+            "Cache layout requires its own diagnostic registration; frozen v3 cannot change prompts"
+        )
+    if study:
+        from ..llm.deepseek_cache import COMMON_SYSTEM
+        from .locomo import sha
+
+        if sha(COMMON_SYSTEM) != study["common_system_sha256"]:
+            raise ValueError("Registered DeepSeek common prefix changed")
     if (
         fallback in {"targeted", "adaptive_risk"}
         and protocol.get("verification_policy") != registration["risk_verification_policy"]
@@ -112,6 +124,7 @@ def validate_registration(
         "scoring": registration["scoring"],
         "execution": observed,
         "risk_verification_policy": registration["risk_verification_policy"],
+        **({"cache_layout_study": study} if study else {}),
         "inputs": frozen,
         "manifest_sha256": hashlib.sha256(canonical(registration).encode()).hexdigest(),
     }

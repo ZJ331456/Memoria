@@ -8,7 +8,6 @@ from ..memory.evidence_sufficiency import EvidenceSufficiency, SYSTEM as SUFFICI
 from ..memory.verification import verify, support_envelope
 from ..llm.types import ContextLengthError, IncompleteResponseError
 from ..prompting.reader_budget import ReaderBudget
-from .history import canonical
 from .locomo import parse_answer
 
 PROTOCOL = 'locomo-sufficiency-risk-v3'
@@ -16,7 +15,8 @@ UNKNOWN = {'status': 'abstain', 'answer': 'Not mentioned.', 'evidence_ids': []}
 
 
 async def run_case(client, settings, roles, question, history, anchors, chosen,
-                   row, retrieve, *, method, reader_system, select_context):
+                   row, retrieve, *, method, reader_system, select_context, deepseek_cache=False):
+    from ..llm.deepseek_cache import shared_reader_messages
     if method not in {'targeted', 'adaptive_risk'}:
         raise ValueError('Unknown risk ablation')
     policy = AdaptiveFallback(evidence_budgets=(chosen['budget_chars'], 16000, 20000) if method == 'adaptive_risk'
@@ -33,8 +33,8 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
         cfg = roles[role]
         model = getattr(settings, cfg.slot)
         prepared = await ReaderBudget(settings).prepare(
-            [{'role': 'system', 'content': system}, {'role': 'user', 'content': canonical(packet)}],
-            selected=model, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
+            shared_reader_messages(model,reader_system,{'question':question,'evidence':chosen['payload']['evidence']},system,packet,enabled=deepseek_cache),
+            selected=model, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p,atomic=deepseek_cache)
         ticket = 'answer_pipeline' if method == 'adaptive_risk' and stage in {'reader','support'} else None
         if not policy.reserve_call(stage, prepared.report, reservation=ticket):
             return None
@@ -112,14 +112,14 @@ async def run_case(client, settings, roles, question, history, anchors, chosen,
         cfg = roles['reader']
         meter = ReaderBudget(settings)
         prepared = await meter.prepare(
-            [{'role':'system','content':reader_system},
-             {'role':'user','content':canonical({'question':question,'evidence':evidence})}],
+            shared_reader_messages(getattr(settings,cfg.slot),reader_system,{'question':question,'evidence':evidence},reader_system,{'question':question,'evidence':evidence},enabled=deepseek_cache),
             selected=getattr(settings,cfg.slot), max_tokens=cfg.max_tokens,
-            temperature=cfg.temperature, top_p=cfg.top_p)
+            temperature=cfg.temperature, top_p=cfg.top_p,atomic=deepseek_cache)
         judge = roles['judge']
         envelope = await support_envelope(meter,SUPPORT_SYSTEM,
             {'question':question,'evidence':evidence,'query_risk':risk}, selected=getattr(settings,judge.slot),
-            max_tokens=judge.max_tokens,temperature=judge.temperature,top_p=judge.top_p)
+            max_tokens=judge.max_tokens,temperature=judge.temperature,top_p=judge.top_p,
+            shared_reader=(reader_system,{'question':question,'evidence':evidence}) if deepseek_cache else None)
         return policy.hold_calls('answer_pipeline',[prepared.report,envelope,envelope])
 
     async def expand(decision):

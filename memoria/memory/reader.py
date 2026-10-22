@@ -276,7 +276,7 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
         from .adaptive_fallback import AdaptiveFallback
         from .evidence_sufficiency import EvidenceSufficiency, SYSTEM as SUFFICIENCY_SYSTEM
         from .answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM
-        from .verification import verify, support_envelope
+        from .verification import verify, support_envelope, REPAIR_INSTRUCTION
         evidence=quoted_catalog(guard)
         from .rerank import seed_policy
         policy = seed_policy(access['reranking'],risk=True) if access.get('reranking',{}).get('calls') else AdaptiveFallback(evidence_budgets=(6000,), max_calls=5)
@@ -284,8 +284,9 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
                        'contract_errors':[], 'adaptive_retrieval_enabled':False,'semantic_entailment_verified':False}
 
         async def risk_call(stage,system,packet):
-            bounded=await meter.prepare([{'role':'system','content':system},
-                {'role':'user','content':canonical(packet)}],max_tokens=2048)
+            from ..llm.deepseek_cache import evidence_messages
+            bounded=await meter.prepare(evidence_messages(llm.settings.main,system,packet,
+                enabled=not system.endswith(REPAIR_INSTRUCTION)),max_tokens=2048,atomic=True)
             if not policy.reserve_call(stage,bounded.report,
                     reservation='answer_pipeline' if stage=='support' else None):
                 raise ContextLengthError('Answer risk budget exhausted')
@@ -304,7 +305,7 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
                 return {'status':'clarify' if gate['state']=='conflict' else 'abstain','answer':SAFE_UNKNOWN,
                         'citations':[],'reader_called':False,'access':access,'risk_checks':risk_checks,
                         'validation':{'valid':True,'reason':'evidence_sufficiency_not_established','semantic_entailment_verified':False}}
-            envelope=await support_envelope(meter,SUPPORT_SYSTEM,{'question':request.query,'evidence':evidence})
+            envelope=await support_envelope(meter,SUPPORT_SYSTEM,{'question':request.query,'evidence':evidence},deepseek_cache=True)
             if not policy.hold_calls('answer_pipeline',[prepared.report,envelope,envelope]):
                 risk_checks['pipeline_budget_unavailable']=True
                 raise ContextLengthError('Answer pipeline budget unavailable')

@@ -341,3 +341,45 @@ def test_embedding_requests_are_observed_without_hidden_retries(core, monkeypatc
     assert len(calls) == len(receipts) == 1
     assert receipts[0]['status'] == ('failed' if fail else 'returned')
     assert receipts[0]['usage'] == (None if fail else {'total_tokens':3})
+
+
+def test_deepseek_contract_repair_uses_original_layout_and_keeps_total_budget(core):
+    """A malformed source ID must recover through existing repair, never relaxed validation."""
+    from memoria.llm.deepseek_cache import COMMON_SYSTEM
+    from memoria.memory.verification import REPAIR_INSTRUCTION
+    kernel, _, _ = core
+    kernel.settings.main.base_url='https://api.deepseek.com/v1'
+    kernel.settings.main.api_key='engineering-only'
+
+    class WireModel(Model):
+        def __init__(self,settings):
+            super().__init__(settings)
+            self.wire=[]
+            self.injected=False
+
+        async def chat(self,messages,**kwargs):
+            self.wire.append(copy.deepcopy(messages))
+            decoded=messages
+            if messages[0]['content']==COMMON_SYSTEM:
+                data={**json.loads(messages[1]['content']),**json.loads(messages[-1]['content'])}
+                data.pop('source_id_allowlist')
+                decoded=[{'role':'system','content':messages[2]['content']},
+                         {'role':'user','content':json.dumps(data,ensure_ascii=False)}]
+            result=await super().chat(decoded,**kwargs)
+            if decoded[0]['content'].startswith(GATE) and not self.injected:
+                value=json.loads(result.content)
+                value['requirements'][0]['sources'][0]['id']='not-a-presented-source'
+                result.content=json.dumps(value,ensure_ascii=False)
+                self.injected=True
+            return result
+
+    model=WireModel(kernel.settings)
+    kernel.llm=model
+    result=asyncio.run(kernel.answer(QueryRequest(query=QUERY)))
+    assert result['status']=='answer'
+    assert model.gates==2 and len(model.wire)==4
+    assert model.wire[0][0]['content']==COMMON_SYSTEM
+    assert len(model.wire[1])==2
+    assert model.wire[1][0]['content'].startswith(GATE)
+    assert model.wire[1][0]['content'].endswith(REPAIR_INSTRUCTION)
+    assert result['access']['adaptive']['contract_errors'][0]['code']=='invalid_contract'

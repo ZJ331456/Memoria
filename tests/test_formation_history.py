@@ -60,6 +60,11 @@ def test_actual_related_memories_and_current_evidence_are_separate(env):
     assert source['id'] in {r['id'] for r in observe['history_context']['recent_messages']}
     assert len(json.dumps(observe['history_context'],ensure_ascii=False))<=history.MAX_CHARS
     assert any('独立的记忆关联核验器' in p for p,_ in calls)
+    reviewed=next(data for prompt,data in calls if '长期记忆的证据审核员' in prompt)
+    roles=reviewed['history_associations'][0]['support_roles']
+    assert roles['current_fact']['quote']==text
+    assert roles['identity_only']==[{'ref':'memory:'+old['id'],'quote':source['content']}]
+    assert 'assessment' not in roles
     assert not service.kernel.entities.cohort('memory',new['id'],history.digest(new['content']))
 
 
@@ -376,3 +381,16 @@ def test_optional_relation_without_target_preserves_independent_current_fact(env
     assert job['status']=='completed' and job['extracted_count']==1 and len(store.memories())==1
     row=next(r for r in client.get('/api/memory-observations').json() if r['message_id']==source['id'])
     assert row['history']['relation']=='unknown' and row['history']['linked_memory_ids']==[]
+
+
+def test_unrequested_alias_quote_cannot_approve_association(env):
+    store,service,_=env
+    session=store.create_session()['id'];source,old=seed(store,service,session=session)
+    def extra(prompt,output,data):
+        if '独立的记忆关联核验器' in prompt:
+            assert data['proposals'][0]['required_target_refs']==['memory:'+old['id']]
+            output['links'][0]['target_quotes']['message:'+source['id']]=source['content']
+    linking(service,old['id'],mutate=extra)
+    current,job=send(store,service,'这个项目新增了回滚模块。',session)
+    assert job['status']=='completed' and job['extracted_count']==0
+    assert not [m for m in store.memories() if m['source_ref']==current['id']]

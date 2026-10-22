@@ -62,7 +62,15 @@ def call_metrics(calls):
     """Known tokens are a lower bound; failures with missing usage are never zero usage."""
     llm = [c for c in calls if isinstance(c, dict) and c.get("stage") != "embedding"]
     embedding = [c for c in calls if isinstance(c, dict) and c.get("stage") == "embedding"]
+    from ..llm.deepseek_cache import cache_summary
+
+    cache = cache_summary([c for c in llm if c.get("cache_provider") == "deepseek"])
     return {
+        "deepseek_prompt_cache_hit_tokens": cache["prompt_cache_hit_tokens"],
+        "deepseek_prompt_cache_miss_tokens": cache["prompt_cache_miss_tokens"],
+        "deepseek_cache_known_calls": cache["known_cache_calls"],
+        "deepseek_cache_unknown_calls": cache["unknown_cache_calls"],
+        "deepseek_cache_invalid_calls": cache["invalid_cache_calls"],
         "llm_requests": len(llm),
         "llm_retries": sum(int(c.get("retries", 0) or 0) for c in llm),
         "llm_duration_ms": sum(int(c.get("duration_ms", c.get("elapsed_ms", 0)) or 0) for c in llm),

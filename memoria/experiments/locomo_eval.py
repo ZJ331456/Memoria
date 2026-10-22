@@ -356,7 +356,10 @@ def checkpoint_rows(workspace, run_id, protocol, cases, histories, retry_errors=
 async def execute(workspace, settings, source, *, scope='full', profile=None, roles=None,
                   allow_remote=False, embedding_device='auto', concurrency=None, candidate_limit=40,
                   anchor_limit=40, evidence_chars=12000, embedding_model='bge-small-en-v1.5', fallback='full_history', client_factory=ExperimentLLM,
-                  embedding_factory=EmbeddingClient, resume_from=None, retry_errors=False, registration=None):
+                  embedding_factory=EmbeddingClient, resume_from=None, retry_errors=False, registration=None, deepseek_cache=False):
+    from ..llm.deepseek_cache import evidence_messages, VERSION as CACHE_LAYOUT
+    if deepseek_cache and registration is None:
+        raise ValueError('DeepSeek cache layout requires a separate --registration')
     risk_method = fallback in {'targeted', 'adaptive_risk'}
     explicit_concurrency = concurrency is not None
     if risk_method and scope=='full' and registration is None:
@@ -403,7 +406,8 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
     if registration:
         registered = validate_registration(registration,settings.root,source,protocol,settings,roles,
             fallback=fallback, concurrency=concurrency,embedding_model=embedding_model,
-            candidate_limit=candidate_limit,anchor_limit=anchor_limit,evidence_chars=evidence_chars)
+            candidate_limit=candidate_limit,anchor_limit=anchor_limit,evidence_chars=evidence_chars,
+            cache_layout=CACHE_LAYOUT if deepseek_cache else 'legacy')
         protocol.update(registration=registered, mode='locomo_diagnostic_v3',
                         claim='same-question diagnostic retest', unseen_generalization=False)
         if not risk_method:
@@ -412,6 +416,8 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
     elif risk_method:
         protocol.update(claim='unregistered engineering diagnostic; no protocol-matched improvement claim',
                         unseen_generalization=False, mode='locomo_diagnostic_v3')
+    protocol['cache_layout']=CACHE_LAYOUT if deepseek_cache else 'legacy'
+    if deepseek_cache:protocol['id']+='-'+CACHE_LAYOUT
     if risk_method:
         roles = {**roles, 'judge': replace(roles['reader'], max_tokens=2048)}
     local_policy(settings, roles, allow_remote)
@@ -493,10 +499,10 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                     chosen = select_context(history, found, question=case['question'], budget_chars=evidence_chars,
                                             anchor_limit=anchor_limit)
                 packet = {'question': case['question'], **chosen['payload']}
-                prompt = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': canonical(packet)}]
+                prompt = evidence_messages(selected,SYSTEM,packet,enabled=False)
                 cfg = roles['reader']
                 prepared = await ReaderBudget(settings).prepare(prompt, selected=selected, max_tokens=cfg.max_tokens,
-                                                                temperature=cfg.temperature, top_p=cfg.top_p)
+                                                                temperature=cfg.temperature, top_p=cfg.top_p,atomic=deepseek_cache)
                 row.update(question=case['question'], history_turns=len(history), retrieved_ids=[m['id'] for m in found],
                            presented_ids=chosen['presented_ids'], retrieval_diagnostics=info,
                            selection=chosen, reader_budget=prepared.report,
@@ -509,7 +515,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                             with timings.measure('retrieval.supplemental'):
                                 return await retriever.select(history, query, 'B2_rrf', limit, timings=timings)
                     await risk_case(client,settings,roles,case['question'],history,found,chosen,row,supplemental,
-                                    method=fallback,reader_system=SYSTEM,select_context=select_context)
+                                    method=fallback,reader_system=SYSTEM,select_context=select_context,deepseek_cache=deepseek_cache)
                     return
                 result = await client.call('reader', prepared.messages, stream=False)
                 primary_error = None
@@ -528,10 +534,10 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                     full_packet = {
                         'question': case['question'], 'evidence': complete,
                         'instruction': 'Recheck against the complete original conversation. Answer only if supported; otherwise Not mentioned.'}
-                    fallback_prompt = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': canonical(full_packet)}]
+                    fallback_prompt = evidence_messages(selected,SYSTEM,full_packet,enabled=False)
                     try:
                         full_prepared = await ReaderBudget(settings).prepare(fallback_prompt, selected=selected,
-                            max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
+                            max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p,atomic=deepseek_cache)
                         if full_prepared.messages != fallback_prompt:
                             raise ValueError('Complete history/question was not fully presented')
                         full_result = await client.call('reader', full_prepared.messages, stream=False)
@@ -547,10 +553,10 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                                  'evidence above. Every status=answer requires at least one exact supporting evidence id. '
                                  'Do not fabricate IDs or change facts to force an answer. If unsupported, return '
                                 'status=abstain, answer="Not mentioned.", evidence_ids=[]. Return ONLY valid JSON.'}
-                            repair_prompt = [{'role': 'system', 'content': SYSTEM},
-                                             {'role': 'user', 'content': canonical(repair_packet)}]
+                            from ..llm.deepseek_cache import shared_reader_messages
+                            repair_prompt = shared_reader_messages(selected,SYSTEM,full_packet,SYSTEM,repair_packet,enabled=deepseek_cache)
                             full_prepared = await ReaderBudget(settings).prepare(repair_prompt, selected=selected,
-                                max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)
+                                max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p,atomic=deepseek_cache)
                             if full_prepared.messages != repair_prompt:
                                 raise ValueError('Repair history/question was not fully presented')
                             full_result = await client.call('reader', full_prepared.messages, stream=False)
@@ -610,6 +616,9 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         (recorder.path/'score.json').write_text(canonical(result_score)+'\n', encoding='utf-8')
         metrics = {k: v for k, v in result_score.items() if k != 'details'}
         usages = [c.get('usage') for c in calls]
+        from ..llm.deepseek_cache import cache_summary
+        metrics['deepseek_cache']=cache_summary(calls)
+        metrics['deepseek_cache_by_role']={role:cache_summary([c for c in calls if c.get('role')==role]) for role in ('reader','judge')}
         metrics.update(errors=sum(r['status'] != 'success' for r in rows.values()), reader_calls=len(calls),
                        failed_calls=sum(bool(c.get('error')) for c in calls),
                        primary_validation_errors=sum(bool(r.get('primary_validation_error')) for r in rows.values()),

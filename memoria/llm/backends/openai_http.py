@@ -111,7 +111,7 @@ class OpenAICompatBackend:
             raise ProviderError("模型返回了无效的 Chat Completions 响应") from exc
         if choice.get("finish_reason") == "content_filter":
             raise ContentSafetyError("模型供应商拒绝了不安全内容")
-        usage = {key: int(value) for key, value in (data.get("usage") or {}).items() if isinstance(value, int)}
+        usage = {key: int(value) for key, value in (data.get("usage") or {}).items() if type(value) is int}
         return ChatResult(
             str(message.get("content") or ""),
             calls,

@@ -439,6 +439,8 @@ class AgentRuntime:
             "scope": "LLM client request attempt; provider/network acceptance unknown on failure",
         }
         context.metadata.setdefault("llm_calls", []).append(attempt)
+        from ..llm.deepseek_cache import official
+        attempt['cache_provider']='deepseek' if official(kwargs.get('model') or self.settings.main) else None
         started = time.perf_counter()
         try:
             result = await (

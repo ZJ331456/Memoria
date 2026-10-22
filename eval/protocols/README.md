@@ -1,5 +1,7 @@
 # 冻结研究协议与角色
 
+[DeepSeek缓存布局登记](locomo-deepseek-cache-20261022.json)允许显式比较legacy与共享Reader输入前缀，Reader输入不变，引用子集继续短请求；原v3登记不能偷偷启用。两题诊断与负向试验见[记录](../../docs/implemented/DeepSeek缓存前缀与成本审计.md)，尚无新全量成绩。
+
 2026-10-22：[v3同题诊断登记](locomo-v3-diagnostic-20261022.json)与[完整角色](locomo-v3-roles-20261022.toml)固定并发2、标准输入SHA、Reader、英文BGE权重及评分依赖。全量风险方法必须显式登记；历史v2保持原字节，不宣称复现或未见泛化。仅完成预检，尚未跑新LoCoMo，见[13项审查](../../docs/implemented/协议计量隐私与边界审查.md)。
 
 [项目首页](../../README.md) · [研究工具](../../memoria/experiments/README.md) · [运行配置](../../config/README.md)

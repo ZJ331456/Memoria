@@ -21,7 +21,7 @@ from .evidence.budget import EvidenceBudget
 from .evidence.closure import select_closed
 from .evidence.query_plan import plan, validate_plan
 from .evidence_sufficiency import SYSTEM as GATE_SYSTEM
-from .verification import verify, support_envelope
+from .verification import verify, support_envelope, REPAIR_INSTRUCTION
 from ..llm.call_scope import inference_scope
 
 VERSION = 'production-missing-evidence-v1'
@@ -269,12 +269,18 @@ async def read_adaptive(kernel, request):
                 return await adapter.retrieve(query)
 
     async def call(stage, system, packet):
-        prepared = await meter.prepare([{'role': 'system', 'content': system},
-            {'role': 'user', 'content': canonical(packet)}], max_tokens=2048)
+        from ..llm.deepseek_cache import evidence_messages, official, layout_of
+        # The existing single repair may fall back to the established short layout;
+        # validators and total call budgets remain unchanged.
+        prepared = await meter.prepare(evidence_messages(kernel.settings.main,system,packet,
+                                       enabled=not system.endswith(REPAIR_INSTRUCTION)),
+                                       max_tokens=2048,atomic=True)
         if not policy.reserve_call(stage, prepared.report, reservation='answer_pipeline' if stage == 'support' else None):
             raise ContextLengthError('Shared adaptive call/input budget exhausted')
         row = {'stage': stage, 'prompt_sha256': fingerprint(prepared.messages), 'prompt_chars': len(canonical(prepared.messages)), 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
         trace['calls'].append(row)
+        row['cache_provider']='deepseek' if official(prepared.model) else None
+        row['cache_layout']=layout_of(prepared.messages) if official(prepared.model) else None
         from .reader_calls import record_call
         record_call(row)
         clock = time.perf_counter()
@@ -329,11 +335,10 @@ async def read_adaptive(kernel, request):
             _, future_messages, _, _ = adapter.present(access, pool)
             future = await meter.prepare(reader_messages(future_messages))
             future_repair = await meter.prepare(reader_messages(future_messages, repair=True))
-            support_bound = await support_envelope(meter, SUPPORT_SYSTEM, {'question': request.query, 'evidence': evidence})
+            support_bound = await support_envelope(meter, SUPPORT_SYSTEM, {'question': request.query, 'evidence': evidence},deepseek_cache=True)
             policy.release('answer_pipeline')
             if not policy.hold_calls('answer_pipeline', [future.report, future_repair.report, support_bound, support_bound]):
                 return finish('complete_answer_reservation_unavailable')
-            from .auto_review import SECRET
             payload = {'question': request.query, 'query_plan': query_plan, 'evidence': evidence}
             if SECRET.search(canonical(payload) + canonical(future_messages)): return finish('credential_bearing_source_not_sent')
             if pool:
@@ -368,7 +373,7 @@ async def read_adaptive(kernel, request):
                 repaired = await meter.prepare(reader_messages(messages, repair=True))
                 if not guard.visible(prepared.messages) or guard.freshness(): return finish('final_evidence_changed')
                 # Replace the conservative hold with the actual, complete final pipeline.
-                final_support = await support_envelope(meter, SUPPORT_SYSTEM, {'question': request.query, 'evidence': evidence})
+                final_support = await support_envelope(meter, SUPPORT_SYSTEM, {'question': request.query, 'evidence': evidence},deepseek_cache=True)
                 policy.release('answer_pipeline')
                 if not policy.hold_calls('answer_pipeline', [prepared.report, repaired.report, final_support, final_support]):
                     return finish('final_answer_reservation_unavailable')
@@ -379,6 +384,8 @@ async def read_adaptive(kernel, request):
                     reader_called = True
                     clock = time.perf_counter()
                     row = {'stage': 'reader', 'prompt_sha256': fingerprint(prepared.messages), 'prompt_chars': len(canonical(prepared.messages)), 'attempt': attempt+1, 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
+                    from ..llm.deepseek_cache import official
+                    row['cache_provider']='deepseek' if official(prepared.model) else None
                     trace['calls'].append(row)
                     from .reader_calls import record_call
                     record_call(row)

@@ -119,11 +119,13 @@ class ReaderBudget:
             raise ContextLengthError('完整reader请求及输出预留超过配置预算；未发送模型请求')
         return report
 
-    async def prepare(self,messages,tools=None,*,selected=None,max_tokens=None,stream=False,**generation):
+    async def prepare(self,messages,tools=None,*,selected=None,max_tokens=None,stream=False,atomic=False,**generation):
         model=copy.deepcopy(selected or self.settings.main)
         output=max_tokens if max_tokens is not None else self.settings.max_tokens
         prepared,schemas=copy.deepcopy(messages),copy.deepcopy(tools)
         original=await self.measure(model,prepared,schemas,output,stream,**generation)
+        if atomic and not original['fits']:
+            raise ContextLengthError('完整证据/任务请求超过预算；未删除前缀证据或发送模型请求')
         report=dict(original)
         dropped,compacted=0,0
         # Optional protocol exchanges are removed whole. Never clip the current query or tools.

@@ -40,9 +40,14 @@ async def verify(call, stage, system, packet, validate, errors):
                 raise
 
 
-async def support_envelope(meter, system, packet, *, selected=None, max_tokens=2048, **generation):
+async def support_envelope(meter, system, packet, *, selected=None, max_tokens=2048, deepseek_cache=False, shared_reader=None, **generation):
     """4000 answer characters x six JSON bytes; include all possible cited sources and repair text."""
-    from ..claims import canonical
-    messages = [{'role':'system','content':system + REPAIR_INSTRUCTION},
-                {'role':'user','content':canonical({**packet, 'proposed_answer':'\x00' * 4000})}]
+    from ..llm.deepseek_cache import evidence_messages
+    messages = evidence_messages(selected or meter.settings.main,system+REPAIR_INSTRUCTION,
+        {**packet,'proposed_answer':'\x00'*4000},enabled=deepseek_cache)
+    if shared_reader is not None:
+        from ..llm.deepseek_cache import shared_reader_messages
+        reader_system,reader_packet=shared_reader
+        messages=shared_reader_messages(selected or meter.settings.main,reader_system,reader_packet,
+            system+REPAIR_INSTRUCTION,{**packet,'proposed_answer':'\x00'*4000})
     return await meter.measure(selected or meter.settings.main, messages, None, max_tokens, **generation)

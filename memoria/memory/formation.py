@@ -263,7 +263,8 @@ class MemoryFormation:
         return receipt
 
     async def associate(self,source,context,items,selected):
-        proposals=[{'index':i,**o.model_dump()} for i,o in items if history.refs(o.model_dump())]
+        proposals=[{'index':i,**o.model_dump(),'required_target_refs':history.refs(o.model_dump())}
+            for i,o in items if history.refs(o.model_dump())]
         judged={}
         if proposals:
             result,call_id=await self.call('associate',[{'role':'system','content':history.AUDIT_PROMPT},

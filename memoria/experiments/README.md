@@ -93,3 +93,5 @@ production_replay的`prepare-memory-probe`准备固定单角色LoCoMo原文，�
 [simulation.py](simulation.py)提供用户授权的虚构功能验收，复用production_replay原生产组件，显式synthetic_functional及专用输出隔离、全调用上限、后验断言/失败分母、冻结SHA与跨版本累计报告；真实LLM、离线BGE和工程替身分层，不进入正式研究成绩。[输入与命令](../../simulation/README.md)。
 
 2026-10-21：[生产与实验入口统一](../../docs/implemented/统一内核入口与存储边界.md)。production_replay的冻结账号副本也构造Kernel且禁用Markdown写出；entity_retrieval的Reader直接调用Kernel.answer并显式关闭自适应。rerank_comparison保留冻结候选池这一对照条件；独立PrefixRetriever LoCoMo协议及旧分数未改变。
+
+2026-10-22新增[deepseek_cache.py](deepseek_cache.py)：`deepseek-cache-audit`按本run或显式祖先只读真实缓存usage、保留未知并估算已知用量；`deepseek-cache-probe`默认预检、显式执行至多16调用，固定两题配对、原始失败和所有成本保留。LoCoMo新缓存布局须显式`--deepseek-cache`及单独登记，旧v3不可默许。生产与隔离布局不同，Reader保持原输入；详细数字及负向结果见[DeepSeek缓存说明](../../docs/implemented/DeepSeek缓存前缀与成本审计.md)。OpenAI/Anthropic仅TODO，未实现。

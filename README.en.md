@@ -1,5 +1,7 @@
 # Memoria
 
+2026-10-22: [DeepSeek prefix caching and cost audit](docs/implemented/DeepSeek缓存前缀与成本审计.md). Reader inputs stay unchanged; cold production-layout calls and warm isolated probes are reported separately. OpenAI/Anthropic caching remains TODO. Final engineering checks: 1522 tests, 49/49 functional checks, 4/4 real local-BGE retrieval lanes; no new full LoCoMo evaluation.
+
 Architecture update: tenant-bound Kernel is required for production memory consumers. Personal-memory Chat/bot answers and API/replay use the same Reader; general task dialogue retains its tool loop. SQLite adapters are separated from HTTP/transport code. [Implementation and evaluation limits](docs/implemented/统一内核入口与存储边界.md).
 
 **Source-backed memory for long-term companionship.**

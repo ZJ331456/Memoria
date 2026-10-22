@@ -73,6 +73,11 @@ class ReaderCallLog:
             "prompt_chars": len(json.dumps(messages, ensure_ascii=False)),
         }
         self.calls.append(attempt)
+        from ..llm.deepseek_cache import official, layout_of
+
+        model = kwargs.get("model") or getattr(getattr(self.client, "settings", None), "main", None)
+        attempt["cache_provider"] = "deepseek" if official(model) else None
+        attempt["cache_layout"] = layout_of(messages) if official(model) else None
         record_call(attempt)
         try:
             notify_request()

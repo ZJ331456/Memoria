@@ -80,6 +80,9 @@ class ExperimentLLM(LLMClient):
         row = {"call": call_id, "role": role, "prompt_sha256": prompt_sha,
                "model": selected.model, "generation": asdict(cfg), "usage": None,
                "ttft_ms": None, "error": None}
+        from ..llm.deepseek_cache import official,layout_of
+        row.update(cache_provider='deepseek' if official(selected) else None,
+                   cache_layout=layout_of(messages) if official(selected) else None)
         try:
             with self.timings.measure(f"llm.{role}"):
                 kwargs = dict(model=selected, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)

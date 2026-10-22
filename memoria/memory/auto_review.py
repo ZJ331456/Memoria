@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import re
 from typing import Literal
 
@@ -13,7 +12,7 @@ from ..store import now
 from .evidence_verifier import EvidenceVerifier, THIRD_PARTY, CONDITIONAL, PLAN, NEGATIVE
 from .claim_normalizer import preference_desire, aliases
 
-VERSION = 'memory-auto-review-v8-subject-event-clocks'
+VERSION = 'memory-auto-review-v9-identity-support-roles'
 ALIAS_BLOCKER = 'value_not_literal; semantic_or_alias_review_required'
 SECRET = re.compile(r'sk-[A-Za-z0-9_-]{16,}|(?:app[_ ]?secret|api[_ ]?key|密码|口令|验证码|私钥)\s*[:：=]\s*\S+',re.I)
 SENSITIVE = re.compile(r'病史|确诊|诊断|便秘|抑郁|过敏|药物|服药|身份证|银行卡|手机号|家庭住址|投资账户|medical|diagnos|password|secret|private key',re.I)
@@ -66,6 +65,9 @@ polarity=negative时value只写被否定的对象，如“不喝咖啡”应为v
 
 PROMPT += '''
 history_associations只提供经过独立检查的主体/叙事线索，不是当前事实的证据。新事实和evidence_quote仍只由source支持；不能从旧记忆复制事实值、旧条件或旧结论。
+允许用其中可逐字回查的同会话唯一主体原话消解“这个项目”等指代；不能将“不能借旧事实”误解为“主体名称必须在当前source重复出现”。当前新事实仍须由当前原话独立支持；先行词不唯一、主体/条件/版本依赖无效时仍review。
+Separate two checks: CURRENT source supports the NEW fact; raw history supports ONLY its unique antecedent. These may be DIFFERENT source passages. The history passage is NOT required to already mention the new fact. Absence of the new detail in prior history is not evidence against an explicit new self-report. This review checks textual support, not independent real-world verification. If either the new fact or unique antecedent lacks textual support, keep review; never invent either.
+任务示例（不是输入事实）：当前原话“这个项目新增了自动化发布”，同会话唯一前文“我维护甲项目”，且关联依赖有效；忠实保留当前表述的普通候选，其新事实和主体分别有原话支持，可以是Supported、claim=null，不要求前文也已记录“自动化发布”。若前文同时有甲乙两个项目、关联已失效或当前原话只是建议，则仍须review/reject；不能照示例替输入补事实。
 带指代的候选保留原话表达，不要求替换成历史项目名。维护某项目不等于声明project_goal；没有明确目标语义就claim=null，普通项目事实仍可审核。'''
 
 PROMPT += '''\nformation_context的semantics由当前原话和来源时钟生成；event_time是事件/计划提及的区间，source_time是原始对话时间，recorded_at是系统记录时间，不能互换。
@@ -178,7 +180,14 @@ class AutoMemoryReviewer:
                             projection=project(association['context'])
                             projection['memories']=[r for r in projection['memories'] if 'memory:'+r['id'] in allowed]
                             projection['recent_messages']=[r for r in projection['recent_messages'] if 'message:'+r['id'] in allowed]
-                            payload['history_associations'].append({'proposal':association['proposal'],'context':projection})
+                            # Present raw support roles explicitly. An older identity
+                            # quote need not already contain this NEW event. These are
+                            # still source texts, never a prior model verdict.
+                            identity_quotes=(association['audit'].get('verdict') or {}).get('target_quotes',{})
+                            payload['history_associations'].append({'proposal':association['proposal'],'context':projection,
+                                'support_roles':{'current_fact':{'quote':observation['quote']},
+                                    'identity_only':[{'ref':ref,'quote':quote} for ref,quote in identity_quotes.items()
+                                        if ref in allowed]}})
                 report['model_called']=True
                 report['reviewer']='llm'
                 result=await self.llm.chat([{'role':'system','content':PROMPT},{'role':'user','content':canonical(payload)}],

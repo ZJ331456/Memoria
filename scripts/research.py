@@ -111,12 +111,20 @@ def main():
     sub.add_argument("--embedding-device", choices=["auto", "cuda", "cpu"], default="auto")
     sub.add_argument("--concurrency", type=int, default=None, help="Explicit for registered runs; otherwise risk=2, baseline=4")
     sub.add_argument("--registration", help="Frozen v3 diagnostic JSON; mandatory for full risk runs")
+    sub.add_argument("--deepseek-cache", action="store_true", help="Explicit cache-layout study registration; changes prompt positions")
     sub.add_argument("--embedding-model", choices=["bge-small-en-v1.5", "bge-small-zh-v1.5"], default="bge-small-en-v1.5")
     sub.add_argument("--fallback", choices=["none", "full_history", "targeted", "adaptive_risk"], default="full_history")
     sub.add_argument("--resume-from", help="Stopped fingerprinted checkpoint in the same account; preserve completed cases")
     sub.add_argument("--retry-errors", action="store_true", help="With --resume-from, retry failed cases; keep all original failures in source run")
     sub = subs.add_parser("locomo-audit", help="Offline failure triage and lineage Token accounting; no model calls")
     sub.add_argument("--source-run", required=True)
+    sub = subs.add_parser("deepseek-cache-audit", help="Read-only flat cache usage/cost audit; never modify old runs")
+    sub.add_argument("--source-run", required=True)
+    sub.add_argument("--include-lineage", action="store_true")
+    sub = subs.add_parser("deepseek-cache-probe", help="Two fixed public questions, <=16 calls; paid only with both flags")
+    sub.add_argument("--input", required=True)
+    sub.add_argument("--execute", action="store_true")
+    sub.add_argument("--allow-remote", action="store_true")
     sub = subs.add_parser("locomo-compare", help="Verify matched case/model sets and costs; scoring already frozen")
     sub.add_argument("--baseline-run", required=True)
     sub.add_argument("--runs", nargs="+", required=True)
@@ -181,6 +189,7 @@ def main():
             resume_from=args.resume_from,
             retry_errors=args.retry_errors,
             registration=private_input(args.registration, directory) if args.registration else None,
+            deepseek_cache=args.deepseek_cache,
             roles=load_roles(private_input(args.roles, directory) if args.roles else None)))
     elif args.command == "benchmark-access":
         result = benchmark_access(workspace,Settings.load(args.config),repeats=args.repeats,iterations=args.iterations)
@@ -210,6 +219,13 @@ def main():
     elif args.command == "locomo-audit":
         from memoria.experiments.locomo_diagnostics import audit
         result,_ = audit(workspace,args.source_run)
+    elif args.command == "deepseek-cache-probe":
+        from memoria.experiments.deepseek_cache import probe
+        result=asyncio.run(probe(workspace,Settings.load(args.config),private_input(args.input,directory),
+            execute=args.execute,allow_remote=args.allow_remote))
+    elif args.command == "deepseek-cache-audit":
+        from memoria.experiments.deepseek_cache import audit
+        result, _ = audit(workspace,args.source_run,include_lineage=args.include_lineage)
     elif args.command == "locomo-compare":
         from memoria.experiments.locomo_diagnostics import compare
         result,_ = compare(workspace,args.baseline_run,args.runs,allow_protocol_differences=args.allow_protocol_differences)

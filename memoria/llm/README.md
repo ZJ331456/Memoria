@@ -9,6 +9,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | [client.py](client.py) | chat/chat_stream/complete、普通记忆抽取/关系决策/查询规划，完整请求门槛及ChatResult.budget |
+| [deepseek_cache.py](deepseek_cache.py) | 精确官方DeepSeek端点的前缀布局、独立任务/引用子集约束、真实缓存usage汇总；其他供应商保持原布局 |
 | [types.py](types.py) | ChatResult 和供应商/上下文/内容安全异常 |
 | [server.py](server.py) | 有限 OpenAI 兼容聊天、Embedding、models、health与不生成的reader-token-count扩展 |
 | [backends/](backends/README.md) | HTTP/进程内后端、路由、本地队列 |

@@ -307,11 +307,13 @@ async def execute(workspace: HistoryWorkspace, settings, *, mode, dataset=None, 
         usages = [c.get("usage") for c in client.calls]
         role_costs = {}
         for role in roles:
+            from ..llm.deepseek_cache import cache_summary
             calls = [c for c in client.calls if c["role"] == role]
             role_costs[role] = {"calls": len(calls), "elapsed_ms": round(sum(c["elapsed_ms"] for c in calls), 3),
                                 "tokens_known": {key: sum(c.get("usage", {}).get(key, 0) or 0 for c in calls if c.get("usage"))
                                                  for key in ("prompt_tokens", "completion_tokens", "total_tokens")},
                                 "usage_unknown_calls": sum(c.get("usage") is None for c in calls),
+                                "deepseek_cache":cache_summary(calls),
                                 "ttft": quantiles([c["ttft_ms"] for c in calls if c.get("ttft_ms") is not None])}
         if encoder:
             recorder.manifest["protocol"]["embedding"]["runtime_after"] = encoder.public_status()
