@@ -35,7 +35,7 @@ class Model:
     async def chat(self, messages, **kwargs):
         system = messages[0]['content']
         self.calls.append(system)
-        if system.startswith(GATE):
+        if GATE in system:
             payload = json.loads(messages[1]['content'])
             self.gates += 1
             self.evidence = payload['evidence']
@@ -54,7 +54,7 @@ class Model:
             if self.broken == 'drop': value['requirements'].pop()
             if self.broken == 'quote': value['requirements'][0]['sources'][0]['quote'] = 'fabricated evidence'
             if self.broken == 'id': value['requirements'][0]['sources'][0]['id'] = 'foreign'
-        elif system.startswith(SUPPORT):
+        elif SUPPORT in system:
             packet = json.loads(messages[1]['content'])
             e = packet['evidence'][0]
             value = {'verdict': 'supported', 'claims': [{'statement': packet['proposed_answer'], 'relation': 'supported',
@@ -343,9 +343,9 @@ def test_embedding_requests_are_observed_without_hidden_retries(core, monkeypatc
     assert receipts[0]['usage'] == (None if fail else {'total_tokens':3})
 
 
-def test_deepseek_contract_repair_uses_original_layout_and_keeps_total_budget(core):
+def test_deepseek_contract_repair_uses_legacy_layout_and_keeps_total_budget(core):
     """A malformed source ID must recover through existing repair, never relaxed validation."""
-    from memoria.llm.deepseek_cache import COMMON_SYSTEM
+    from memoria.llm.deepseek_cache import COMMON_SYSTEM, evidence_payload
     from memoria.memory.verification import REPAIR_INSTRUCTION
     kernel, _, _ = core
     kernel.settings.main.base_url='https://api.deepseek.com/v1'
@@ -361,12 +361,12 @@ def test_deepseek_contract_repair_uses_original_layout_and_keeps_total_budget(co
             self.wire.append(copy.deepcopy(messages))
             decoded=messages
             if messages[0]['content']==COMMON_SYSTEM:
-                data={**json.loads(messages[1]['content']),**json.loads(messages[-1]['content'])}
+                data={**evidence_payload(messages[1]),**json.loads(messages[-1]['content'])}
                 data.pop('source_id_allowlist')
                 decoded=[{'role':'system','content':messages[2]['content']},
                          {'role':'user','content':json.dumps(data,ensure_ascii=False)}]
             result=await super().chat(decoded,**kwargs)
-            if decoded[0]['content'].startswith(GATE) and not self.injected:
+            if GATE in decoded[0]['content'] and not self.injected:
                 value=json.loads(result.content)
                 value['requirements'][0]['sources'][0]['id']='not-a-presented-source'
                 result.content=json.dumps(value,ensure_ascii=False)
@@ -379,7 +379,7 @@ def test_deepseek_contract_repair_uses_original_layout_and_keeps_total_budget(co
     assert result['status']=='answer'
     assert model.gates==2 and len(model.wire)==4
     assert model.wire[0][0]['content']==COMMON_SYSTEM
+    assert model.wire[1][0]['content']==GATE+REPAIR_INSTRUCTION
     assert len(model.wire[1])==2
-    assert model.wire[1][0]['content'].startswith(GATE)
-    assert model.wire[1][0]['content'].endswith(REPAIR_INSTRUCTION)
+    assert json.loads(model.wire[1][1]['content'])['evidence']==evidence_payload(model.wire[0][1])['evidence']
     assert result['access']['adaptive']['contract_errors'][0]['code']=='invalid_contract'

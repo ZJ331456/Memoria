@@ -51,3 +51,5 @@
 用户要求提交/更新远程时，在完成验证、审查 diff 和确认无凭据后执行提交与普通推送；只读分析或尚未授权的发布不得因本文件自动触发推送。发现远程更新先 fetch 并判断分歧，不能用 reset/force 覆盖其他工作。提交格式与最终核验步骤以提交规范为准。
 
 入口与存储边界遵循docs/implemented/统一内核入口与存储边界.md及docs/implemented/协议计量隐私与边界审查.md：生产Runtime/工具必须注入租户Kernel，个人记忆Reader统一走Kernel.answer；不得另造备用Reader。schema_only仅生成契约，所有业务请求503。API、Runtime、渠道、Observability与公开账号模块不直接.db执行SQL；领域保留SQLite事务，统一使用公开Store.memory_transaction()，禁止拆散expected-revision与完整来源支持。Kernel不得调用领域私有方法。须覆盖旧68条及完整141个operation契约、认证/RequestGate/缺依赖HTTP验证；核心指纹包含tests/fixtures和eval/protocols冻结输入，仍按同指纹三重门槛验收。新生产trace只存单份调用摘要/哈希/成本，失败usage未知不能记作零；隔离实验保留完整原始记录。新LoCoMo风险全量须显式v3诊断登记和并发，旧v2不混跑、不改分数。
+
+2026-10-23效果评估主入口为eval-benchmark，默认只做0调用费用估算；正式只比较完整历史raw_context与生产Kernel＋同模型memoria两组。Chat/机器人/资料上传不是额外实验臂，公开人物不能写成账号本人。主分为1540题LLM二分类，对抗446题单列，失败/未知留计划分母，不以仅有评分项计算准确率，不把技术错误算正确拒答。全部形成/审核/巩固/Reader/支持/修复/评分经同一私有调用账本计费；执行需显式execute、allow-remote和请求/美元上限，核对输入及角色/Judge/预算登记。用户当前要求先估算、暂不全量，不自动运行付费模拟或全量。旧公开成绩退役按固定Git/SHA追溯，原始失败/gold/费用不改写。说明见docs/implemented/双组内核评估与费用估算.md。

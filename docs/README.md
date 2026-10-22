@@ -1,6 +1,9 @@
 # Memoria 文档
 
+2026-10-23：[双组内核评估与费用估算](implemented/双组内核评估与费用估算.md)：默认0调用估算，完整历史Baseline vs生产Kernel＋同模型、独立二分类评分。旧结果退役，付费全量与小批校准均待预算，不冒用旧完整验收。
 [DeepSeek缓存前缀与成本审计](implemented/DeepSeek缓存前缀与成本审计.md)：核实旧账本Judge命中偏低；生产独立核验稳定前缀、Reader原布局保留；隔离两题77.16%→92.45%，不代表生产/全量收益。OpenAI/Anthropic仅TODO，见[计划67](plans/长期陪伴记忆研究与实验计划书.md#67-deepseek缓存前缀与成本诊断2026-10-22)。
+
+[DeepSeek缓存优化详解](implemented/DeepSeek缓存优化详解.md)：按官方完整前缀规则修正缓存归因，保留生产布局与修复回退，新的整段重放仅显式实验；不把内容重复率和假想投影当作命中保证。
 
 [协议、计量、隐私与13项边界审查](implemented/协议计量隐私与边界审查.md)：v3诊断登记与依赖冻结、生产摘要计量、全部141个租户接口鉴权/503、公开事务和追踪持久层；最终同指纹完整工程1488项、完整模拟49/49及实际BGE4/4通过；旧LoCoMo分数保持，本轮不跑新全量。
 
@@ -41,7 +44,7 @@
 | 检索与回答 | [条件/证据选择](implemented/条件时序抽取与预算证据选择.md) · [完整Reader预算](implemented/完整Reader预算与生产引用校验.md) · [风险核验](implemented/证据充分性与风险感知回答.md) |
 | 数据与权限 | [账号隔离](implemented/用户登录与数据隔离.md) · [DBeaver可选查看](implemented/DBeaver可选数据库查看.md) · [真实来源导入](implemented/真实对话数据与实验入口.md) · [本机清理记录](implemented/本机数据目录与残留清理.md) |
 | 工程修复 | [内部一致性](implemented/内部记忆一致性修复记录.md) · [算法审查](implemented/算法逻辑审查逐项修复.md) · [来源支持与渐进访问](implemented/来源支持与渐进访问修复.md) · [生产重放与普通来源支持](implemented/生产重放与普通来源支持.md) |
-| 实验与复现 | [保留的三组实验](../assets/evaluation/README.md) · [研究工具](implemented/真实历史标注与评测.md) |
+| 实验与复现 | [评估状态与历史归档](../assets/evaluation/README.md) · [研究工具](implemented/真实历史标注与评测.md) |
 | 文档与资产维护 | [当前布局与精简规则](implemented/文档结构与展示资产.md) · [英文海报与架构图](implemented/文档结构与展示资产.md#英文海报与架构图重设计) |
 
 全部模块与操作说明见[implemented导航](implemented/README.md)。实现、工程验证与研究效果分别陈述；接口存活、测试替身和历史指标不作为新版本效果证明。

@@ -1,0 +1,53 @@
+{
+  "protocol": "kernel-vs-context-llm-judge-v1",
+  "date": "2026-10-23",
+  "status": "proposed; offline estimate only; paid execution awaits budget decision",
+  "dataset": "data/benchmarks/locomo/raw/locomo10.json",
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "questions_per_arm": 1986,
+  "primary_categories": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "primary_questions": 1540,
+  "supplementary_category": 5,
+  "supplementary_questions": 446,
+  "arms": [
+    "raw_context",
+    "memoria"
+  ],
+  "backbone": "deepseek-flash",
+  "endpoint": "https://api.deepseek.com/v1",
+  "thinking": "disabled",
+  "temperature": 0,
+  "top_p": 1,
+  "reader_max_tokens": 1024,
+  "request_timeout_seconds": 120,
+  "max_retries": 0,
+  "concurrency": 2,
+  "concurrency_scope": "two independent arms; serial questions within an arm",
+  "input_request_byte_cap": 240000,
+  "baseline": "Full visible conversation before question; drop oldest whole turns only if byte/window budget exceeded. Record every truncation.",
+  "memoria": "Public session windows -> external working sources -> native formation/review/consolidation -> Kernel.answer(KnowledgeAnswer) with adaptive retrieval and publication checks. No personal user injection.",
+  "kernel_evidence_chars": 8000,
+  "kernel_local_embedding": "model/bge-small-en-v1.5",
+  "judge": "Independent binary LLM with frozen adapted permissive rubric; no arm label or evidence override. Gold used only after answering.",
+  "failure_policy": "Planned IDs stay in denominator; unknown judge coverage and answer errors are separate. No filtered-accuracy promotion.",
+  "accounting": "Every formation, consolidation, Reader, support, repair and grading call. Shared ingestion once per visible-history hash. Missing usage stays unknown; retained upper reservation is not an invoice.",
+  "execution_gate": [
+    "--execute",
+    "--allow-remote",
+    "positive --max-calls",
+    "positive --max-cost-usd"
+  ],
+  "resume": "Not implemented. Keep checkpoints, isolated databases and append-only calls. New execution is a new charged run.",
+  "interpretation_limits": [
+    "All LoCoMo questions have been used for development; this is not unseen generalization.",
+    "External sources do not automatically activate personal Claim/View; report actual route coverage.",
+    "Full-framework comparison has different internal prompts/policies and is not a single-mechanism causal ablation.",
+    "No measured outcome exists under this protocol; old Token F1 scores are retired from current presentation."
+  ],
+  "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9"
+}

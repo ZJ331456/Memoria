@@ -1,10 +1,16 @@
 """Read-only cache audit of immutable run ledgers; separate report, zero inference."""
 
 import json
+import re
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from ..llm.deepseek_cache import cache_summary, official
+from ..llm.deepseek_cache import (
+    cache_summary,
+    hit_rate_drop,
+    official,
+    physical_input,
+)
 from .locomo_diagnostics import lineage, verified_run, lines
 from .records import digest_file
 
@@ -50,9 +56,63 @@ def cost_bounds(summary, model):
     }
 
 
+VOLATILE_MARKERS = {
+    "iso_timestamp": re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}"),
+    "clock_time": re.compile(r"\b\d{1,2}:\d{2}:\d{2}\b"),
+    "hex_uuid": re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}"),
+    "uuid_hex32": re.compile(r"\b[0-9a-f]{32}\b"),
+    "float_score": re.compile(r"\b0\.\d{6,}\b"),
+}
+
+
+def prefix_stability(prompts):
+    """Deterministic offline check: how much of each role's prompt is a stable head.
+
+    No model calls and no rewriting. A volatile marker that survives inside the shared
+    head means the "stable" block still moves between runs, which is the usual cause of a
+    sudden hit-rate drop.
+    """
+
+    def text(messages):
+        return "\n\n".join(
+            str(m.get("role", "")) + ":" + (m.get("content") or "") for m in messages
+        )
+
+    groups = {}
+    for row in prompts:
+        messages = row.get("messages")
+        if isinstance(messages, list) and messages:
+            groups.setdefault(row.get("role") or "unknown", []).append(text(messages))
+    report = {}
+    for role, texts in sorted(groups.items()):
+        head = texts[0]
+        for value in texts[1:]:
+            limit = min(len(head), len(value))
+            index = 0
+            while index < limit and head[index] == value[index]:
+                index += 1
+            head = head[:index]
+            if not head:
+                break
+        sizes = sorted(len(t) for t in texts)
+        median = sizes[len(sizes) // 2]
+        report[role] = {
+            "prompts": len(texts),
+            "stable_head_chars": len(head),
+            "median_prompt_chars": median,
+            "stable_head_ratio": (len(head) / median) if median else None,
+            "volatile_markers_in_stable_head": [
+                name for name, pattern in VOLATILE_MARKERS.items() if pattern.search(head)
+            ],
+        }
+    return report
+
+
 def audit(workspace, run_id, *, include_lineage=False):
     path, manifest = verified_run(workspace, run_id)
-    files = [path / n for n in ("manifest.json", "calls.jsonl") if (path / n).exists()]
+    files = [
+        path / n for n in ("manifest.json", "calls.jsonl", "prompts.jsonl") if (path / n).exists()
+    ]
     before = {p.name: digest_file(p) for p in files}
     if include_lineage:
         _, _, calls = lineage(workspace, run_id)
@@ -72,15 +132,21 @@ def audit(workspace, run_id, *, include_lineage=False):
             excluded += 1
             continue
         grouped.setdefault((role, model["model"]), []).append(call)
-    roles = [
-        {
-            "role": role,
-            "model": model,
-            "usage": cache_summary(rows),
-            "pricing": cost_bounds(cache_summary(rows), model),
-        }
-        for (role, model), rows in sorted(grouped.items())
-    ]
+    roles = []
+    for (role, model), rows in sorted(grouped.items()):
+        summary = cache_summary(rows)
+        pricing = cost_bounds(summary, model)
+        roles.append(
+            {
+                "role": role,
+                "model": model,
+                "usage": summary,
+                "pricing": pricing,
+                # A model id the snapshot does not know must be visible, never an empty field
+                # that reads as "no cost".
+                "pricing_unavailable": pricing is None,
+            }
+        )
     included = [call for rows in grouped.values() for call in rows]
     report = {
         "schema_version": 1,
@@ -91,14 +157,25 @@ def audit(workspace, run_id, *, include_lineage=False):
         "excluded_non_deepseek_or_unknown_provider": excluded,
         "overall": cache_summary(included),
         "roles": roles,
+        # Input volume and provider tokens are distinct units. Cache hits discount fees,
+        # not the number of prompt tokens or the required context window.
+        "physical_input": physical_input(included),
+        # A sudden fall is reported with its most likely cause instead of being guessed at.
+        "hit_rate_trend": hit_rate_drop(included),
         "pricing_snapshot": PRICING,
         "model_calls": 0,
         "source_artifacts": before,
+        "prefix_stability": (
+            prefix_stability(lines(path / "prompts.jsonl"))
+            if (path / "prompts.jsonl").exists()
+            else None
+        ),
         "limitations": [
             "token weighted, not average of per-call percentages",
             "cold calls and short prefixes can miss",
             "adjacent prompt LCP is a proxy, not a proof of provider cache reuse",
             "no new QA score or historical invoice claim",
+            "prefix_stability reports a deterministic stable head, not a provider hit prediction",
         ],
     }
     assert before == {p.name: digest_file(p) for p in files}, "Run ledger changed during audit"

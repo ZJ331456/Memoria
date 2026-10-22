@@ -4,8 +4,9 @@
 
 | 目录 | 内容 |
 | --- | --- |
+| [brand](brand/README.md) | 所有者提供的章鱼与字标素材，根README展示 |
 | [images](images/project-diagrams.manifest.json) | 英文宣传海报、英文系统架构图；首页用PNG，架构另提供矢量SVG |
-| [evaluation](evaluation/README.md) | 三组保留实验的聚合、图表与复现指纹 |
+| [evaluation](evaluation/README.md) | 新双组评估状态与旧公开结果退役指纹 |
 | [data-sources](data-sources/README.md) | 公开来源版本、许可、选择范围与SHA清单 |
 
 图片和公开聚合统一存放在本目录。原话、参考答案、个人资料、密钥、模型权重和逐题调用账本保留在Git忽略的本机data/model目录。图表重绘不调用模型、不产生新评分。

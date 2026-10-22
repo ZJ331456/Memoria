@@ -80,9 +80,14 @@ class ExperimentLLM(LLMClient):
         row = {"call": call_id, "role": role, "prompt_sha256": prompt_sha,
                "model": selected.model, "generation": asdict(cfg), "usage": None,
                "ttft_ms": None, "error": None}
-        from ..llm.deepseek_cache import official,layout_of
+        from ..llm.deepseek_cache import official,layout_of,cache_epoch
         row.update(cache_provider='deepseek' if official(selected) else None,
                    cache_layout=layout_of(messages) if official(selected) else None)
+        if row['cache_layout']:
+            # One tag per call so a hit-rate drop is attributable to a model/layout/tool/
+            # truncation change rather than guessed after the fact.
+            row['cache_epoch']=cache_epoch(model=selected.model,endpoint=selected.base_url,
+                layout=row['cache_layout'],mode=role)
         try:
             with self.timings.measure(f"llm.{role}"):
                 kwargs = dict(model=selected, max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p)

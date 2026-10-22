@@ -64,11 +64,11 @@ MCP安装/初始化/授权/只读调用分别记录。[飞书回调及私密步�
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py
-.\.venv\Scripts\python.exe scripts/render_eval_charts.py --check
+.\.venv\Scripts\python.exe scripts/render_eval_charts.py --aggregate PATH_TO_ARCHIVED_JSON
+.\.venv\Scripts\python.exe scripts/render_eval_charts.py --aggregate PATH_TO_ARCHIVED_JSON --check
 ```
 
-仅读取公开历史聚合表/注册协议/实现报告，生成PNG/SVG与SHA清单；不读取私有原话/gold，不调用模型或产生新评分。数据口径见[图表说明](../assets/evaluation/README.md)。后台维护、备份恢复与完整注销仍是计划任务。
+旧结果已退役；渲染器仅在显式提供归档文件时使用。仅读取公开历史聚合表/注册协议/实现报告，生成PNG/SVG与SHA清单；不读取私有原话/gold，不调用模型或产生新评分。数据口径见[图表说明](../assets/evaluation/README.md)。后台维护、备份恢复与完整注销仍是计划任务。
 
 ## 同池证据选择
 
@@ -101,3 +101,7 @@ locomo-run新增--resume-from：必须先确认旧进程已停止并冻结为int
 [config](../config/README.md)按system/models/feishu/mcp各自统一，实际文件忽略、example公开，无local目录；冻结研究登记在eval/protocols。protect_local_data.ps1默认保护data及config，其他自定义私密路径需显式-Directory。详见[配置目录与模型后端](../docs/implemented/配置目录与模型后端.md)。
 
 `test_memory_scenarios.py --user USER`默认0调用验证用户授权的[模拟场景](../simulation/README.md)；显式执行受总调用/字符上限约束，支持指定场景复测、仅进程直连、真实离线BGE和零调用累计清单。全部输出在忽略的simulation/runs，不写生产库、不作为研究成绩。
+
+## 双组评估与零调用估算
+
+research.py --user USERNAME eval-benchmark --dataset data/benchmarks/locomo/raw/locomo10.json --conversations 10 默认只估算，不调用模型。完整上下文Baseline与生产Kernel使用同模型、独立LLM二分类；实际执行另需execute、allow-remote、请求和费用上限，先看[成本与协议](../docs/implemented/双组内核评估与费用估算.md)。

@@ -60,8 +60,11 @@ class MemoryKernel:
 
         return revalidate(self, request, result, answer=answer)
 
-    async def remember(self, content, kind="fact", importance=3, source="agent_tool"):
-        return await self.memory.remember(content, kind, importance, source)
+    async def remember(self, content, kind="fact", importance=3, source="agent_tool",
+                       source_ref=None, *, require_source=False):
+        return await self.memory.remember(
+            content, kind, importance, source, source_ref, require_source=require_source
+        )
 
     def forget(self, memory_id):
         deleted = self.store.delete_memory(memory_id)
@@ -101,12 +104,16 @@ class MemoryKernel:
 
         return source_lineage(self, references)
 
-    async def answer(self, request):
-        """Production Reader, never an alternate benchmark extractor or automatic Claim promotion."""
+    async def answer(self, request, *, unified_head=False):
+        """Production Reader, never an alternate benchmark extractor or Claim promotion.
+
+        `unified_head` puts the Reader on the shared head: a fixed system, the data block at
+        a constant offset and the trusted contract repeated after it. It is opt-in because it
+        changes the instruction position, which is a prompt change that needs its own check.
+        """
         from .access import QueryRequest
         from .reader import read_memory_answer, read_knowledge_answer
         from ..observability.memory_trace import answer_trace
-
         if self.llm is None:
             raise LibraryError(503, "未配置Reader模型")
         from .evidence.query_plan import complex_recall
@@ -119,6 +126,8 @@ class MemoryKernel:
                 and not getattr(request, "use_query_model", False)
             )
         if adaptive:
+            if unified_head:
+                raise LibraryError(422, "unified_head is only supported by the non-adaptive personal Reader")
             from .adaptive_retrieval import read_adaptive
 
             if getattr(request, "use_llm_rerank", False) or getattr(
@@ -141,11 +150,14 @@ class MemoryKernel:
                 policy_guard=lambda access: bool(
                     self.guard_pending_revisions(dict(access), request).get("pending_revisions")
                 ),
+                unified_head=unified_head,
             )
             result["access"]["pending_revisions"] = self.guard_pending_revisions(
                 dict(result["access"]), request
             ).get("pending_revisions", [])
         elif isinstance(request, MemorySearch):
+            if unified_head:
+                raise LibraryError(422, "unified_head is only supported by the non-adaptive personal Reader")
             if request.domains != ["library"]:
                 raise LibraryError(
                     422, "资料Reader仅接受library域；个人状态使用QueryRequest，其他来源使用search"

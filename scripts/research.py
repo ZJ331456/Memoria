@@ -90,11 +90,22 @@ def main():
     sub = subs.add_parser('attribute-closed-loop',help='Post-hoc structural/label attribution on a frozen closed-loop run; no models')
     sub.add_argument('--source-run',required=True)
     sub.add_argument('--judgments',required=True)
-    sub = subs.add_parser("budget-micro", help="Two public questions; zero inference by default, at most four Reader calls")
-    sub.add_argument("--input", required=True)
-    sub.add_argument("--with-reader", action="store_true")
+    sub = subs.add_parser("eval-benchmark", help="Two-arm evaluation: raw context window vs the memory kernel")
+    sub.add_argument("--benchmark", default="locomo", choices=["locomo", "longmemeval"])
+    sub.add_argument("--dataset", required=True)
+    sub.add_argument("--arms", default="raw_context,memoria")
+    sub.add_argument("--conversations", type=int, default=10)
+    sub.add_argument("--questions", type=int)
+    sub.add_argument("--output")
+    sub.add_argument("--concurrency", type=int, default=2)
     sub.add_argument("--allow-remote", action="store_true")
-    sub.add_argument("--profile")
+    sub.add_argument("--context-chars", type=int, default=240000, help="Complete UTF-8 request budget")
+    sub.add_argument("--kernel-budget-chars", type=int, default=8000)
+    sub.add_argument("--write-mode", default="library", choices=["library"])
+    sub.add_argument("--no-judge", action="store_true")
+    sub.add_argument("--execute", action="store_true", help="Without this flag only estimate, zero model calls")
+    sub.add_argument("--max-calls", type=int)
+    sub.add_argument("--max-cost-usd", type=float)
     sub = subs.add_parser("locomo-smoke", help="Fixed ten-question official LoCoMo execution test; no production writes")
     sub.add_argument("--input", required=True, help="Verified official locomo10.json")
     sub.add_argument("--profile")
@@ -212,10 +223,16 @@ def main():
     elif args.command == 'attribute-closed-loop':
         from memoria.experiments.production_replay import attribute_closed_loop_file
         result=attribute_closed_loop_file(workspace,Settings.load(args.config),args.source_run,private_input(args.judgments,directory))
-    elif args.command == "budget-micro":
-        from memoria.experiments.micro_budget import run_micro
-        result = asyncio.run(run_micro(workspace,Settings.load(args.config),private_input(args.input,directory),
-            with_reader=args.with_reader,allow_remote=args.allow_remote,profile=args.profile))
+    elif args.command == "eval-benchmark":
+        from memoria.experiments.eval_command import run as run_eval
+        result=asyncio.run(run_eval(workspace,Settings.load(args.config),
+            benchmark=args.benchmark,dataset=args.dataset,
+            arms=[part.strip() for part in args.arms.split(',') if part.strip()],
+            conversations=args.conversations,questions=args.questions,output=args.output,
+            concurrency=args.concurrency,allow_remote=args.allow_remote,
+            context_chars=args.context_chars,kernel_budget_chars=args.kernel_budget_chars,
+            write_mode=args.write_mode,judge=not args.no_judge,execute=args.execute,
+            max_calls=args.max_calls,max_cost_usd=args.max_cost_usd))
     elif args.command == "locomo-audit":
         from memoria.experiments.locomo_diagnostics import audit
         result,_ = audit(workspace,args.source_run)

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 320" role="img" aria-label="Memoria logo lockup">
+<defs><linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1854E8"/><stop offset=".45" stop-color="#38D5F5"/><stop offset=".72" stop-color="#7861F4"/><stop offset="1" stop-color="#A68BFF"/></linearGradient></defs>
+<g transform="translate(22 24) scale(.72)">
+ <path d="M74 250 C81 205 96 125 112 79 C119 59 139 58 152 76 L233 170 C242 181 252 181 263 170 L349 76 C363 60 384 65 390 85 C405 135 422 205 438 250 C442 266 426 276 412 269 L378 251 C366 245 361 237 358 224 L337 156 L275 224 C260 240 238 240 222 224 L160 156 L140 224 C137 237 131 245 119 251 L93 269 C78 277 70 266 74 250Z" fill="url(#m)"/>
+</g>
+<text x="390" y="208" font-family="Inter, Manrope, Nunito Sans, Arial, sans-serif" font-size="150" font-weight="750" letter-spacing="-5" fill="#101C50">Memoria</text>
+<path d="M405 250 C525 278 660 278 802 250" fill="none" stroke="url(#m)" stroke-width="7" stroke-linecap="round"/>
+</svg>

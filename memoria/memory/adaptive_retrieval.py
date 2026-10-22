@@ -270,10 +270,10 @@ async def read_adaptive(kernel, request):
 
     async def call(stage, system, packet):
         from ..llm.deepseek_cache import evidence_messages, official, layout_of
-        # The existing single repair may fall back to the established short layout;
-        # validators and total call budgets remain unchanged.
+        # Preserve the established fallback for the single contract repair. New layouts
+        # cannot silently replace it in an attempt to increase cache hits.
         prepared = await meter.prepare(evidence_messages(kernel.settings.main,system,packet,
-                                       enabled=not system.endswith(REPAIR_INSTRUCTION)),
+                enabled=not system.endswith(REPAIR_INSTRUCTION)),
                                        max_tokens=2048,atomic=True)
         if not policy.reserve_call(stage, prepared.report, reservation='answer_pipeline' if stage == 'support' else None):
             raise ContextLengthError('Shared adaptive call/input budget exhausted')
@@ -281,6 +281,13 @@ async def read_adaptive(kernel, request):
         trace['calls'].append(row)
         row['cache_provider']='deepseek' if official(prepared.model) else None
         row['cache_layout']=layout_of(prepared.messages) if official(prepared.model) else None
+        if row['cache_layout']:
+            from ..llm.deepseek_cache import cache_epoch
+            # A hit-rate drop must be attributable, not guessed: model, layout, tool contract,
+            # truncation and stage are folded into one tag that is recorded next to the call.
+            row['cache_epoch']=cache_epoch(model=getattr(prepared.model,'model',''),
+                endpoint=getattr(prepared.model,'base_url',''),layout=row['cache_layout'],
+                truncated=bool((prepared.report or {}).get('truncated_messages')),mode=stage)
         from .reader_calls import record_call
         record_call(row)
         clock = time.perf_counter()

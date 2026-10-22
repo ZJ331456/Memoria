@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT = ROOT / "assets/evaluation/registered-20261012.json"
 CHARTS = ("source-recall", "qa-literal-and-citations", "empty-claim-access")
 
 
@@ -50,7 +49,7 @@ def validate(data):
     assert all(v is None for v in data["unmeasured"].values())
 
 
-def render(data, output):
+def render(data, output, source):
     os.environ.setdefault("MPLCONFIGDIR", str(ROOT / ".venv/.matplotlib-cache"))
     import matplotlib
     matplotlib.use("Agg")
@@ -118,26 +117,27 @@ def render(data, output):
     save(fig, CHARTS[2])
     files = {name+ext:{"sha256":digest(output/(name+ext)), "bytes":(output/(name+ext)).stat().st_size}
              for name in CHARTS for ext in (".png", ".svg")}
-    (output / "figures.manifest.json").write_text(json.dumps({"source_summary_sha256":digest(DEFAULT),
+    (output / "figures.manifest.json").write_text(json.dumps({"source_summary_sha256":digest(source),
                 "matplotlib":matplotlib.__version__, "measured_commit":data["measured_code_commit"],
                 "new_model_calls":0, "new_scoring":False, "files":files}, ensure_ascii=False, indent=2)+"\n", encoding="utf-8", newline="\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--aggregate", type=Path, required=True, help="Explicit archived aggregate; old scores are not bundled as current results")
     parser.add_argument("--check", action="store_true", help="Verify public data and previously rendered files; no model calls")
     args = parser.parse_args()
-    data = json.loads(DEFAULT.read_text(encoding="utf-8")); validate(data)
-    output = DEFAULT.parent
+    data = json.loads(args.aggregate.read_text(encoding="utf-8")); validate(data)
+    output = args.aggregate.parent
     if args.check:
         manifest = json.loads((output/"figures.manifest.json").read_text(encoding="utf-8"))
-        assert manifest["source_summary_sha256"] == digest(DEFAULT)
+        assert manifest["source_summary_sha256"] == digest(args.aggregate)
         assert not manifest["new_scoring"] and manifest["new_model_calls"] == 0
         for name, meta in manifest["files"].items():
             assert digest(output/name) == meta["sha256"] and (output/name).stat().st_size == meta["bytes"]
         print("Verified public protocol, report aggregates and 6 figure fingerprints; no private input or inference")
     else:
-        render(data, output)
+        render(data, output, args.aggregate)
         print("Rendered 3 PNG/SVG charts from the historical public summary; 0 model calls, 0 new scoring")
 
 

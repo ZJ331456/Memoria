@@ -1,0 +1,14 @@
+{
+  "origin": "owner-provided local brand kit",
+  "generated_in_this_task": false,
+  "files": {
+    "logo-main-lockup.png": {
+      "source": "memoria-brand-kit/01-logo-lockups/logo-main-lockup.png",
+      "sha256": "df17bec95d4a0aae87ee90b4a82f79e600d116e0b3377c4a533273812d5672b5"
+    },
+    "memoria-logo-lockup.svg": {
+      "source": "memoria-brand-kit/01-logo-lockups/memoria-logo-lockup.svg",
+      "sha256": "0ed48a93a5c72ffaa2cfab334648339dcf943ba6b166abe6f39605abc51e1a7e"
+    }
+  }
+}

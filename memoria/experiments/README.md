@@ -1,5 +1,6 @@
 # Experiments：来源、标注、runner 与评分
 
+当前效果入口eval-benchmark只比较完整历史Baseline与生产Kernel＋同模型，默认0调用估算；[实现与费用](../../docs/implemented/双组内核评估与费用估算.md)。必须显式execute及费用/请求上限才执行，原始账本/检查点/隔离库留账号私有目录。旧LoCoMo/LCCC工具仅用于历史复现，不作为当前分数。
 [rerank_comparison.py](rerank_comparison.py)只对预声明的四题LoCoMo资料库来源Reader做配对诊断，同候选/字符上限、轮换顺序、全部预测后才读取gold；不运行全量，不评测个人RRF或Claim形成。[CLI与结果边界](../../docs/implemented/LLM候选重排与同预算诊断.md)。
 
 [entity_retrieval.py](entity_retrieval.py)提供隔离的三路RRF/实体过滤/实体RRF对照，复用生产Access/Selector/Reader；[CLI](../../scripts/evaluate_entity_retrieval.py)默认0调用，8场景×3方法，同字符预算并单列实际usage。虚构夹具直接入库不测抽取，后验标签不进预测，原始结果只保存在simulation/runs；[协议与边界](../../docs/implemented/实体身份与实体召回.md#第三阶段固定预算的实体对照)。
@@ -86,7 +87,7 @@ v3工程协议单独登记[配置](../../eval/protocols/research-locomo-risk-v3-
 
 [production_replay.py](production_replay.py)通过管理员CLI冻结本账号数据库，在临时副本调用生产访问路径；默认纯词面，可显式使用离线BGE，禁止LLM/远程Embedding。候选四策略可多预算0调用重放，标签只用于后验诊断，不能用于选择。[命令与边界](../../docs/implemented/生产重放与普通来源支持.md)。
 
-[micro_budget.py](micro_budget.py)提供budget-micro：固定官方前两题，默认四策略×三字节预算零推理，显式Reader最多4次、输出512/请求12000字节、0重试/回退；失败保留分母和未知usage。[实际诊断与边界](../../docs/implemented/生产重放与普通来源支持.md#5-两题同预算诊断与硬调用上限)。
+[统一评估框架](eval_schema.py)：`eval-benchmark` 一次运行比较"无记忆基线 / 全上下文 / 内核对话接口 / 内核文档库接口"四个臂，统一结果schema、分组指标、token/缓存/延迟计量，并给出相对基线的差值与分母；来源只用于评分，不参与推理。取代原 `budget-micro` 单入口。
 
 production_replay的`prepare-memory-probe`准备固定单角色LoCoMo原文，接原closed-loop实际执行形成/审核/Claim/View/Reader与撤回；默认准备/验证0调用，显式执行另受调用预算约束。v1普通记忆与v2 Claim两轮共6次真模型调用/4829 tokens，原始记录和后验AI标注留私有空间，不是新的LoCoMo评分。统计区分状态查询尝试、选入Claim修订、编译View与热命中；合理非回答只有显式后验标签才标正确。[命令、结果与限制](../../docs/implemented/生产记忆闭环与逐题归因.md#claim与view真实调用补测2026-10-20)。
 

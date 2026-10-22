@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-23",
+  "current_scores": null,
+  "reason": "retire old presentation; new two-arm protocol pending budget",
+  "archive_commit": "1142dea16e21b14482b6e7e16cb2da4ea2b3d9ff",
+  "private_raw_ledgers_untouched": true,
+  "files": [
+    {
+      "path": "assets/evaluation/empty-claim-access.png",
+      "sha256": "1a4985e7f58f9ca67d9600d06f9a5a2d16c7743d492f12aaf1a6b089345bd043"
+    },
+    {
+      "path": "assets/evaluation/empty-claim-access.svg",
+      "sha256": "2be2ee5b216f7526c331e186c25fa6f993c3a3c038ae631068dc8c91c9df0944"
+    },
+    {
+      "path": "assets/evaluation/evidence-selection-20261012.json",
+      "sha256": "3e39da6be93a8e0c81770e02e35a6ebd54d8ff6487e30db8bc2175f493ad47e4"
+    },
+    {
+      "path": "assets/evaluation/figures.manifest.json",
+      "sha256": "26272ec4a8ef146026e73ffb7705531b86008d9ded505ce61f5c19aaf84160f7"
+    },
+    {
+      "path": "assets/evaluation/locomo-risk-full-20261014-chart.json",
+      "sha256": "4936d0a53454b321a6fae1b925cd71d38d75c1a1408dea59895c2dfcda9f3f8d"
+    },
+    {
+      "path": "assets/evaluation/locomo-risk-full-20261014.json",
+      "sha256": "21f7138dafb7866bc457ce4e9c9e2c578eefa5199e78dc39951c81d5569431b7"
+    },
+    {
+      "path": "assets/evaluation/locomo-risk-full-20261014.png",
+      "sha256": "1e67bf5d0a3df034f2270a573f4e8c1f5542f1d0e9495ff3e88e633065576137"
+    },
+    {
+      "path": "assets/evaluation/locomo-risk-full-20261014.svg",
+      "sha256": "6394223e3ad7386e2cf392e88fb142c6ef13d26c380a47cf3ebe39a1adadad57"
+    },
+    {
+      "path": "assets/evaluation/qa-literal-and-citations.png",
+      "sha256": "506e25a9dcc1da970040c862de0e436917adcc02d6278155ced2ff2e885b6955"
+    },
+    {
+      "path": "assets/evaluation/qa-literal-and-citations.svg",
+      "sha256": "8e8abd20cada1e1bfeb24f0762c96386e65d9019af27b97e32c602e0fa2b555b"
+    },
+    {
+      "path": "assets/evaluation/registered-20261012.json",
+      "sha256": "fb066686b9c86dff087bd3f7c98e0ed0692adda8d2e125ae998edcdcc310ea00"
+    },
+    {
+      "path": "assets/evaluation/retention.manifest.json",
+      "sha256": "a291fbc6bb48d592e64921a3103a5c0d5fa38ad6bf766ccf0180a79ece7c6b3a"
+    },
+    {
+      "path": "assets/evaluation/source-recall.png",
+      "sha256": "9e330aa8fb23ff4816de0fade2dcf46771e56c668ff99d227f85a7cb9111e1c3"
+    },
+    {
+      "path": "assets/evaluation/source-recall.svg",
+      "sha256": "33711ad3891f950d44154fd05783f51da2970b0ae29108917b47201b954f8313"
+    }
+  ]
+}

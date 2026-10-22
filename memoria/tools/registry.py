@@ -72,9 +72,14 @@ class ToolRegistry:
         self._hooks.append(hook)
 
     def schemas(self) -> list[dict[str, Any]]:
-        return [tool.schema() for tool in self._tools.values()]
+        # Always-on tools first, then the rest, each group sorted. Registration order depends
+        # on import/plugin timing and per-turn tool search, so an unsorted list silently
+        # changes the prompt prefix and cold-starts the cache behind it.
+        order = sorted(self._tools.values(), key=lambda t: (not t.always_on, t.name))
+        return [tool.schema() for tool in order]
 
     def catalog(self) -> list[dict[str, Any]]:
+        order = sorted(self._tools.values(), key=lambda t: (not t.always_on, t.name))
         return [
             {
                 "name": t.name,
@@ -84,7 +89,7 @@ class ToolRegistry:
                 "always_on": t.always_on,
                 "search_hint": t.search_hint,
             }
-            for t in self._tools.values()
+            for t in order
         ]
 
     async def execute(self, name: str, arguments: dict[str, Any], allow_write: bool = False, allowed_write_tools: set[str] | None = None) -> ToolResult:

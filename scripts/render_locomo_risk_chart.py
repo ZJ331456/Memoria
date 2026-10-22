@@ -31,8 +31,8 @@ def data_rows(report):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--aggregate',type=Path,default=ROOT/'assets/evaluation/locomo-risk-full-20261014.json')
-    parser.add_argument('--output',type=Path,default=ROOT/'assets/evaluation/locomo-risk-full-20261014')
+    parser.add_argument('--aggregate',type=Path,required=True,help='Explicit archived aggregate; old scores are not current results')
+    parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--check',action='store_true',help='Verify existing chart and source fingerprints without rendering')
     args=parser.parse_args()
     report=json.loads(args.aggregate.read_text(encoding='utf-8'))

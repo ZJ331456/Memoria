@@ -1,18 +1,20 @@
 # Memoria
 
-**面向长期陪伴与任务经验、以可追溯证据为基础的记忆系统。**
+<p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 
-[English](README.en.md) · [快速开始](#快速开始) · [系统架构](#系统架构) · [评测结果](#locomo-全量评测) · [文档](docs/README.md)
+**面向持续交互的、以可追溯证据为基础的长期记忆内核。**
 
-Memoria 管理对话、笔记、文档和任务结果的来源、审核、条件与版本，让有限上下文中的回答和后续任务使用适用的记忆。个人事实与资料知识分别管理，项目提供独立 Chat、Memory Studio、HTTP API 与研究工具，当前后台使用 DeepSeek 大模型与本地 BGE Embedding；也支持本地 Qwen 和兼容 OpenAI 接口的模型配置。
+> 我怎样才能证明：这个系统真的在随着陪伴理解一个人，而且这种能力确实来自我设计的记忆机制？
 
-![Memoria — Memory that stays in context.](assets/images/memoria-overview.png)
+[English](README.en.md) · [快速开始](#快速开始) · [系统架构](#系统架构) · [评估状态](#locomo-全量评测) · [文档](docs/README.md)
 
-> 当前是本机研究原型与受控试用基础。真实连续人物的长期效果、正向画像视图收益和正式商业发布仍待验证。
+Memoria将原始来源、Observation、Pattern、普通记忆与结构化Claim连接起来，管理形成、审核、条件、时间、版本与撤回。Chat、机器人、文档和任务应用是内核的接入方，记忆不局限于对话。
 
-2026-10-21：[统一内核入口与存储边界](docs/implemented/统一内核入口与存储边界.md)。Chat/机器人个人记忆回答、API与生产实验共用Kernel Reader；一般任务聊天仍负责工具编排，历史LoCoMo分数不追认为新机制成绩。
+当前使用DeepSeek与本地BGE，也支持本地/兼容OpenAI格式的模型配置。当前是本机研究原型；真实连续人物的长期效果、抽取F1、因果机制收益及商业发布仍待验证。
 
-2026-10-22最新功能验收：完整工程1522项通过、完整固定场景49/49、实际本地BGE四路4/4。新增[DeepSeek缓存前缀与费用审计](docs/implemented/DeepSeek缓存前缀与成本审计.md)，保留Reader原布局，区分冷输入与隔离暖缓存诊断；OpenAI/Anthropic缓存仅TODO。这些检查与下方冻结LoCoMo效果分开记录，未跑新全量。
+2026-10-23：[缓存审查](docs/implemented/DeepSeek缓存优化详解.md)与[双组内核评估](docs/implemented/双组内核评估与费用估算.md)。新评估只比较完整历史Baseline与生产Kernel＋同模型，采用独立LLM二分类；按用户要求仅做费用估算，暂不全量。旧成绩退出当前展示，原始研究记录保留。
+
+本轮工程回归1,552项通过、实际本地BGE四路4/4。新增付费调用0；真实模型全链路复测与新全量仍待预算，这不是完整核心验收或效果成绩。
 
 ## 项目关注什么
 
@@ -98,33 +100,22 @@ MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均�
 
 ## LoCoMo 全量评测
 
-最新公开完整比较使用 **10 段对话、5,882 条原话、1,986 道 QA**，Reader 为 DeepSeek `deepseek-flash` 非思考模式，Embedding 为本地 `bge-small-en-v1.5`。以下是冻结的 v2 历史成绩；后续工程修复未重新运行全量评测。
+新的[双组协议提案](eval/protocols/kernel-vs-context-judge-v1.json)采用同一DeepSeek Flash、完整10段历史/5,882原话/1,986题。主分为1–4类1,540题的独立LLM二分类；对抗446题单列。旧Token F1与拒答短语分不填入本表。
 
-| 方法 | 普通 Answer F1 ↑ | 对抗拒答短语分 ↑ | 已知 Token / 题 ↓ |
-| --- | ---: | ---: | ---: |
-| RRF + 邻句，首次回答 | 56.12% | 94.17% | 3,986.38 |
-| RRF + 全历史复核 | 58.65% | 92.38% | 18,414.96 |
-| RRF + 定向补检 | 57.47% | 92.83% | 7,290.80 |
-| 充分性 + 风险核验 + 自适应补检 | 51.15% | 95.96% | 12,663.62 |
+| 方法 | 主分（LLM二分类） | 对抗拒答二分类 | 完整费用 / 延迟 |
+| --- | --- | --- | --- |
+| Baseline：完整历史或声明截断＋模型 | 待运行 | 待运行 | 待测 |
+| Memoria：生产内核＋同一模型 | 待运行 | 待运行 | 待测 |
 
-普通题 1,540 道，对抗题 446 道，分别计分。拒答短语分与 F1 均不是人工语义准确率；Token 是包含失败/重试的已知下界，未知 usage 不计零成本。四方法预算不同，没有同协议外部方法排名；自适应组最终 1 题工程失败保留完整分母。
+**按用户要求尚未启动新全量。** 0调用规划估算约15.37–30.74美元；冷暖、形成产量、输出和失败尚未校准，不能作为账单上限。包含形成、审核、巩固、Reader、核验、修复和两组评分。[详细假设与估算命令](docs/implemented/双组内核评估与费用估算.md)
 
-**综合质量、拒答与成本目标尚未达到，生产默认保持。** [完整指标与指纹](assets/evaluation/locomo-risk-full-20261014.json) · [协议、失败与限制](docs/implemented/证据充分性与风险感知回答.md#v2完整1986题消融2026-10-14)
-
-<details>
-<summary>查看质量与成本图，以及其他保留实验</summary>
-
-![LoCoMo四方法全量比较](assets/evaluation/locomo-risk-full-20261014.png)
-
-当前展示保留三组结果：LoCoMo 完整四方法、LCCC 固定 21 轮、同池证据选择。旧冒烟、开发子集和重复导出已从当前资产移除，历史版本与本地原始账本可追溯。[实验资产与复现](assets/evaluation/README.md)
-
-</details>
+旧结果与图表从当前展示退役，可按[归档指纹](assets/evaluation/README.md)追溯。本次比较的是完整框架，不能单凭差值证明某一治理机制或真实长期陪伴效果。
 
 ## 仓库目录
 
 ```text
 Memoria/
-├─ config/           # 系统、模型、飞书、MCP各一份私密配置及公开example
+├─ config/           # 系统、模型、通讯机器人、MCP各一份私密配置及公开example
 ├─ eval/protocols/   # 冻结研究登记，与生产配置分开
 ├─ assets/           # 项目图片、保留评测结果与来源清单
 ├─ docs/

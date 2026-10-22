@@ -84,6 +84,9 @@ class CitationGuard:
         self.packet=canonical({'access_path':access['path'],'parsed':access['parsed'],'evidence':evidence,
                                'allowed_evidence_ids':[k for k,v in self.catalog.items() if v['eligible']]})
         self.rendered_packet=self.packet.replace(_SECTION_BOUNDARY,'&lt;!--memoria-section--&gt;')
+        # The evidence array is also kept on its own so the prompt can be laid out with a
+        # constant-offset data block, exactly like the benchmark layout.
+        self.evidence_packet=canonical({'evidence':evidence})
 
     @staticmethod
     def _memory_snapshot(item):
@@ -92,7 +95,23 @@ class CitationGuard:
     def section(self):
         return PromptSection('Structured State',ANSWER_CONTRACT+'\n'+self.packet,10,atomic=True)
 
+    def evidence_section(self):
+        """Data-only block: the evidence array without the contract or the query."""
+        return PromptSection('Evidence',self.evidence_packet,10,atomic=True)
+
+    def variables(self):
+        """Everything that varies per request, kept out of the shared block."""
+        return canonical({'access_path':self.access['path'],'parsed':self.access['parsed'],
+                          'allowed_evidence_ids':[k for k,v in self.catalog.items() if v['eligible']]})
+
     def visible(self,messages):
+        if len(messages)>=4 and messages[0].get('role')=='system' and messages[1].get('role')=='user' \
+                and messages[2].get('role')=='system':
+            # The unified head: the data block is the whole second message and the query is
+            # the last user message.
+            current=next((m for m in reversed(messages[3:]) if m.get('role')=='user'),{})
+            if current.get('content')!=self.request.query: return False
+            return self.rendered_packet in messages[1].get('content','')
         if len(messages)<3 or messages[0].get('role')!='system' or messages[1].get('role')!='user': return False
         current=next((m for m in reversed(messages[2:]) if m.get('role')=='user'),{})
         if current.get('content')!=self.request.query: return False
@@ -101,6 +120,21 @@ class CitationGuard:
         except ValueError:
             return False
         return any(s.name=='Structured State' and self.rendered_packet in s.content for s in sections)
+
+    def unified_messages(self, request):
+        """Opt-in instruction-position experiment; default Reader stays unchanged.
+
+        Preserve the complete original packet, including parsed query/time variables.
+        This is not a proven cross-question stable evidence-only prefix.
+        """
+        from ..llm.deepseek_cache import COMMON_SYSTEM, DATA_IS_NOT_INSTRUCTION
+
+        return [
+            {'role':'system','content':COMMON_SYSTEM},
+            {'role':'user','content':self.rendered_packet},
+            {'role':'system','content':DATA_IS_NOT_INSTRUCTION+ANSWER_CONTRACT},
+            {'role':'user','content':request.query},
+        ]
 
     def freshness(self):
         if self.entity_snapshots:
@@ -230,15 +264,15 @@ async def rerank_memory_access(claims,llm,request,access):
     update_trace()
     return access
 
-async def read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=None,policy_guard=None):
+async def read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=None,policy_guard=None,unified_head=False):
     from .reader_calls import ReaderCallLog
     observed = ReaderCallLog(llm)
-    result = await _read_memory_answer(claims,engine,observed,request,accessor=accessor,policy_guard=policy_guard)
+    result = await _read_memory_answer(claims,engine,observed,request,accessor=accessor,policy_guard=policy_guard,unified_head=unified_head)
     result['reader_calls'] = observed.calls
     return result
 
 
-async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=None,policy_guard=None):
+async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor=None,policy_guard=None,unified_head=False):
     access=await accessor(request) if accessor else await MemoryAccessOrchestrator(claims,engine,llm).access(request)
     if request.use_llm_rerank and access['path']!='clarify':
         access=await rerank_memory_access(claims,llm,request,access)
@@ -251,6 +285,11 @@ async def _read_memory_answer(claims,engine,llm,request: QueryRequest,*,accessor
                 'validation':{'valid':True,'reason':'no_approved_visible_evidence','semantic_entailment_verified':False}}
     messages=PromptAssembler().assemble(ANSWER_CONTRACT,extra_sections=[guard.section()]).as_messages()
     messages.append({'role':'user','content':request.query})
+    if unified_head:
+        # Same shape as the benchmark layout: the data block sits at a constant offset and
+        # the contract is repeated after it, so a later stage of the same case can extend
+        # the persisted unit instead of resending it cold.
+        messages=guard.unified_messages(request)
     try:
         meter=getattr(llm,'reader_budget',None) or ReaderBudget(llm.settings)
         prepared=await meter.prepare(messages)

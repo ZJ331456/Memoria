@@ -181,7 +181,7 @@ def score_smoke(rows, gold):
 
 async def execute_smoke(workspace, settings, source, *, profile=None, allow_remote=False,
                         roles=None, baseline='B2_rrf', embedding_device='auto', candidate_limit=40,
-                        top_k=12, evidence_chars=12000, selector='coverage',
+                        top_k=12, evidence_chars=12000, selector='coverage', deepseek_cache=False,
                         client_factory=ExperimentLLM, embedding_factory=EmbeddingClient):
     if baseline not in {'B0_recent','B2_fts_compact','B2_dense','B2_rrf'}:
         raise ValueError('Unsupported smoke retrieval baseline')
@@ -245,7 +245,8 @@ async def execute_smoke(workspace, settings, source, *, profile=None, allow_remo
                                              budget=EvidenceBudget(evidence_chars, 'chars'))
                 presented = [c['id'] for c in chosen['payload']['evidence']]
                 packet = {'question':case['question'], 'evidence':chosen['payload'], 'allowed_evidence_ids':presented}
-                prompt = [{'role':'system', 'content':SYSTEM}, {'role':'user', 'content':canonical(packet)}]
+                from ..llm.deepseek_cache import reader_messages
+                prompt = reader_messages(selected, SYSTEM, packet, enabled=deepseek_cache)
                 cfg = roles['reader']
                 prepared = await ReaderBudget(settings).prepare(prompt, selected=selected, max_tokens=cfg.max_tokens,
                                                                 temperature=cfg.temperature, top_p=cfg.top_p)

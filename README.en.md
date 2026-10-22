@@ -1,8 +1,8 @@
 # Memoria
 
-2026-10-22: [DeepSeek prefix caching and cost audit](docs/implemented/DeepSeek缓存前缀与成本审计.md). Reader inputs stay unchanged; cold production-layout calls and warm isolated probes are reported separately. OpenAI/Anthropic caching remains TODO. Final engineering checks: 1522 tests, 49/49 functional checks, 4/4 real local-BGE retrieval lanes; no new full LoCoMo evaluation.
+<p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 
-Architecture update: tenant-bound Kernel is required for production memory consumers. Personal-memory Chat/bot answers and API/replay use the same Reader; general task dialogue retains its tool loop. SQLite adapters are separated from HTTP/transport code. [Implementation and evaluation limits](docs/implemented/统一内核入口与存储边界.md).
+2026-10-23: [Two-arm kernel evaluation and offline cost planning](docs/implemented/双组内核评估与费用估算.md). No new paid calls or full run; current scores are pending. Old published result assets are retired with immutable Git provenance. Cache replay is experimental; production verifier/repair fallbacks remain conservative.
 
 **Source-backed memory for long-term companionship.**
 
@@ -64,29 +64,11 @@ Chat: http://127.0.0.1:2237/ · Studio: http://127.0.0.1:2237/studio/ · API doc
 
 Both interfaces require normal account registration/login; there are no default credentials. MCP tools and the Feishu private-message channel are optional and require their own configuration and account authorization.
 
-## Latest complete LoCoMo comparison
+## Two-arm LoCoMo evaluation
 
-All **1,986 QA**, from 10 conversations and 5,882 utterances; DeepSeek `deepseek-flash`, non-thinking, with local `bge-small-en-v1.5`. These are frozen v2 measurements; later engineering changes have not been reevaluated.
+The proposed v1 compares raw full history (declared oldest-turn truncation when needed) with the production MemoryKernel and the same DeepSeek Flash model. Binary LLM judging uses an adapted permissive rubric; categories 1–4 (1,540 questions) form the primary score, with 446 adversarial questions reported separately.
 
-| Method | Ordinary Answer F1 ↑ | Adversarial refusal phrase score ↑ | Known tokens / QA ↓ |
-| --- | ---: | ---: | ---: |
-| RRF primary | 56.12% | 94.17% | 3,986.38 |
-| Full-history recheck | 58.65% | 92.38% | 18,414.96 |
-| Targeted retrieval | 57.47% | 92.83% | 7,290.80 |
-| Sufficiency + risk + adaptive retrieval | 51.15% | 95.96% | 12,663.62 |
-
-The 1,540 ordinary and 446 adversarial cases are scored separately. Neither F1 nor literal refusal scores establish semantic accuracy. Known tokens include failures and retries, are lower bounds, and exclude unknown usage. Budgets differ, and no matched external-method ranking is claimed. The adaptive run retains one engineering failure in its full denominator.
-
-**The combined quality/refusal/cost objective is not met; production defaults remain.** [Aggregate](assets/evaluation/locomo-risk-full-20261014.json) · [Protocol and limits](docs/implemented/证据充分性与风险感知回答.md)
-
-<details>
-<summary>Quality/cost chart and retained experiments</summary>
-
-![LoCoMo complete comparison](assets/evaluation/locomo-risk-full-20261014.png)
-
-The current asset set retains three result families: complete LoCoMo, registered LCCC diagnostics, and evidence selection. Superseded smoke/development exports and duplicate charts have been removed from the current tree. Historical Git revisions and private run ledgers remain traceable. [Assets and reproduction](assets/evaluation/README.md)
-
-</details>
+**No v1 scores exist yet.** The owner requested an estimate before any full paid run. The planning scenario is USD15.37–30.74 including formation, verification, answers and judging; this is not a billing guarantee. [Protocol](eval/protocols/kernel-vs-context-judge-v1.json) · [Limits and estimate](docs/implemented/双组内核评估与费用估算.md) · [Retired records](assets/evaluation/README.md)
 
 ## Repository
 
@@ -105,3 +87,5 @@ Continuous personal-history effects remain unverified. Backup/restore, migration
 Routine memories now use model-led admission: extraction, a separate evidence review, and source/risk checks before automatic low-risk publication. Human review handles sensitive, conflicting or ambiguous cases. Studio supports an explicit per-message history request and audit receipts; public corpus data stays separate. See [implementation and limits](docs/implemented/LLM自动审核与人工辅助.md).
 
 Runtime settings live in [config/](config/README.md): system.toml, models.toml, bot.toml and mcp.toml, each with a public example. Actual files are ignored; there is no local subdirectory. One model file selects cloud/local LLMs and API/process-local BGE embeddings, including UUID-owned account overrides. Encrypted credentials and OAuth remain in private data storage. [Configuration guide](docs/implemented/配置目录与模型后端.md).
+
+Engineering review at core4c8025b72f5c: 1,552 tests, zero failures/errors/skips; real local BGE 4/4 without Dense/RRF fallback. No new paid model calls. The real-model functional suite was not rerun under the budget hold, so complete core acceptance remains pending.

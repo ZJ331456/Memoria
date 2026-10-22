@@ -357,7 +357,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                   allow_remote=False, embedding_device='auto', concurrency=None, candidate_limit=40,
                   anchor_limit=40, evidence_chars=12000, embedding_model='bge-small-en-v1.5', fallback='full_history', client_factory=ExperimentLLM,
                   embedding_factory=EmbeddingClient, resume_from=None, retry_errors=False, registration=None, deepseek_cache=False):
-    from ..llm.deepseek_cache import evidence_messages, VERSION as CACHE_LAYOUT
+    from ..llm.deepseek_cache import VERSION as CACHE_LAYOUT
     if deepseek_cache and registration is None:
         raise ValueError('DeepSeek cache layout requires a separate --registration')
     risk_method = fallback in {'targeted', 'adaptive_risk'}
@@ -499,7 +499,10 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                     chosen = select_context(history, found, question=case['question'], budget_chars=evidence_chars,
                                             anchor_limit=anchor_limit)
                 packet = {'question': case['question'], **chosen['payload']}
-                prompt = evidence_messages(selected,SYSTEM,packet,enabled=False)
+                from ..llm.deepseek_cache import reader_messages
+                # The Reader is the only request that must carry new bytes; verifiers extend
+                # this exact head, so it must use the same layout when the study is enabled.
+                prompt = reader_messages(selected, SYSTEM, packet, enabled=deepseek_cache)
                 cfg = roles['reader']
                 prepared = await ReaderBudget(settings).prepare(prompt, selected=selected, max_tokens=cfg.max_tokens,
                                                                 temperature=cfg.temperature, top_p=cfg.top_p,atomic=deepseek_cache)
@@ -534,7 +537,7 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
                     full_packet = {
                         'question': case['question'], 'evidence': complete,
                         'instruction': 'Recheck against the complete original conversation. Answer only if supported; otherwise Not mentioned.'}
-                    fallback_prompt = evidence_messages(selected,SYSTEM,full_packet,enabled=False)
+                    fallback_prompt = reader_messages(selected, SYSTEM, full_packet, enabled=deepseek_cache)
                     try:
                         full_prepared = await ReaderBudget(settings).prepare(fallback_prompt, selected=selected,
                             max_tokens=cfg.max_tokens, temperature=cfg.temperature, top_p=cfg.top_p,atomic=deepseek_cache)
@@ -616,8 +619,9 @@ async def execute(workspace, settings, source, *, scope='full', profile=None, ro
         (recorder.path/'score.json').write_text(canonical(result_score)+'\n', encoding='utf-8')
         metrics = {k: v for k, v in result_score.items() if k != 'details'}
         usages = [c.get('usage') for c in calls]
-        from ..llm.deepseek_cache import cache_summary
+        from ..llm.deepseek_cache import cache_summary, structural_ceiling
         metrics['deepseek_cache']=cache_summary(calls)
+        metrics['deepseek_cache']['ceiling']=structural_ceiling(calls)
         metrics['deepseek_cache_by_role']={role:cache_summary([c for c in calls if c.get('role')==role]) for role in ('reader','judge')}
         metrics.update(errors=sum(r['status'] != 'success' for r in rows.values()), reader_calls=len(calls),
                        failed_calls=sum(bool(c.get('error')) for c in calls),
