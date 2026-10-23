@@ -238,9 +238,6 @@ class MemorySearchService:
             ]
             capture["identity_rejected"] = list(identity_rejected)
             capture["retrieval"] = retrieval
-        if retrieval and request.budget_chars >= 2000:
-            response['retrieval'] = {domain: {k: v for k,v in report.items()
-                if k not in {'lanes','adjacency_hints'}} for domain,report in retrieval.items()}
         response["selection"]["identity_rejected_count"] = len(identity_rejected)
         response["selection"]["temporal_rejected_count"] = len(temporal_rejected)
         response["selection"]["temporal_diagnostics_truncated"] = False
@@ -284,6 +281,15 @@ class MemorySearchService:
                         response["selection"]["skipped_budget"] += 1
             response["selection"]["selected_count"] = len(response["evidence"])
             size()
+        # Optional retrieval reporting must never displace original evidence or
+        # its complete identity/support dependencies. Detailed diagnostics remain
+        # available in capture even when the public summary cannot fit.
+        if retrieval and request.budget_chars >= 2000:
+            response['retrieval'] = {domain: {k: v for k,v in report.items()
+                if k not in {'lanes','adjacency_hints','candidate_selection'}} for domain,report in retrieval.items()}
+            if size() > request.budget_chars:
+                response.pop('retrieval')
+                size()
         from ..observability.memory_trace import record_read
 
         record_read(

@@ -1,0 +1,539 @@
+{
+  "schema": "memoria-core-acceptance-v2",
+  "date": "2026-10-24",
+  "core_sha256": "b26116833fe2a7bb669470156988e383e813b65dc36ada1d09e574de3df86281",
+  "engineering": {
+    "tests": 1764,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 635.771,
+    "junit_sha256": "7834fd1db2dbd88702664ced42fa2aca8b5d9dd14adc92dafde665cccc4e0fe1"
+  },
+  "simulation": {
+    "run_id": "20261023T235546-b96b6761",
+    "acceptance_passed": true,
+    "acceptance_scope": "complete_current_suite",
+    "blocked_calls": 0,
+    "case_execution_errors": 0,
+    "cases": 38,
+    "core_sha256": "b26116833fe2a7bb669470156988e383e813b65dc36ada1d09e574de3df86281",
+    "core_unchanged": true,
+    "data_kind": "synthetic_functional",
+    "elapsed_seconds": 207.583,
+    "known_tokens": 217395,
+    "model_calls": 133,
+    "production_writes": 0,
+    "quality": "functional_assertions_not_semantic_accuracy",
+    "question_outcomes": {
+      "passed": 49
+    },
+    "questions": 49,
+    "unknown_usage_calls": 0,
+    "cost": {
+      "rates": {
+        "off_peak": {
+          "hit": 0.003,
+          "miss": 0.15,
+          "output": 0.6
+        },
+        "peak": {
+          "hit": 0.006,
+          "miss": 0.3,
+          "output": 1.2
+        }
+      },
+      "estimate": {
+        "off_peak": {
+          "known_input_usd": 0.017306742,
+          "known_input_output_usd": 0.026058941999999998,
+          "effective_input_usd_per_million": 0.08533559820125439,
+          "input_without_cache_usd": 0.030421199999999995
+        },
+        "peak": {
+          "known_input_usd": 0.034613484,
+          "known_input_output_usd": 0.052117883999999996,
+          "effective_input_usd_per_million": 0.17067119640250877,
+          "input_without_cache_usd": 0.06084239999999999
+        }
+      },
+      "invoice": false,
+      "complete_usage": true,
+      "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+    }
+  },
+  "simulation_attempts": [
+    {
+      "run_id": "20261023T194825-e804241f",
+      "acceptance_passed": false,
+      "acceptance_scope": "complete_current_suite",
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "cases": 38,
+      "core_sha256": "deaf04d0e0f55b57c700fa7950ba70686892f19802f4ba402819a61d5c10a592",
+      "core_unchanged": true,
+      "data_kind": "synthetic_functional",
+      "elapsed_seconds": 214.534,
+      "known_tokens": 217493,
+      "model_calls": 134,
+      "production_writes": 0,
+      "quality": "functional_assertions_not_semantic_accuracy",
+      "question_outcomes": {
+        "capability_gap": 1,
+        "passed": 48
+      },
+      "questions": 49,
+      "unknown_usage_calls": 0,
+      "cost": {
+        "rates": {
+          "off_peak": {
+            "hit": 0.003,
+            "miss": 0.15,
+            "output": 0.6
+          },
+          "peak": {
+            "hit": 0.006,
+            "miss": 0.3,
+            "output": 1.2
+          }
+        },
+        "estimate": {
+          "off_peak": {
+            "known_input_usd": 0.016709436,
+            "known_input_output_usd": 0.025500036000000004,
+            "effective_input_usd_per_million": 0.08237660839471116,
+            "input_without_cache_usd": 0.0304263
+          },
+          "peak": {
+            "known_input_usd": 0.033418872,
+            "known_input_output_usd": 0.05100007200000001,
+            "effective_input_usd_per_million": 0.1647532167894223,
+            "input_without_cache_usd": 0.0608526
+          }
+        },
+        "invoice": false,
+        "complete_usage": true,
+        "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+      }
+    },
+    {
+      "run_id": "20261023T195907-89d77210",
+      "acceptance_passed": true,
+      "acceptance_scope": "complete_current_suite",
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "cases": 38,
+      "core_sha256": "a324392e1caf8287b7353094e2239509cbe049370da790189b8fc1ef0fac9b22",
+      "core_unchanged": true,
+      "data_kind": "synthetic_functional",
+      "elapsed_seconds": 218.297,
+      "known_tokens": 220968,
+      "model_calls": 135,
+      "production_writes": 0,
+      "quality": "functional_assertions_not_semantic_accuracy",
+      "question_outcomes": {
+        "passed": 49
+      },
+      "questions": 49,
+      "unknown_usage_calls": 0,
+      "cost": {
+        "rates": {
+          "off_peak": {
+            "hit": 0.003,
+            "miss": 0.15,
+            "output": 0.6
+          },
+          "peak": {
+            "hit": 0.006,
+            "miss": 0.3,
+            "output": 1.2
+          }
+        },
+        "estimate": {
+          "off_peak": {
+            "known_input_usd": 0.017555546999999998,
+            "known_input_output_usd": 0.026553746999999996,
+            "effective_input_usd_per_million": 0.08523310077632287,
+            "input_without_cache_usd": 0.030895649999999997
+          },
+          "peak": {
+            "known_input_usd": 0.035111093999999995,
+            "known_input_output_usd": 0.05310749399999999,
+            "effective_input_usd_per_million": 0.17046620155264575,
+            "input_without_cache_usd": 0.06179129999999999
+          }
+        },
+        "invoice": false,
+        "complete_usage": true,
+        "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+      }
+    },
+    {
+      "run_id": "20261023T234155-0dca3ef1",
+      "acceptance_passed": true,
+      "acceptance_scope": "complete_current_suite",
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "cases": 38,
+      "core_sha256": "2733e5b2634b45acec46209bee3d3f56d0e44e456342f3a8e9f54956a17f672e",
+      "core_unchanged": true,
+      "data_kind": "synthetic_functional",
+      "elapsed_seconds": 214.252,
+      "known_tokens": 218147,
+      "model_calls": 134,
+      "production_writes": 0,
+      "quality": "functional_assertions_not_semantic_accuracy",
+      "question_outcomes": {
+        "passed": 49
+      },
+      "questions": 49,
+      "unknown_usage_calls": 0,
+      "cost": {
+        "rates": {
+          "off_peak": {
+            "hit": 0.003,
+            "miss": 0.15,
+            "output": 0.6
+          },
+          "peak": {
+            "hit": 0.006,
+            "miss": 0.3,
+            "output": 1.2
+          }
+        },
+        "estimate": {
+          "off_peak": {
+            "known_input_usd": 0.017336717999999997,
+            "known_input_output_usd": 0.026042718,
+            "effective_input_usd_per_million": 0.08513540270186654,
+            "input_without_cache_usd": 0.030545549999999998
+          },
+          "peak": {
+            "known_input_usd": 0.034673435999999995,
+            "known_input_output_usd": 0.052085436,
+            "effective_input_usd_per_million": 0.17027080540373307,
+            "input_without_cache_usd": 0.061091099999999995
+          }
+        },
+        "invoice": false,
+        "complete_usage": true,
+        "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+      }
+    },
+    {
+      "run_id": "20261023T235043-43487032",
+      "acceptance_passed": false,
+      "acceptance_scope": "complete_current_suite",
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "cases": 38,
+      "core_sha256": "b26116833fe2a7bb669470156988e383e813b65dc36ada1d09e574de3df86281",
+      "core_unchanged": true,
+      "data_kind": "synthetic_functional",
+      "elapsed_seconds": 212.425,
+      "known_tokens": 217521,
+      "model_calls": 133,
+      "production_writes": 0,
+      "quality": "functional_assertions_not_semantic_accuracy",
+      "question_outcomes": {
+        "capability_gap": 1,
+        "passed": 48
+      },
+      "questions": 49,
+      "unknown_usage_calls": 0,
+      "cost": {
+        "rates": {
+          "off_peak": {
+            "hit": 0.003,
+            "miss": 0.15,
+            "output": 0.6
+          },
+          "peak": {
+            "hit": 0.006,
+            "miss": 0.3,
+            "output": 1.2
+          }
+        },
+        "estimate": {
+          "off_peak": {
+            "known_input_usd": 0.017294784,
+            "known_input_output_usd": 0.025868184000000002,
+            "effective_input_usd_per_million": 0.08509872461029759,
+            "input_without_cache_usd": 0.0304848
+          },
+          "peak": {
+            "known_input_usd": 0.034589568,
+            "known_input_output_usd": 0.051736368000000005,
+            "effective_input_usd_per_million": 0.17019744922059518,
+            "input_without_cache_usd": 0.0609696
+          }
+        },
+        "invoice": false,
+        "complete_usage": true,
+        "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+      }
+    },
+    {
+      "run_id": "20261023T235546-b96b6761",
+      "acceptance_passed": true,
+      "acceptance_scope": "complete_current_suite",
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "cases": 38,
+      "core_sha256": "b26116833fe2a7bb669470156988e383e813b65dc36ada1d09e574de3df86281",
+      "core_unchanged": true,
+      "data_kind": "synthetic_functional",
+      "elapsed_seconds": 207.583,
+      "known_tokens": 217395,
+      "model_calls": 133,
+      "production_writes": 0,
+      "quality": "functional_assertions_not_semantic_accuracy",
+      "question_outcomes": {
+        "passed": 49
+      },
+      "questions": 49,
+      "unknown_usage_calls": 0,
+      "cost": {
+        "rates": {
+          "off_peak": {
+            "hit": 0.003,
+            "miss": 0.15,
+            "output": 0.6
+          },
+          "peak": {
+            "hit": 0.006,
+            "miss": 0.3,
+            "output": 1.2
+          }
+        },
+        "estimate": {
+          "off_peak": {
+            "known_input_usd": 0.017306742,
+            "known_input_output_usd": 0.026058941999999998,
+            "effective_input_usd_per_million": 0.08533559820125439,
+            "input_without_cache_usd": 0.030421199999999995
+          },
+          "peak": {
+            "known_input_usd": 0.034613484,
+            "known_input_output_usd": 0.052117883999999996,
+            "effective_input_usd_per_million": 0.17067119640250877,
+            "input_without_cache_usd": 0.06084239999999999
+          }
+        },
+        "invoice": false,
+        "complete_usage": true,
+        "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+      }
+    }
+  ],
+  "interrupted_engineering_attempts": 2,
+  "prior_completed_engineering": {
+    "tests": 1756,
+    "core_sha256": "a324392e1caf8287b7353094e2239509cbe049370da790189b8fc1ef0fac9b22"
+  },
+  "prior_internal_36_run": {
+    "run_id": "20261023T120312Z-5312061f",
+    "calls": 226,
+    "primary_correct": 13,
+    "primary_planned": 28,
+    "unscored": 1
+  },
+  "bge": {
+    "personal": {
+      "passed": 4,
+      "total": 4,
+      "dense_available": true,
+      "fallback": false
+    },
+    "library": {
+      "passed": 4,
+      "total": 4,
+      "dense_available": true,
+      "fallback": false
+    }
+  },
+  "production_isolation": {
+    "production_databases": 2,
+    "experimental_ids_checked": {
+      "messages": 180,
+      "library_sources": 165,
+      "memories": 140
+    },
+    "checks": [
+      {
+        "quick_check": "ok",
+        "foreign_key_errors": 0,
+        "production_counts_unchanged": true,
+        "experiment_id_leaks": {
+          "messages": 0,
+          "library_sources": 0,
+          "memories": 0
+        }
+      },
+      {
+        "quick_check": "ok",
+        "foreign_key_errors": 0,
+        "production_counts_unchanged": true,
+        "experiment_id_leaks": {
+          "messages": 0,
+          "library_sources": 0,
+          "memories": 0
+        }
+      }
+    ],
+    "access": "SQLite read-only URI; no production test imports"
+  },
+  "this_revision_paid_attempts": {
+    "calls": 1118,
+    "usage": {
+      "calls": 1118,
+      "known_cache_calls": 1118,
+      "unknown_cache_calls": 0,
+      "invalid_cache_calls": 0,
+      "prompt_cache_hit_tokens": 788436,
+      "prompt_cache_miss_tokens": 2635493,
+      "known_prompt_tokens": 3423929,
+      "completion_tokens_known": 257052,
+      "unknown_completion_calls": 0,
+      "token_weighted_hit_rate": 0.2302722982865591,
+      "complete": true,
+      "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
+    },
+    "cost": {
+      "rates": {
+        "off_peak": {
+          "hit": 0.003,
+          "miss": 0.15,
+          "output": 0.6
+        },
+        "peak": {
+          "hit": 0.006,
+          "miss": 0.3,
+          "output": 1.2
+        }
+      },
+      "estimate": {
+        "off_peak": {
+          "known_input_usd": 0.39768925800000005,
+          "known_input_output_usd": 0.551920458,
+          "effective_input_usd_per_million": 0.11614997215187582,
+          "input_without_cache_usd": 0.51358935
+        },
+        "peak": {
+          "known_input_usd": 0.7953785160000001,
+          "known_input_output_usd": 1.103840916,
+          "effective_input_usd_per_million": 0.23229994430375164,
+          "input_without_cache_usd": 1.0271787
+        }
+      },
+      "invoice": false,
+      "complete_usage": true,
+      "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+    },
+    "unknown_reserved_upper_usd": 0
+  },
+  "previous_optimization_paid_attempts": {
+    "calls": 1251,
+    "usage": {
+      "calls": 1251,
+      "known_cache_calls": 1250,
+      "unknown_cache_calls": 1,
+      "invalid_cache_calls": 0,
+      "prompt_cache_hit_tokens": 1750610,
+      "prompt_cache_miss_tokens": 2576857,
+      "known_prompt_tokens": 4327467,
+      "completion_tokens_known": 250940,
+      "unknown_completion_calls": 0,
+      "token_weighted_hit_rate": 0.40453456952993516,
+      "complete": false,
+      "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
+    },
+    "cost": {
+      "rates": {
+        "off_peak": {
+          "hit": 0.003,
+          "miss": 0.15,
+          "output": 0.6
+        },
+        "peak": {
+          "hit": 0.006,
+          "miss": 0.3,
+          "output": 1.2
+        }
+      },
+      "estimate": {
+        "off_peak": {
+          "known_input_usd": 0.39178038,
+          "known_input_output_usd": 0.54234438,
+          "effective_input_usd_per_million": 0.09053341827909953,
+          "input_without_cache_usd": 0.64912005
+        },
+        "peak": {
+          "known_input_usd": 0.78356076,
+          "known_input_output_usd": 1.08468876,
+          "effective_input_usd_per_million": 0.18106683655819905,
+          "input_without_cache_usd": 1.2982401
+        }
+      },
+      "invoice": false,
+      "complete_usage": false,
+      "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+    },
+    "unknown_reserved_upper_usd": 0.0018945
+  },
+  "all_authorized_optimization_paid_attempts": {
+    "calls": 2369,
+    "usage": {
+      "calls": 2369,
+      "known_cache_calls": 2368,
+      "unknown_cache_calls": 1,
+      "invalid_cache_calls": 0,
+      "prompt_cache_hit_tokens": 2539046,
+      "prompt_cache_miss_tokens": 5212350,
+      "known_prompt_tokens": 7751396,
+      "completion_tokens_known": 507992,
+      "unknown_completion_calls": 0,
+      "token_weighted_hit_rate": 0.32755983567347097,
+      "complete": false,
+      "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
+    },
+    "cost": {
+      "rates": {
+        "off_peak": {
+          "hit": 0.003,
+          "miss": 0.15,
+          "output": 0.6
+        },
+        "peak": {
+          "hit": 0.006,
+          "miss": 0.3,
+          "output": 1.2
+        }
+      },
+      "estimate": {
+        "off_peak": {
+          "known_input_usd": 0.789469638,
+          "known_input_output_usd": 1.094264838,
+          "effective_input_usd_per_million": 0.10184870415599978,
+          "input_without_cache_usd": 1.1627094
+        },
+        "peak": {
+          "known_input_usd": 1.578939276,
+          "known_input_output_usd": 2.188529676,
+          "effective_input_usd_per_million": 0.20369740831199956,
+          "input_without_cache_usd": 2.3254188
+        }
+      },
+      "invoice": false,
+      "complete_usage": false,
+      "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+    },
+    "unknown_reserved_upper_usd": 0.0018945
+  },
+  "limits": [
+    "Synthetic checks verify functions, not unseen quality or causal memory benefit.",
+    "All prior simulations, two interrupted engineering attempts and the v14 36-case diagnostic remain private immutable receipts.",
+    "New caption input differs from the historical dialogue-only protocol.",
+    "Costs use the frozen tariff snapshot, not provider invoices; unknown usage is not zero."
+  ]
+}

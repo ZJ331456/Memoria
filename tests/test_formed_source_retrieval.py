@@ -54,7 +54,9 @@ def test_reviewed_description_recalls_original_turn_and_summary_is_not_quote_evi
     assert library.dependency_valid(candidate['dependency'])
     guard, messages, evidence, _ = adapter.present(access, [candidate])
     assert guard.freshness() is None
-    assert organization['observations'][0]['summary'] in json.dumps(messages)
+    assert organization['observations'][0]['summary'] not in json.dumps(messages)
+    assert organization['observations'][0]['summary'] in json.dumps(evidence[0]['retrieval_hints'])
+    assert guard.packet['evidence'][0]['provenance']['formed_memory']['role'] == 'retrieval_receipt_only'
     validate_quotes([Quote(id=candidate['id'], quote=body)], evidence)
     with pytest.raises(ValueError, match='exact source text'):
         validate_quotes([Quote(id=candidate['id'], quote=organization['observations'][0]['summary'])], evidence)

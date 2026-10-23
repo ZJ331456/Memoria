@@ -1,6 +1,6 @@
 # Memoria
 
-Latest: [the original 36 cases evaluated on the final Memoria framework only](docs/implemented/记忆读取优化与36题诊断.md): ordinary **12/28 (42.86% lower bound, two unscored failures)** and adversarial **8/8**. The previous Memoria result was 14/28; this run does not establish an accuracy improvement. Approved observations now reach the Reader, while explicit consolidation use remains zero on these cases. Final functional acceptance: **1671 engineering tests, 49/49 model-backed synthetic checks, and both actual local BGE suites passed**. Raw data stay private; [the single formal group](assets/evaluation/joint-memory36.json) and [all attempts/costs](assets/evaluation/joint-memory-acceptance.json) are public aggregates.
+Latest: [evidence-flow fixes and the original 36-case single-framework retest](docs/implemented/证据流召回判断与回答修复.md): **15/28 ordinary (53.57% lower bound, one unscored budget failure)** and **6/8 adversarial**. Ordinary results increased from 12/28, while adversarial results fell from 8/8; overall quality improvement is not established. Input now includes separate dataset-provided machine captions. Final acceptance: **1764 tests, 49/49 model-backed synthetic checks, and both actual local BGE suites passed**. [One formal group](assets/evaluation/evidence-flow36.json) · [all attempts and costs](assets/evaluation/evidence-flow-acceptance.json). Raw QA and ledgers remain private.
 
 <p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 

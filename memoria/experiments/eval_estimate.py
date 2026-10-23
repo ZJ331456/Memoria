@@ -79,6 +79,11 @@ def estimate(items, dataset, *, model, context_bytes=240000, arms=None):
         "judge_reference_policy": "adapted binary rubric, no evidence override; not an exact Mem0 score reproduction",
         "questions_per_arm": len(items), "groups": dict(Counter(i.group for i in items)),
         "histories": len(histories), "source_turns": sum(len(h) for h in histories.values()),
+        "source_input_counts": {
+            "dialogue_turns": sum(s.get("source_kind") != "machine_image_caption"
+                for h in histories.values() for s in h),
+            "machine_image_captions": sum(s.get("source_kind") == "machine_image_caption"
+                for h in histories.values() for s in h)},
         "formation_windows": b, "context_byte_limit": context_bytes,
         "baseline_untruncated_serialized_chars_sum": histories_chars,
         "scenarios": scenarios, "pricing_snapshot": PRICING,

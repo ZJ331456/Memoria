@@ -169,7 +169,8 @@ def test_production_kernel_retries_selection_once_with_exact_source_windows(env,
         if GATE in system:
             packet=json.loads(messages[1]['content']);cid=packet['evidence'][0]['id']
             assert 'speaker' not in packet['evidence'][0]['text']
-            value={'state':'sufficient','requirements':[{**r,'status':'supported','sources':[
+            value={'state':'sufficient','requirements':[{**r,'status':'supported',
+                'binding':{'value':'A cat','basis':'explicit','missing_components':[]},'sources':[
                 {'id':cid,'quote':'I adopted a cat.'}]} for r in packet['query_plan']['requirements']],
                 'missing_queries':[],'reason':'Synthetic original event.'}
         elif SUPPORT in system:
@@ -182,6 +183,10 @@ def test_production_kernel_retries_selection_once_with_exact_source_windows(env,
             value={'verdict':'insufficient' if counterevidence else 'supported','claims':[{'statement':packet['proposed_answer'],'relation':'insufficient' if counterevidence else 'supported',
                 'basis':'explicit','sources':[{'id':cid,'quote':'I adopted a cat.'}],'reason':'Synthetic.'}],
                 'missing_queries':[],'reason':'Synthetic.'}
+            if 'query_plan' in packet:
+                value['requirement_coverage']=[{'fact':r['fact'],'status':'missing' if counterevidence else 'answered',
+                    'answer_units':[] if counterevidence else [packet['proposed_answer']]}
+                    for r in packet['query_plan']['requirements']]
         else:
             _,sections=_parse_frame(messages[1]['content'])
             packet=json.loads(next(s.content for s in sections if s.name=='Source Evidence').rsplit('\n',1)[-1])

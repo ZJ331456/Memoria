@@ -123,7 +123,8 @@ def test_date_anchors_are_top_level_source_local_fields_and_not_upload_dates(env
     assert e['speaker']=='Alice' and e['session_date_raw']=='1:56 pm on 8 May, 2023'
     query_plan=plan(adapter.request.query,{})
     fact=query_plan['requirements'][0]
-    decision={'state':'sufficient','requirements':[{**fact,'status':'supported','sources':[
+    decision={'state':'sufficient','requirements':[{**fact,'status':'supported',
+        'binding':{'value':'7 May 2023','basis':'derived','missing_components':[]},'sources':[
         {'id':e['id'],'field':'text','quote':'I adopted a cat yesterday.'},
         {'id':e['id'],'field':'session_date_raw','quote':e['session_date_raw']}]}],
         'missing_queries':[],'reason':'Explicit utterance plus its source-local calendar.'}
@@ -211,16 +212,16 @@ def test_same_utterance_explicit_event_and_separate_date_keep_audited_dependenci
     value={'verdict':'supported','claims':[
         {'statement':'Alice painted it last year','relation':'supported','basis':'explicit',
          'sources':[{'id':'c1','field':'text','quote':'I painted it last year.'}],'reason':'Source self-report.'},
-        {'statement':'in a statement dated 8 May 2023','relation':'supported','basis':'explicit',
+        {'statement':'The source date is 8 May 2023','relation':'supported','basis':'explicit','scope':'source_metadata',
          'sources':[{'id':'c1','field':'session_date_raw','quote':'8 May 2023'}],'reason':'Same utterance date.'},
         {'statement':'so in 2022','relation':'supported','basis':'derived',
          'sources':[{'id':'c1','field':'session_date_raw','quote':'8 May 2023'}],'reason':'Last year relative to 2023.'}],
         'missing_queries':[],'reason':'Synthetic.'}
-    answer={'answer':'Alice painted it last year, in a statement dated 8 May 2023, so in 2022','evidence_ids':['c1']}
+    answer={'answer':'Alice painted it last year. The source date is 8 May 2023, so in 2022','evidence_ids':['c1']}
     evidence=[{'id':'c1','speaker':'Alice','text':'I painted it last year.','session_date_raw':'8 May 2023'}]
     result=AnswerRisk().validate(value,'When did Alice paint it?',answer,evidence)
-    assert result['accepted'] and len(result['support_dependencies'])==2
-    assert result['support_dependencies'][1]['event_claim_indices']==[0]
+    assert result['accepted'] and len(result['support_dependencies'])==1
+    assert result['support_dependencies'][0]['event_claim_indices']==[0]
     value['claims'][0]['basis']='inference'
     with pytest.raises(ValueError,match='Timestamp alone'):AnswerRisk().validate(value,'When?',answer,evidence)
 

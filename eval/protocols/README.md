@@ -4,6 +4,10 @@
 
 # 冻结研究协议与角色
 
+[v15最终值绑定与日期范围修复36题](kernel-memory-judge-v15-value-closure-36.json)仍只执行Memoria一组；原36题、caption输入、模型和Judge沿用v14。依据复现缺陷修复区间参照日期误拒、未引用的物品值和来源言语行为时间边界，旧v14的13/28与失败费用私有保留，不局部挑题重试。
+
+[v14证据流修复单组36题](kernel-memory-judge-v14-evidence-flow-36.json)仅执行完整Memoria、原36个ID，450调用/1.5美元保护；新输入显式包含188条独立机器BLIP描述，788段原对话保持，旧v13纯文本成绩不改。配对变化包含输入完整性修复，不能作为单模块因果收益；失败/未知留完整分母。
+
 [v13最终Memoria单臂36题](kernel-memory-judge-v13-final-36.json)按用户最终要求只执行完整框架，350调用/1美元保护；原36题、DeepSeek Flash与Judge保持。它在修复通用顿号覆盖错误后独立执行，不局部重试或追认v12失败，不重复内部对照。旧v12诊断和全部调用/费用保留。
 
 [v12原36题记忆读取诊断](kernel-vs-context-judge-v12-joint-memory-ablation-36.json)保留v11原36个ID、模型与Judge；内部原文/自适应/完整历史对照只用于定位机制，最终公开成绩仅Memoria一组。严格登记各臂开关、顺序及750调用/3美元保护，不新增全量或按分数挑选重跑。v11和旧协议原字节保持。

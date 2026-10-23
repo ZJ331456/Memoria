@@ -80,3 +80,24 @@ def test_primary_publication_exposes_one_framework_and_retains_all_diagnostic_co
     assert "raw_context" not in json.dumps(result)
     assert result["paired_ordinary"] == {}
     assert result["entire_diagnostic_accounting"]["calls"] == 1
+
+
+def test_previous_single_framework_is_paired_without_dropping_its_failure(tmp_path):
+    current = tmp_path / "current"
+    previous = tmp_path / "previous"
+    current.mkdir()
+    previous.mkdir()
+    reg, _ = fixture_run(current)
+    fixture_run(previous)
+    path = previous / "cases.jsonl"
+    path.write_text("".join(line + "\n" for line in path.read_text(encoding="utf-8").splitlines()
+        if json.loads(line)["arm"] == "memoria"), encoding="utf-8")
+    manifest_path = previous / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["protocol"]["arms"] = ["memoria"]
+    manifest["artifacts"]["cases.jsonl"]["sha256"] = digest(path)
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    result = publish(current, reg, previous=previous, primary_only=True)
+    paired = result["paired_ordinary"]["historical_memoria_to_current"]
+    assert paired == {"both_correct": 1, "both_incorrect": 0,
+        "improved": 0, "regressed": 0, "unknown": 1}

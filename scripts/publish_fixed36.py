@@ -43,12 +43,20 @@ def read_cases(run, arms, ids):
         ) if key in row})
         # Keep only numeric/boolean diagnostics; locators and quoted summaries stay private.
         extra = row.get("extras", {})
-        stages = ("initial_candidates", "final_candidates", "reader_evidence", "published_citations")
+        stages = ("initial_candidates", "final_candidates", "gate_bound_evidence", "reader_evidence", "published_citations")
         pipeline = extra.get("pipeline", {})
         case.extras["pipeline"] = {"stages": {name: {
             key: int(value.get(key, 0)) for key in ("records", "consolidated_summaries",
                 "observation_hint_records", "observation_ids", "visible_observation_summaries")
         } for name, value in pipeline.get("stages", {}).items() if name in stages}}
+        if gate := pipeline.get("gate"):
+            case.extras["pipeline"]["gate"] = {
+                "sufficient": bool(gate.get("sufficient")),
+                "unassessed_candidates": int(gate.get("unassessed_candidates", 0))}
+        if repair := pipeline.get("answer_repair"):
+            case.extras["pipeline"]["answer_repair"] = {
+                key: bool(repair.get(key)) for key in (
+                    "attempted", "accepted", "question_requirement_coverage_verified")}
         gold = extra.get("posthoc_gold", {})
         case.extras["posthoc_gold"] = {
             "gold_defined": bool(gold.get("gold_defined")),
@@ -101,6 +109,8 @@ def publish(run, registration, *, previous=None, primary_only=False):
             ("arm_order", "arm_order"), ("arm_configuration", "arm_configuration"),
             ("kernel_evidence_chars", "kernel_budget_chars"),
             ("reader_max_tokens", "reader_max_tokens"),
+            ("include_captions", "include_captions"),
+            ("source_input_policy", "source_input_policy"),
             ("input_request_byte_cap", "context_byte_limit")):
         if declared_key in declared and protocol.get(runtime_key) != declared[declared_key]:
             raise ValueError("Run mechanisms/order/budgets differ from registration")
@@ -133,7 +143,8 @@ def publish(run, registration, *, previous=None, primary_only=False):
         from memoria.experiments.eval_diagnostics import summarize_diagnostics
         diagnostics = summarize_diagnostics(rows)
         public["diagnostics"] = {key: diagnostics[key] for key in (
-            "ordinary", "adversarial", "pipeline_stages", "gold_undefined_cases", "unavailable_gold_cases")}
+            "ordinary", "adversarial", "pipeline_stages", "gate_bindings", "answer_repairs",
+            "gold_undefined_cases", "unavailable_gold_cases")}
         subset = [row for row in calls if row.get("arm") == arm]
         usage = cache_summary(subset)
         public["accounting"] = {"calls": len(subset), "usage": usage,
@@ -146,6 +157,7 @@ def publish(run, registration, *, previous=None, primary_only=False):
                 "cost": cost_bounds(cache_summary(selected), declared["backbone"])}
         summaries[arm] = public
     comparisons = {}
+    historical_input = None
     for arm in arms:
         if arm != "memoria" and "memoria" in cases:
             comparisons[arm + "_to_memoria"] = paired(cases[arm], cases["memoria"])
@@ -158,9 +170,20 @@ def publish(run, registration, *, previous=None, primary_only=False):
                 old_manifest["protocol"]["judge_prompt_sha256"] != protocol["judge_prompt_sha256"] or
                 old_manifest["protocol"]["model"] != protocol["model"]):
             raise ValueError("Historical dataset/judge differs")
-        # Historical run contains only the two original arms; never filter failures.
-        old = read_cases(previous, ["memoria", "raw_context"], ids)
+        old_arms = old_manifest["protocol"].get("arms", ["memoria", "raw_context"])
+        if (not isinstance(old_arms, list) or not old_arms or len(set(old_arms)) != len(old_arms)
+                or "memoria" not in old_arms):
+            raise ValueError("Historical run must declare its complete arm set including Memoria")
+        # Read every declared historical arm and every planned ID, including failed
+        # checkpoints. A previous Memoria-only run is a valid paired comparison.
+        old = read_cases(previous, old_arms, ids)
         comparisons["historical_memoria_to_current"] = paired(old["memoria"], cases["memoria"])
+        old_captions = bool(old_manifest["protocol"].get("include_captions", False))
+        current_captions = bool(protocol.get("include_captions", False))
+        historical_input = {"previous_includes_machine_captions": old_captions,
+            "current_includes_machine_captions": current_captions,
+            "same_caption_input_policy": old_captions == current_captions,
+            "isolated_algorithm_effect": False}
     if primary_only:
         if "memoria" not in summaries:
             raise ValueError("Primary publication requires the Memoria arm")
@@ -174,6 +197,8 @@ def publish(run, registration, *, previous=None, primary_only=False):
         "judge_prompt_sha256": protocol["judge_prompt_sha256"],
         "code_commit": manifest["code"]["commit"], "dirty_diff_sha256": manifest["code"]["dirty_diff_sha256"],
         "arms": summaries, "paired_ordinary": comparisons,
+        "input_policy": {"includes_separate_machine_captions": bool(protocol.get("include_captions", False)),
+            "historical_comparison": historical_input},
         "publication_scope": "Memoria only; other arms are private mechanism diagnostics" if primary_only else "all registered arms",
         "entire_diagnostic_accounting": {"calls": len(calls),
             "cost": cost_bounds(cache_summary(calls), declared["backbone"])},

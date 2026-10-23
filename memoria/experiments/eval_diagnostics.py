@@ -19,6 +19,26 @@ def _key(record):
     return record.get("citation") or record.get("id")
 
 
+def gold_locator_ids(values):
+    """Normalize compound LoCoMo cells without dropping unknown locator formats.
+
+    This runs only in post-answer attribution. Some official cells contain several
+    IDs in one string, e.g. ``D1:2; D3:4``; treating the cell as a single locator
+    incorrectly reports otherwise visible evidence as unavailable.
+    """
+    result = set()
+    for value in values:
+        raw = str(value).strip()
+        normalized = raw.rsplit("/", 1)[-1].strip()
+        cells = re.split(r"\s*[,;]\s*|\s+(?=(?:[^\s,;]+/)?D\d+:\d+\b)", raw)
+        parts = [cell.rsplit("/", 1)[-1].strip() for cell in cells]
+        if parts and all(re.fullmatch(r"D\d+:\d+", part) for part in parts):
+            result.update(parts)
+        else:
+            result.add(normalized)
+    return result
+
+
 def _stage(records, source_index):
     records = list(records)
     source_ids, consolidated, observations, summaries = set(), set(), set(), set()
@@ -66,14 +86,37 @@ def inspect_kernel_result(result, source_index=None):
             by_key.setdefault(_key(record), record)
     final = list(by_key.values())
     selected = list(_records(access.get("selection", {}).get("payload", {}).get("evidence", [])))
-    reader = selected if result.get("reader_called") else []
+    # Source selection retains the original routing candidates for diagnosis;
+    # access.evidence is the actual projected Reader packet (summaries removed).
+    presented = access.get("evidence")
+    reader = (presented if isinstance(presented, list) else selected) if result.get("reader_called") else []
     catalog = {_key(record): record for record in final + selected}
-    cited = [catalog.get(c.get("id") or c.get("citation"), c) for c in result.get("citations", [])]
+    cited = [{**catalog.get(c.get("id") or c.get("citation"), {}), **c}
+        for c in result.get("citations", [])]
+    rounds = adaptive.get("rounds", [])
+    last = rounds[-1] if rounds else {}
+    decision = last.get("decision", {})
+    requirements = decision.get("requirements", [])
+    bound_ids = {s["id"] for r in requirements if r["status"] == "supported" for s in r["sources"]}
+    bound = [catalog[eid] for eid in sorted(bound_ids) if eid in catalog]
+    repair = adaptive.get("answer_repair", {})
     return {"scope": "post-answer ID/representation visibility; not semantic necessity or causal benefit",
         "reader_called": bool(result.get("reader_called")),
         "stages": {"initial_candidates": _stage(initial, source_index),
-            "final_candidates": _stage(final, source_index), "reader_evidence": _stage(reader, source_index),
+            "final_candidates": _stage(final, source_index),
+            "gate_bound_evidence": _stage(bound, source_index), "reader_evidence": _stage(reader, source_index),
             "published_citations": _stage(cited, source_index)},
+        "gate": {"rounds": len(rounds), "requirements": len(requirements),
+            "supported_requirements": sum(r["status"] == "supported" for r in requirements),
+            "binding_integrity_verified": bool(decision.get("binding_integrity_verified")),
+            "sufficient": decision.get("state") == "sufficient",
+            "unassessed_candidates": len(last.get("omitted_from_gate", [])),
+            "semantic_sufficiency_verified": False},
+        "answer_repair": {"attempted": bool(repair.get("attempted")),
+            "accepted": bool(repair.get("accepted")),
+            "retained_units": int(repair.get("retained_unit_count", 0)),
+            "question_requirement_coverage_verified": bool(adaptive.get("answer_support_after_repair", {}).get(
+                "question_requirement_coverage_verified"))},
         "citation_interpretation": "Raw citations with observation hints are raw-source citations; only consolidated_memory is an explicit formed-memory citation"}
 
 
@@ -90,9 +133,10 @@ def annotate_posthoc(result, item):
             "published_citations": {**stage, "records": len(cited), "source_unit_ids": cited}}}
         result.extras["pipeline"] = pipeline
     normalize = lambda value: str(value).rsplit("/", 1)[-1]
-    gold = {normalize(value) for value in item.extras.get("gold_evidence", [])}
+    gold = gold_locator_ids(item.extras.get("gold_evidence", []))
     visible = {normalize(source["id"]) for source in item.sources}
     result.extras["posthoc_gold"] = {"scope": "official locator ID coverage, not semantic sufficiency",
+        "normalization_version": "compound-locators-v2",
         "gold_defined": bool(gold), "gold_ids": sorted(gold), "unavailable_gold_ids": sorted(gold-visible),
         "all_gold_visible": bool(gold) and gold <= visible,
         "stages": {name: {"matched_ids": sorted(gold & {normalize(value) for value in stage["source_unit_ids"]}),
@@ -116,7 +160,7 @@ def summarize_diagnostics(results):
             "wrong_clarifications": sum(r.answer_status == "clarify" and r.score == 0 for r in valid)}
 
     stages = {}
-    for name in ("initial_candidates", "final_candidates", "reader_evidence", "published_citations"):
+    for name in ("initial_candidates", "final_candidates", "gate_bound_evidence", "reader_evidence", "published_citations"):
         rows = [r.extras["pipeline"]["stages"][name] for r in results
             if name in r.extras.get("pipeline", {}).get("stages", {})]
         gold = [r.extras["posthoc_gold"]["stages"][name] for r in results
@@ -134,7 +178,17 @@ def summarize_diagnostics(results):
     adversarial_actions = actions(adversarial)
     adversarial_actions.update(overanswer_actions=adversarial_actions["answer_actions"],
         wrong_overanswers=adversarial_actions["wrong_answers"])
+    repairs = [r.extras.get("pipeline", {}).get("answer_repair", {}) for r in results]
+    gates = [r.extras.get("pipeline", {}).get("gate", {}) for r in results]
     return {"ordinary": actions(ordinary), "adversarial": adversarial_actions,
+        "gate_bindings": {"observed_cases": sum(bool(g) for g in gates),
+            "sufficient_cases": sum(bool(g.get("sufficient")) for g in gates),
+            "cases_with_unassessed_candidates": sum(bool(g.get("unassessed_candidates")) for g in gates),
+            "semantic_sufficiency_verified": False},
+        "answer_repairs": {"attempted": sum(bool(r.get("attempted")) for r in repairs),
+            "accepted": sum(bool(r.get("accepted")) for r in repairs),
+            "accepted_with_all_question_requirements": sum(bool(r.get("accepted")) and bool(
+                r.get("question_requirement_coverage_verified")) for r in repairs)},
         "technical_errors": dict(Counter(r.error for r in results if r.error)), "pipeline_stages": stages,
         "gold_undefined_cases": sum(not r.extras.get("posthoc_gold", {}).get("gold_defined") for r in results),
         "unavailable_gold_cases": sum(bool(r.extras.get("posthoc_gold", {}).get("unavailable_gold_ids")) for r in results),

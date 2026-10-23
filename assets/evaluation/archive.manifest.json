@@ -61,5 +61,24 @@
       "path": "assets/evaluation/source-recall.svg",
       "sha256": "33711ad3891f950d44154fd05783f51da2970b0ae29108917b47201b954f8313"
     }
-  ]
+  ],
+  "superseded_fixed36_v13": {
+    "archive_commit": "926e193a05a9c500185663143daaa272aaf6d6ba",
+    "replacement": "assets/evaluation/evidence-flow36.json",
+    "private_raw_ledgers_untouched": true,
+    "files": [
+      {
+        "path": "assets/evaluation/joint-memory36.json",
+        "sha256": "d7b6528ec35bf566b7d0911fe6eaf8b0352389a7177382a38c585ad51aafa201"
+      },
+      {
+        "path": "assets/evaluation/joint-memory-acceptance.json",
+        "sha256": "4c242af13bf41daa0761fb425fc4d7e9ac4fa7c02d6ae849673515a97a8abed7"
+      },
+      {
+        "path": "assets/evaluation/joint-memory-code.manifest.json",
+        "sha256": "ec61b38283dd6b1f6f4f204a210569878abbaaa3c162c2d177e29aac4385221b"
+      }
+    ]
+  }
 }

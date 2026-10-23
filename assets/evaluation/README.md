@@ -1,6 +1,6 @@
 # 评测记录
 
-当前正式只展示[完整Memoria原36题单组](joint-memory36.json)：v13普通12/28（42.86%下界、2未评分）、对抗8/8，未证明优于旧v11的14/28。17题Reader有观察摘要，明确巩固Reader/引用仍0。一次支持契约、一次Judge传输失败保留分母，状态failed不改写。[实现、归因和边界](../../docs/implemented/记忆读取优化与36题诊断.md) · [最终同指纹验收及全部1251次付费尝试](joint-memory-acceptance.json) · [源码指纹](joint-memory-code.manifest.json)。内部对照不另发布正式分组表；原文、gold、答案、prompt和SQLite仅留本机。
+当前正式仅[完整Memoria原36题单组](evidence-flow36.json)：v15普通15/28（53.57%下界，1题预算未评分）、对抗6/8；相比v13普通增加但对抗退步，未达到全面改善目标。候选来源ID覆盖没有提升，实际Reader摘要为0、仅保留定位回执，明确巩固Reader/引用仍0。[完整归因与限制](../../docs/implemented/证据流召回判断与回答修复.md) · [同指纹验收与全部尝试费用](evidence-flow-acceptance.json) · [源码指纹](evidence-flow-code.manifest.json)。旧v13公开组通过`926e193`追溯，原始QA、失败、费用和库保持私有不可变。
 
 前轮：[原36题最终实现复测](final36-retest.json)，v11固定普通28/对抗8。Memoria14/28、对抗7/8、0错误；完整历史Baseline21/28、1题无效契约未评分。相比无故障v9仅净增1道普通题，仍不接近Baseline；形成349批准/38关联核验/6巩固头，但最终Reader巩固引用0。只新增登记、聚合和文档，不改算法或覆盖旧记录；[详细说明](../../docs/implemented/固定36题最终代码复测.md)。
 

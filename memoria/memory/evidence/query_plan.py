@@ -1,7 +1,7 @@
 """Question-faithful bounded requirements; retrieval hints never become evidence."""
 import re
 
-VERSION = 'missing-requirements-plan-v4-question-spans'
+VERSION = 'missing-requirements-plan-v5-typed-bindings'
 FACETS = (
     ('project', r'哪个项目|哪些项目|什么项目|which project', '项目名称及这些记录属于同一项目的原话依据'),
     ('adoption', r'采用|选用|使用[^？?。;；]*方案|\b(?:adopt(?:ed|s|ing)?|chos(?:e|en)|choos(?:e|es|ing))\b', '原问题所询问的选择/采用行为、相关主体与对象的原话'),
@@ -13,6 +13,36 @@ FACETS = (
 _SPLIT = re.compile(r'[?？;；。]+|(?:,?\s*\b(?:and|also|then)\s+|,\s*)(?=(?:what|which|who|where|when|why|how)\b)|[，,、]?(?:以及|并且|然后)(?=(?:什么|哪些|哪个|为何|为什么|何时|哪里|后来))', re.I)
 _QUESTION = re.compile(r'\b(?:what|which|who|where|when|why|how)\b|什么|哪些|哪个|为何|为什么|何时|哪里|多久|多少|几次', re.I)
 _STOP = frozenset('what which who where when why how did does do has have had is are was were the a an and or to of in on at for it they he she i you we their his her my our its that this with from'.split())
+
+
+def target_spec(clause, key):
+    """Only classify what is requested; never predict an answer or resolve aliases."""
+    from ..answer_risk import query_risk
+    inference = query_risk(clause)['allows_background_inference']
+    category = {
+        'project':'object', 'adoption':'event', 'reason':'relation', 'change':'event',
+        'resolution':'relation', 'outcome':'event', 'interval_start':'interval',
+        'interval_end':'interval', 'event_set':'count', 'event_count':'count',
+        'collection':'collection', 'intersection':'intersection',
+    }.get(key)
+    if key.startswith('subject_'): category = 'identity'
+    if not category:
+        if inference: category = 'inference'
+        elif re.search(r'^\s*(?:(?:since\s+)?when\b|(?:(?:in|on|at|during)\s+)?(?:what|which) (?:year|month|date|day|time|period)\b)|何时|什么时候|哪年|哪月|哪天', clause, re.I):
+            category = 'time'
+        elif re.search(r'\bwhat (?:kind|type|color|colour|name)\b|\bhow\b.*\b(?:feel|describe)\w*\b|什么类型|什么种类|什么颜色|感觉|感受', clause, re.I):
+            category = 'attribute'
+        elif re.search(r'\bwhat\b.*\b(?:make|made|build|built|create|created|craft|crafted|adopt|adopted|receive|received|bring|brought)\b|做了什么|制作了什么|造了什么', clause, re.I):
+            category = 'object'
+        else: category = 'fact'
+    precision = 'year' if re.search(r'\byear\b|哪年|年份',clause,re.I) else 'month' if re.search(
+        r'\bmonth\b|哪月|月份',clause,re.I) else 'day' if re.search(r'\b(?:date|day)\b|哪天|几号',clause,re.I) else 'source_precision'
+    # A count of remembered mentions is not an exhaustive count of reality.
+    count_scope = ('recorded_mentions' if re.search(r'\b(?:mention|record|report)\w*\b|提到|记录中|记载',clause,re.I)
+                   else 'specified_events') if category == 'count' else None
+    return {'target_type':category, 'target':clause[:300], 'precision':precision,
+        'inference_allowed':inference, 'count_scope':count_scope,
+        'absence_is_negative_evidence':False}
 
 
 def literal_terms(text):
@@ -65,7 +95,8 @@ def plan(query, parsed):
         locator = ' '.join([*(anchors if not subject else [subject]), clause])
         specs.append({'id': key, 'fact': fact, 'question_span': [start, end],
             'question_text': query[start:end], 'locator': locator[:300],
-            'lexical_terms': sorted(literal_terms(clause))})
+            'requested_subject':subject,
+            'lexical_terms': sorted(literal_terms(clause)), **target_spec(clause,key)})
 
     for key, pattern, description in FACETS:
         matches = [i for i, (start, end) in enumerate(spans) if re.search(pattern, query[start:end], re.I)]
@@ -117,7 +148,8 @@ def plan(query, parsed):
             for i, span in enumerate(spans))):
         facts[-1] = {'fact': 'remaining: 原问题中其余全部子句及其主体、条件、否定与时间依据', 'kind': 'fact'}
         specs[-1] = {'id':'remaining','fact':facts[-1]['fact'],'question_span':[0,len(query)],
-            'question_text':query,'locator':query[:300], 'lexical_terms':sorted(literal_terms(query))}
+            'question_text':query,'locator':query[:300], 'lexical_terms':sorted(literal_terms(query)),
+            **target_spec(query,'remaining')}
     return {'version': VERSION, 'origin': 'query_and_parser_only', 'question': query,
         'requirements': facts, 'requirement_specs': specs, 'subject_id': parsed.get('subject_id'),
         'context': parsed.get('context', {}), 'negation': bool(re.search(r'不|没有|未|\b(?:not|never)\b', query, re.I)),
@@ -145,7 +177,7 @@ def supplemental_targets(query_plan, decision):
 
 
 def validate_plan(value, evidence, query_plan):
-    from ..evidence_sufficiency import EvidenceSufficiency
+    from ..evidence_sufficiency import EvidenceSufficiency, assess_bindings
     decision = EvidenceSufficiency().validate(value, evidence)
     expected = [r['fact'] for r in query_plan['requirements']]
     actual = [r['fact'] for r in decision['requirements']]
@@ -153,4 +185,4 @@ def validate_plan(value, evidence, query_plan):
         raise ValueError('All frozen query requirements must be assessed exactly once')
     if any(r['kind'] != 'fact' for r in decision['requirements']):
         raise ValueError('A date alone cannot replace a required fact')
-    return decision
+    return assess_bindings(decision, evidence, query_plan)

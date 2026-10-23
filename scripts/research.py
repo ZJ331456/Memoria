@@ -92,6 +92,7 @@ def main():
     sub.add_argument('--judgments',required=True)
     sub = subs.add_parser("eval-benchmark", help="Two-arm evaluation: raw context window vs the memory kernel")
     sub.add_argument("--registration", help="Explicit frozen two-arm evaluation protocol")
+    sub.add_argument("--include-captions", action="store_true", help="Include separate dataset-provided machine caption sources")
     sub.add_argument("--history-concurrency", type=int, default=1, help="Independent histories within each ordered arm (1-8)")
     sub.add_argument("--benchmark", default="locomo", choices=["locomo", "longmemeval"])
     sub.add_argument("--dataset", required=True)
@@ -235,7 +236,7 @@ def main():
             context_chars=args.context_chars,kernel_budget_chars=args.kernel_budget_chars,
             write_mode=args.write_mode,judge=not args.no_judge,execute=args.execute,
               max_calls=args.max_calls,max_cost_usd=args.max_cost_usd,registration=args.registration,
-              history_concurrency=args.history_concurrency))
+              history_concurrency=args.history_concurrency,include_captions=args.include_captions))
     elif args.command == "locomo-audit":
         from memoria.experiments.locomo_diagnostics import audit
         result,_ = audit(workspace,args.source_run)

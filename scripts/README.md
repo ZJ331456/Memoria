@@ -1,6 +1,6 @@
 # Scripts：本机管理员与研究入口
 
-`publish_fixed36.py --run PRIVATE_RUN --registration PUBLIC_REGISTRATION --previous PRIVATE_V11_RUN --primary-only --output assets/evaluation/joint-memory36.json`核验冻结产物、完整36题分母、机制/顺序/预算后，仅导出Memoria及旧版配对聚合。全部内部对照费用另列，原文、问题、答案、gold列表及自由错误不公开。[实现与边界](../docs/implemented/记忆读取优化与36题诊断.md)
+`publish_fixed36.py --run PRIVATE_RUN --registration PUBLIC_REGISTRATION --previous PRIVATE_PREVIOUS_RUN --primary-only --output assets/evaluation/evidence-flow36.json`核验冻结产物、完整36题分母、机制/顺序/预算后，仅导出Memoria及旧版配对聚合。全部内部对照费用另列，原文、问题、答案、gold列表及自由错误不公开。[实现与边界](../docs/implemented/证据流召回判断与回答修复.md)
 
 [evaluate_llm_rerank.py](evaluate_llm_rerank.py)默认0调用验证；执行须`--execute --allow-remote --max-calls 12`，只测预声明四题、固定资料库候选与字符预算。保留真实Token/延迟及负向结果，[完整说明](../docs/implemented/LLM候选重排与同预算诊断.md)。
 

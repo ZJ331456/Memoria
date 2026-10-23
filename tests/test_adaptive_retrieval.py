@@ -47,7 +47,9 @@ class Model:
                 matched = next((e for e in self.evidence if marker in e['text']), None)
                 unavailable = not matched or (missing and i == len(payload['query_plan']['requirements']) - 1)
                 requirements.append({'fact': r['fact'], 'kind': 'fact', 'status': 'missing' if unavailable else 'supported',
-                    'sources': [] if unavailable else [{'id': matched['id'], 'quote': matched['source_texts'][0]}]})
+                    'sources': [] if unavailable else [{'id': matched['id'], 'quote': matched['source_texts'][0]}],
+                    'binding':None if unavailable else {'value':matched['source_texts'][0][:300],
+                        'basis':'explicit','missing_components':[]}})
             missing = any(r['status'] == 'missing' for r in requirements)
             value = {'state': 'missing_fact' if missing else 'sufficient', 'requirements': requirements,
                 'missing_queries': ['磁盘空间问题'] if missing else [], 'reason': 'Synthetic evidence check.'}
@@ -60,6 +62,9 @@ class Model:
             value = {'verdict': 'supported', 'claims': [{'statement': packet['proposed_answer'], 'relation': 'supported',
                 'basis': 'explicit', 'sources': [{'id': e['id'], 'quote': e['source_texts'][0]}], 'reason': 'Synthetic.'}],
                 'missing_queries': [], 'reason': 'Synthetic.'}
+            if 'query_plan' in packet:
+                value['requirement_coverage']=[{'fact':r['fact'],'status':'answered',
+                    'answer_units':[packet['proposed_answer']]} for r in packet['query_plan']['requirements']]
         else:
             _, sections = _parse_frame(messages[1]['content'])
             section = next(s for s in sections if s.name in {'Structured State', 'Source Evidence'})

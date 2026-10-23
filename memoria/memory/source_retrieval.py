@@ -11,6 +11,7 @@ from collections import Counter
 import hashlib
 import json
 import math
+import re
 import time
 from functools import lru_cache
 
@@ -22,6 +23,19 @@ POLICY = "source-passages-rrf-v2-english-morphology"
 SCAN_LIMIT = 2000
 TEXT_LIMIT = 1600000
 WEIGHTS = {"keyword": 0.8, "bm25": 0.9, "dense": 1.0}
+
+
+def adjacency_offsets(row):
+    """A pronoun may need an antecedent across one intervening turn.
+
+    This only proposes separately attributed raw passages under the existing
+    four-neighbor budget. Proximity never establishes what the pronoun denotes.
+    """
+    unit = row['unit']
+    body = row['quote'][unit.body_start - unit.start:].lstrip(' \t\r\n\"\'“‘([{') if unit else ''
+    pronoun = re.match(r"(?i)^(?:(?:it|this|that|they|these|those)(?=[\s'’.,:;!?-]|$)|"
+                       r"(?:这是|那是|它|这件|那件|这个|那个|这些|那些))", body)
+    return (-1, -2, 1) if pronoun else (-1, 1)
 
 
 def terms(text):
@@ -282,7 +296,31 @@ class SourceRetrieval:
         ordered = sorted(fused,key=lambda mid:(-fused[mid],mid))
         with self.store.lock:
             ordered = [mid for mid in ordered if self.live(by_id[mid],session_id)]
-            chosen = ordered[:limit]
+            from .source_fusion import choose, POLICY as SELECTION_POLICY, PREFIX_DEPTH
+            # Preserve the raw single-channel ordering in explicit mode; formation
+            # channels retain their existing ability to route approved raw sources.
+            active_lanes = {name: lanes[name] for name in active}
+            chosen, reasons = choose(ordered, active_lanes, limit)
+            citation = lambda mid: f"[library:{by_id[mid]['revision_id']}:{by_id[mid]['start']}:{by_id[mid]['end']}]"
+            selected_ids = set(chosen)
+            dropped = [mid for mid in ordered if mid not in selected_ids]
+            diagnostic['selection_policy'] = SELECTION_POLICY
+            diagnostic['selection_limit'] = limit
+            diagnostic['channel_prefix_depth'] = PREFIX_DEPTH
+            diagnostic['complementary_selected'] = sum(
+                r['selection_reason'] == 'channel_prefix' for r in reasons.values())
+            diagnostic['dropped_by_limit'] = len(dropped)
+            diagnostic['lane_selected_counts'] = {name: len(selected_ids.intersection(lane))
+                for name, lane in active_lanes.items()}
+            # Detailed IDs live in private capture/adaptive traces. The ordinary
+            # search response excludes this field from its bounded summary.
+            diagnostic['candidate_selection'] = {
+                'policy': SELECTION_POLICY, 'prefix_depth': PREFIX_DEPTH,
+                'selected': [{'id': citation(mid), **reasons[mid]} for mid in chosen],
+                'dropped': [citation(mid) for mid in dropped[:64]],
+                'dropped_count': len(dropped), 'dropped_truncated': len(dropped) > 64,
+                'lane_candidate_counts': {name: len(lane) for name, lane in active_lanes.items()},
+                'semantic_sufficiency_verified': False}
             # Adjacency is a retrieval hint, NOT an asserted identity or causal link.
             # Keep separate citations for each raw turn. The gate chooses and quotes
             # any actually necessary bridge; proximity alone never approves a fact.
@@ -297,20 +335,24 @@ class SourceRetrieval:
                     row = by_id[mid]; group = groups.get(row['revision_id'],[])
                     position = next((i for i,r in enumerate(group) if r['id']==mid),None)
                     if position is None:continue
-                    for i in (position-1,position+1):
+                    for offset in adjacency_offsets(row):
+                        i = position + offset
                         if not 0 <= i < len(group):continue
                         other = group[i]['id']
                         if len(chosen) < min(16,limit+4) and other not in chosen and self.live(group[i],session_id):
                             chosen.append(other)
                             edges.append({'from':mid,'to':other,'kind':'source_adjacency_hint',
+                                          'turn_offset': offset,
                                           'semantic_link_verified':False})
             hits = []
             for mid in chosen:
-                retrieval = {'score':fused[mid], 'lane_ranks':{name:lane.index(mid)+1 for name,lane in lanes.items() if mid in lane}}
+                retrieval = {'score':fused[mid], 'lane_ranks':{name:lane.index(mid)+1 for name,lane in lanes.items() if mid in lane},
+                    **reasons.get(mid, {'selection_reason': 'source_adjacency_hint', 'protected_channels': []})}
                 hits.append(self.hit(by_id[mid],retrieval,query,observations=observations,
                                      include_formed_memory=include_formed_memory))
             diagnostic['lanes'] = {name:[f"[library:{by_id[mid]['revision_id']}:{by_id[mid]['start']}:{by_id[mid]['end']}]"
                 for mid in lane[:32]] for name,lane in lanes.items()}
             diagnostic['adjacency_hints'] = edges
+            diagnostic['candidate_selection']['adjacent_ids'] = [citation(e['to']) for e in edges]
             diagnostic['elapsed_ms'] = round((time.perf_counter()-started)*1000,3)
             return hits,diagnostic

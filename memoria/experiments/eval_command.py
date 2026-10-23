@@ -43,7 +43,7 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
               questions=None, output=None, concurrency=2, allow_remote=False,
               max_tokens=1024, context_chars=240000, kernel_budget_chars=8000,
               write_mode="library", judge=True, execute=False, max_calls=None, max_cost_usd=None,
-              registration=None, history_concurrency=1, item_ids_file=None):
+              registration=None, history_concurrency=1, item_ids_file=None, include_captions=False):
     from .runner import account_settings
     from .eval_accounting import EvaluationClient
     from .records import RunRecorder, safe_endpoint
@@ -57,9 +57,11 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         raise ValueError("Public benchmark requires external sources and independent binary judging")
     if concurrency not in {1, 2} or not 1 <= history_concurrency <= 8 or not 1 <= max_tokens <= 2048 or context_chars < 4096:
         raise ValueError("Invalid explicit evaluation bounds")
+    if include_captions and benchmark != "locomo":
+        raise ValueError("Dataset-provided caption sources are supported only by the LoCoMo adapter")
     settings = account_settings(copy.deepcopy(settings), workspace)
     items = load_items(benchmark, dataset, **(
-        {"conversations": conversations, "questions_per_conversation": questions}
+        {"conversations": conversations, "questions_per_conversation": questions, "include_captions": include_captions}
         if benchmark == "locomo" else {"limit": questions}))
     if item_ids_file:
         selected=json.loads(Path(item_ids_file).read_text(encoding='utf-8'))
@@ -73,6 +75,9 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
     if len({item.id for item in items}) != len(items):
         raise ValueError("Duplicate benchmark item IDs; rejected before model calls")
     plan = estimate(items, dataset, model=settings.main.model, context_bytes=context_chars, arms=arms)
+    plan["include_captions"] = include_captions
+    plan["source_input_policy"] = ("locomo-dialogue-and-blip-caption-v2" if include_captions
+        else "locomo-dialogue-text-v1" if benchmark == "locomo" else "benchmark-text-v1")
     if not execute:
         # Crucially no LLM client, kernel, embedding or production database is constructed.
         if output:
@@ -83,6 +88,10 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
     if not allow_remote or not official(settings.main) or not max_calls or max_calls <= 0 or not max_cost_usd or max_cost_usd <= 0:
         raise ValueError("Execution requires --allow-remote and positive --max-calls/--max-cost-usd")
     registration = json.loads(Path(registration or settings.root / "eval/protocols/kernel-vs-context-judge-v1.json").read_text(encoding="utf-8"))
+    if bool(registration.get("include_captions", False)) != include_captions:
+        raise ValueError("Caption input policy differs from frozen registration")
+    if registration.get("source_input_policy", "locomo-dialogue-text-v1") != plan["source_input_policy"]:
+        raise ValueError("Source input policy differs from frozen registration")
     arm_order = registered_arm_order(arms, registration)
     if set(arms) - {"memoria", "raw_context"} and concurrency != 1:
         raise ValueError("Ablation arms require registered sequential execution")
@@ -218,6 +227,8 @@ def main(argv=None):
     parser.add_argument("--registration")
     parser.add_argument("--history-concurrency", type=int, default=1)
     parser.add_argument("--item-ids-file", help="Exact registered diagnostic item IDs; never selected by gold or success")
+    parser.add_argument("--include-captions", action="store_true",
+        help="Explicit LoCoMo input change: separate dataset BLIP descriptions, never speaker quotations")
     args = parser.parse_args(argv)
     result = asyncio.run(run(HistoryWorkspace(directory_for(args.user)), Settings.load(),
                              **{k: v for k, v in vars(args).items() if k != "user"}))

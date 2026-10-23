@@ -20,11 +20,11 @@ from .answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM
 from .evidence.budget import EvidenceBudget
 from .evidence.closure import select_closed
 from .evidence.query_plan import plan, validate_plan, literal_terms, supplemental_targets
-from .evidence_sufficiency import SYSTEM as GATE_SYSTEM
+from .evidence_sufficiency import SYSTEM as GATE_SYSTEM, calendar_derivations
 from .verification import verify, support_envelope, REPAIR_INSTRUCTION
 from ..llm.call_scope import inference_scope
 
-VERSION = 'production-missing-evidence-v5-requirement-diversity'
+VERSION = 'production-missing-evidence-v6-typed-bindings'
 SUPPORT_SYSTEM += ('\nCover EVERY literal character of the proposed answer, including prefixes such as '
     '根据来源记录 and final provenance caveats. Include a framing prefix in the adjacent factual statement '
     'rather than silently omitting it. A statement must be a literal substring of the PROPOSED ANSWER. '
@@ -74,7 +74,40 @@ GATE = (GATE_SYSTEM + '\nThe query_plan is frozen before evidence inspection. As
     'identify that object/type/value; suggest a targeted search for the missing attribute instead. '
     'requirement_specs link each requirement to its literal question span; those spans constrain what is '
     'requested, not which answer is expected. retrieval_hints contain approved memory organization only: '
-    'use them to find related original quotes, never cite hints as facts or add requirements from them.')
+    'use them to find related original quotes, never cite hints as facts or add requirements from them. '
+    'FIRST bind evidence independently for EVERY frozen requirement, THEN aggregate sufficiency. Add '
+    'binding to each supported requirement: {"value":"shortest actual requested value",'
+    '"basis":"explicit|derived|inference","missing_components":[],"scope":null}. '
+    'For missing/conflicted requirements binding.value may be null; a supported requirement needs a '
+    'nonempty concrete value. Do not invent a value to fill an unresolved requirement. '
+    'Use value for the concrete requested answer fragment, not a restatement of the question or broad topic. '
+    'For explicit object/attribute bindings, copy the shortest actual value wording from the CITED original '
+    'quotes; do not translate or paraphrase this locator. The final Reader answer may still paraphrase. '
+    'If a memory hint or machine caption supplies the object, cite that separate original source too; '
+    'a hint without its original citation cannot supply any value words. '
+    'Mark missing_components (subject, event relation, target attribute/object, antecedent, time or scope) '
+    'when a quote is relevant but incomplete, and mark that requirement missing. Preserve such partial '
+    'sources so targeted retrieval can close the actual missing link. For attribute/object targets, the '
+    'quote must identify the requested property or named object; themes, praise or an unresolved "it" '
+    'cannot substitute for it. Cite the antecedent as well as its dependent pronoun when needed. '
+    'For time targets bind the SAME event to its most specific supported time available in this pool; '
+    'prefer an explicit event-relative expression and its source clock over vague recency about a '
+    'possibly different event. calendar_derivations are program arithmetic hints, not identity proof: '
+    'last year + same-source 2023 clock supports 2022 when that quote establishes the requested event. '
+    'Cite BOTH event text and complete same-ID clock; never require a literal absolute year if it is '
+    'defensibly derived. For count targets binding.scope MUST copy the frozen count_scope: '
+    'If the question asks when someone proposed/agreed/decided, a quoted performative proposal '
+    '("Let us/Let\'s...") and explicit agreement are themselves source-time speech events: their '
+    'same-source clock can date that decision. This cannot date performance of the future activity, '
+    'or a past event merely reported in that message. '
+    'recorded_mentions counts distinct supported records/events mentioned, while specified_events '
+    'requires the specified event set and deduplication. Do not demand knowledge of all reality for '
+    'an explicitly record-scoped question, or silently change a real event total to a mention count. '
+    'For inference_allowed questions evaluate modest, explicitly hedged conclusions from actual '
+    'personal premises; do not require an impossible verbatim counterfactual statement. Lack of a '
+    'self-identification never supports a negative sensitive identity or group-membership inference. '
+    'A binding does not make its value true; source identity, conditions, modality and all required '
+    'links must still be established. Use sufficient ONLY when every binding is complete.')
 
 
 class Personal:
@@ -224,7 +257,8 @@ class Sources:
             'policy': 'Source-domain evidence, never approved personal state.'}
 
     def render(self, access, candidates):
-        packet=self.packet(candidates)
+        from .source_evidence import reader_packet
+        packet=reader_packet(self.packet(candidates))
         if required:=required_citations(access):packet['required_evidence_ids']=required
         return packet
 
@@ -403,9 +437,9 @@ async def read_adaptive(kernel, request):
         return {**(verdict or {'status': status, 'answer': SAFE_UNKNOWN if status == 'clarify' else SAFE_REJECTED,
             'citations': [], 'validation': {'valid': False, 'reason': reason, 'semantic_entailment_verified': False}}),
             'reader_called': reader_called, 'usage': reader_usage, 'access': access,
-            'reader_budget': next((c['request_budget'] for c in reversed(trace['calls']) if c['stage'] == 'reader'), None),
+            'reader_budget': next((c['request_budget'] for c in reversed(trace['calls']) if c['stage'] in {'reader','answer_repair'}), None),
             'risk_checks': {'mode': 'missing_requirement_loop', 'usage': [c['usage'] for i,c in enumerate(trace['calls'])
-                if i != max((j for j,c in enumerate(trace['calls']) if c['stage']=='reader'),default=-1)],
+                if i != max((j for j,c in enumerate(trace['calls']) if c['stage'] in {'reader','answer_repair'}),default=-1)],
                 'adaptive_retrieval_enabled': True, 'policy': policy.public()}}
 
     def observe_embedding(payload):
@@ -463,6 +497,41 @@ async def read_adaptive(kernel, request):
             row['elapsed_ms'] = round((time.perf_counter() - clock) * 1000, 3)
             if row['usage'] is None: trace['unknown_usage_count'] += 1
 
+    async def generate_reader(prepared, *, stage='reader', attempt=1):
+        nonlocal reader_usage, reader_called
+        if not policy.reserve_call(stage, prepared.report, reservation='answer_pipeline'):
+            raise ContextLengthError('Shared adaptive Reader budget exhausted')
+        reader_called = True
+        clock = time.perf_counter()
+        row = {'stage': stage, 'prompt_sha256': fingerprint(prepared.messages),
+            'prompt_chars': len(canonical(prepared.messages)), 'attempt': attempt,
+            'request_budget': prepared.report, 'usage': None, 'status': 'started'}
+        from ..llm.deepseek_cache import official
+        row['cache_provider']='deepseek' if official(prepared.model) else None
+        trace['calls'].append(row)
+        from .reader_calls import record_call, notify_request
+        record_call(row)
+        try:
+            async with asyncio.timeout(min(kernel.settings.request_timeout_seconds, 90)):
+                with inference_scope(observe_embedding):
+                    notify_request()
+                    result = await kernel.llm.chat(prepared.messages, model=prepared.model, max_tokens=prepared.max_tokens)
+            reader_usage = result.usage or None
+            row.update(raw=result.content, usage=reader_usage, retries=getattr(result,'retries',None),
+                finish_reason=result.finish_reason, status='returned')
+            return result
+        except BaseException as exc:
+            row.update(status='failed', error_type=type(exc).__name__)
+            raise
+        finally:
+            row['elapsed_ms'] = round((time.perf_counter() - clock) * 1000, 3)
+
+    def support_receipt(check):
+        return {k:check[k] for k in ('version','accepted','query_risk',
+            'support_dependencies','claim_rule_blockers','rule_blockers','quote_integrity_verified',
+            'answer_unit_coverage_verified','question_requirement_coverage_verified','support_contract',
+            'semantic_entailment_verified','judgment_source')}
+
     try:
         from .auto_review import SECRET
         if SECRET.search(request.query): return finish('credential_bearing_query_not_sent')
@@ -502,11 +571,13 @@ async def read_adaptive(kernel, request):
             _, future_messages, _, _ = adapter.present(access, pool)
             future = await meter.prepare(reader_messages(future_messages))
             future_repair = await meter.prepare(reader_messages(future_messages, repair=True))
-            support_bound = await support_envelope(meter, SUPPORT_SYSTEM, {'question': request.query, 'evidence': evidence},deepseek_cache=True)
+            support_bound = await support_envelope(meter, SUPPORT_SYSTEM,
+                {'question': request.query, 'query_plan':query_plan, 'evidence': evidence},deepseek_cache=True)
             policy.release('answer_pipeline')
             if not policy.hold_calls('answer_pipeline', [future.report, future_repair.report, support_bound, support_bound]):
                 return finish('complete_answer_reservation_unavailable')
-            payload = {'question': request.query, 'query_plan': query_plan, 'evidence': evidence}
+            payload = {'question': request.query, 'query_plan': query_plan, 'evidence': evidence,
+                'calendar_derivations':calendar_derivations(evidence)}
             if SECRET.search(canonical(payload) + canonical(future_messages)): return finish('credential_bearing_source_not_sent')
             if pool:
                 decision = await verify(call, 'coverage', GATE, payload,
@@ -554,7 +625,8 @@ async def read_adaptive(kernel, request):
                 repaired = await meter.prepare(reader_messages(messages, repair=True))
                 if not guard.visible(prepared.messages) or guard.freshness(): return finish('final_evidence_changed')
                 # Replace the conservative hold with the actual, complete final pipeline.
-                final_support = await support_envelope(meter, SUPPORT_SYSTEM, {'question': request.query, 'evidence': evidence},deepseek_cache=True)
+                final_support = await support_envelope(meter, SUPPORT_SYSTEM,
+                    {'question': request.query, 'query_plan':query_plan, 'evidence': evidence},deepseek_cache=True)
                 policy.release('answer_pipeline')
                 if not policy.hold_calls('answer_pipeline', [prepared.report, repaired.report, final_support, final_support]):
                     return finish('final_answer_reservation_unavailable')
@@ -562,30 +634,9 @@ async def read_adaptive(kernel, request):
                     phase='reader'
                     if attempt: prepared = repaired
                     if guard.freshness(): return finish('source_changed_before_reader')
-                    policy.reserve_call('reader', prepared.report, reservation='answer_pipeline')
-                    reader_called = True
                     for diagnostic in record['requirement_diagnostics']:
                         diagnostic['presented_to_reader']=diagnostic['selected_for_reader']
-                    clock = time.perf_counter()
-                    row = {'stage': 'reader', 'prompt_sha256': fingerprint(prepared.messages), 'prompt_chars': len(canonical(prepared.messages)), 'attempt': attempt+1, 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
-                    from ..llm.deepseek_cache import official
-                    row['cache_provider']='deepseek' if official(prepared.model) else None
-                    trace['calls'].append(row)
-                    from .reader_calls import record_call
-                    record_call(row)
-                    try:
-                        async with asyncio.timeout(min(kernel.settings.request_timeout_seconds, 90)):
-                            with inference_scope(observe_embedding):
-                                from .reader_calls import notify_request
-                                notify_request()
-                                result = await kernel.llm.chat(prepared.messages, model=prepared.model, max_tokens=prepared.max_tokens)
-                        reader_usage = result.usage or None
-                        row.update(raw=result.content, usage=reader_usage, retries=getattr(result,'retries',None), finish_reason=result.finish_reason, status='returned')
-                    except BaseException as exc:
-                        row.update(status='failed', error_type=type(exc).__name__)
-                        raise
-                    finally:
-                        row['elapsed_ms'] = round((time.perf_counter() - clock) * 1000, 3)
+                    result = await generate_reader(prepared, attempt=attempt+1)
                     verdict = guard.validate(result, prepared.messages)
                     repairable = (not result.tool_calls and result.finish_reason in {None,'stop','length'}
                         and verdict['validation']['reason'] in {'invalid_answer_schema','incomplete_reader_output'})
@@ -603,17 +654,58 @@ async def read_adaptive(kernel, request):
                 if not required_citations <= set(answer.evidence_ids): return finish('necessary_citations_omitted')
                 phase='support'
                 check = await verify(call, 'support', SUPPORT_SYSTEM,
-                    {'question': request.query, 'proposed_answer': answer.answer,
+                    {'question': request.query, 'query_plan':query_plan, 'proposed_answer': answer.answer,
                      'evidence': [e for e in evidence if e['id'] in answer.evidence_ids]},
-                    lambda value: AnswerRisk().validate(value, request.query, answer.model_dump(), evidence), trace['contract_errors'])
+                    lambda value: AnswerRisk().validate(value, request.query, answer.model_dump(), evidence,
+                        query_plan=query_plan), trace['contract_errors'])
                 # Keep the dependency proof, not a second copy of the answer and
                 # quoted personal/source text. Original verification remains in its
                 # single call receipt and the private experiment ledger.
-                trace['answer_support'] = {k:check[k] for k in ('version','accepted','query_risk',
-                    'support_dependencies','rule_blockers','quote_integrity_verified',
-                    'answer_unit_coverage_verified','support_contract',
-                    'semantic_entailment_verified','judgment_source')}
-                if not check['accepted']: return finish('answer_support_not_established')
+                trace['answer_support'] = support_receipt(check)
+                if not check['accepted']:
+                    from .answer_repair import INSTRUCTION, retained_units, validate_deletion
+                    units = retained_units(check, answer.answer)
+                    repair_trace = {'attempted':False, 'max_attempts':1, 'policy':'supported_literal_units_only',
+                        'same_evidence':True, 'retained_unit_count':len(units), 'accepted':False}
+                    trace['answer_repair'] = repair_trace
+                    if not units:
+                        repair_trace['reason']='no_safe_supported_units'
+                        return finish('answer_support_not_established')
+                    # Reserve the COMPLETE optional repair and two independent support
+                    # attempts from the SAME eight-call / 240000-byte budget. Unused
+                    # first-verification slots are released; no extra retry budget exists.
+                    minimal_messages = reader_messages(messages)
+                    minimal_messages[0]['content'] += INSTRUCTION + '\nretained_answer_units=' + canonical(units)
+                    minimal = await meter.prepare(minimal_messages)
+                    repair_support = await support_envelope(meter, SUPPORT_SYSTEM,
+                        {'question':request.query, 'query_plan':query_plan, 'evidence':evidence},deepseek_cache=True)
+                    policy.release('answer_pipeline')
+                    if not policy.hold_calls('answer_pipeline', [minimal.report, repair_support, repair_support]):
+                        repair_trace['reason']='repair_budget_unavailable'
+                        return finish('answer_support_not_established')
+                    phase='answer_repair'
+                    if not guard.visible(minimal.messages) or guard.freshness():
+                        return finish('source_changed_before_answer_repair')
+                    repair_trace['attempted']=True
+                    result = await generate_reader(minimal, stage='answer_repair')
+                    verdict = guard.validate(result, minimal.messages)
+                    if verdict['status'] != 'answer':
+                        repair_trace['reason']='repair_reader_not_answer'
+                        return finish(None, verdict=verdict)
+                    answer = ReaderAnswer.model_validate(strict_json(result.content))
+                    validate_deletion(answer, units, required_citations)
+                    if is_refusal(answer.answer): return finish('refusal_status_conflict')
+                    if guard.freshness(): return finish('source_changed_during_answer_repair')
+                    phase='support'
+                    check = await verify(call, 'support', SUPPORT_SYSTEM,
+                        {'question':request.query, 'query_plan':query_plan, 'proposed_answer':answer.answer,
+                         'evidence':[e for e in evidence if e['id'] in answer.evidence_ids]},
+                        lambda value: AnswerRisk().validate(value, request.query, answer.model_dump(), evidence,
+                            query_plan=query_plan), trace['contract_errors'])
+                    trace['answer_support_after_repair'] = support_receipt(check)
+                    repair_trace.update(accepted=check['accepted'], reason='supported' if check['accepted'] else 'repair_support_not_established')
+                    if not check['accepted']: return finish('answer_support_not_established')
+                    prepared = minimal
                 phase='publication'
                 if guard.freshness(): return finish('source_changed_before_publish')
                 verdict = guard.validate(result, prepared.messages)

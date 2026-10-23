@@ -168,6 +168,28 @@ def test_paid_command_rejects_unregistered_input_before_constructing_client(tmp_
             benchmark="locomo", dataset=p, execute=True, allow_remote=True, max_calls=3, max_cost_usd=1))
 
 
+@pytest.mark.parametrize('registered,reason', [
+    ({"include_captions": False}, "Caption input policy"),
+    ({"include_captions": True, "source_input_policy": "locomo-dialogue-text-v1"}, "Source input policy"),
+])
+def test_caption_input_change_requires_explicit_registration_before_paid_client(tmp_path, monkeypatch, registered, reason):
+    from memoria.experiments import eval_command, runner, eval_accounting
+    from memoria.experiments.history import HistoryWorkspace
+    p = tmp_path / "input.json"
+    p.write_text(json.dumps([{"conversation": {"session_1": []},
+        "qa": [{"question": "q", "answer": "a", "category": 1}]}]))
+    registration = tmp_path / "registration.json"
+    registration.write_text(json.dumps(registered))
+    settings = Settings.load(ROOT / "config/system.example.toml")
+    settings.main = ModelConfig("deepseek-flash", "engineering-only", "https://api.deepseek.com/v1")
+    monkeypatch.setattr(runner, "account_settings", lambda s, _: s)
+    monkeypatch.setattr(eval_accounting, "EvaluationClient", lambda *a, **k: pytest.fail("unregistered paid call"))
+    with pytest.raises(ValueError, match=reason):
+        asyncio.run(eval_command.run(HistoryWorkspace(tmp_path / "isolated"), settings,
+            benchmark="locomo", dataset=p, execute=True, allow_remote=True,
+            max_calls=3, max_cost_usd=1, include_captions=True, registration=registration))
+
+
 def test_kernel_provider_failure_is_not_scored_as_successful_adversarial_refusal(tmp_path):
     from memoria.experiments.eval_runner import run_arms
     from memoria.experiments.eval_benchmarks import BenchmarkItem

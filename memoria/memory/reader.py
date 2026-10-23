@@ -453,6 +453,8 @@ async def _read_knowledge_answer(kernel,request,llm):
         packet,reranking=await rerank_source_packet(kernel,request,packet,captured)
         from ..observability.memory_trace import record_reranked_read
         record_reranked_read(request.model_dump(mode='json'),packet['evidence'],reranking)
+    from .source_evidence import reader_packet
+    packet=reader_packet(packet)
     access={**packet,'candidates':captured['candidates'],
         'selection':{**packet['selection'],'payload':{'evidence':packet['evidence']}}}
     base={'access':access,'reader_called':False,'usage':None,'citations':[]}

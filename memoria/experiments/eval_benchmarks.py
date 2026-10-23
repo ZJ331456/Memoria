@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
+LOCOMO_TEXT_INPUT_POLICY = 'locomo-dialogue-text-v1'
+LOCOMO_CAPTION_INPUT_POLICY = 'locomo-dialogue-and-blip-caption-v2'
+
 
 @dataclass
 class BenchmarkItem:
@@ -70,13 +73,38 @@ def _session_date(conversation: dict, index: int) -> str:
     return str(value) if value else ""
 
 
+def blip_caption_source(parent: dict[str, Any], caption: str) -> dict[str, Any]:
+    """Attach existing dataset text as an independent machine annotation.
+
+    No image is fetched, interpreted or OCRed. The parent's clock is not an
+    image/event clock, and its speaker is not the author of the BLIP caption.
+    Attribution lives in the text too because both production source batching
+    and full-context readers render the same ``speaker/text/date`` contract.
+    """
+    if not isinstance(caption, str) or not caption.strip():
+        raise ValueError('BLIP caption must be nonempty dataset text')
+    attribution = json.dumps({'annotation_type': 'machine_generated_blip_image_caption',
+        'parent_turn_id': parent['id'], 'parent_turn_speaker': parent['speaker'],
+        'parent_relation': 'dataset attachment association only; not caption authorship or verified identity',
+        'event_time': 'unknown', 'original_utterance': False}, ensure_ascii=False, sort_keys=True)
+    return {'id': parent['id'] + '#blip-caption',
+            'dia_id': parent['dia_id'] + '#blip-caption',
+            'session': parent['session'], 'session_date_raw': '',
+            'speaker': 'machine image caption (BLIP)',
+            'text': '[Dataset machine annotation: ' + attribution + ']\n' + caption,
+            'source_kind': 'machine_image_caption', 'parent_source_id': parent['id']}
+
+
 def locomo_items(
-    dataset: list[dict[str, Any]], *, conversations: int = 1, questions_per_conversation: int | None = None
+    dataset: list[dict[str, Any]], *, conversations: int = 1, questions_per_conversation: int | None = None,
+    include_captions: bool = False,
 ) -> Iterator[BenchmarkItem]:
     """LoCoMo: chronological dialogue turns plus QA pairs with evidence ids.
 
     Every QA is asked after the whole supplied conversation. Gold evidence is post-hoc
-    diagnostic metadata, never a history cutoff or a retrieval input.
+    diagnostic metadata, never a history cutoff or a retrieval input. Existing
+    BLIP descriptions are excluded by default. Explicit caption mode is a new
+    input protocol, not a reproduction of the earlier dialogue-only evaluation.
     """
     for index, conversation in enumerate(dataset[:conversations], 1):
         sample_id = conversation.get("sample_id", f"conv-{index}")
@@ -88,11 +116,11 @@ def locomo_items(
             and "_date_time" not in part
         )
         turns: list[dict[str, Any]] = []
+        dialogue_count, caption_count = 0, 0
         for number in sessions:
             date = _session_date(conversation["conversation"], number)
             for turn in conversation["conversation"][f"session_{number}"]:
-                turns.append(
-                    {
+                parent = {
                         "id": f"{sample_id}/{turn['dia_id']}",
                         "dia_id": turn["dia_id"],
                         "session": number,
@@ -100,7 +128,13 @@ def locomo_items(
                         "speaker": turn.get("speaker") or "unknown",
                         "text": turn.get("text", ""),
                     }
-                )
+                turns.append(parent)
+                dialogue_count += 1
+                caption = turn.get('blip_caption')
+                if isinstance(caption, str) and caption.strip():
+                    caption_count += 1
+                    if include_captions:
+                        turns.append(blip_caption_source(parent, caption))
         qa = conversation.get("qa") or []
         if questions_per_conversation:
             qa = qa[:questions_per_conversation]
@@ -118,6 +152,11 @@ def locomo_items(
                     "category": entry.get("category"),
                     "gold_evidence": entry.get("evidence") or [],
                     "conversation": sample_id,
+                    "source_input_policy": LOCOMO_CAPTION_INPUT_POLICY if include_captions else LOCOMO_TEXT_INPUT_POLICY,
+                    "source_input_audit": {'dialogue_turns': dialogue_count,
+                        'nonempty_blip_captions': caption_count,
+                        'imported_blip_captions': caption_count if include_captions else 0,
+                        'excluded_blip_captions': 0 if include_captions else caption_count},
                 },
             )
 
