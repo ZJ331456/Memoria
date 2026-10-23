@@ -1,7 +1,7 @@
 """Question-faithful bounded requirements; retrieval hints never become evidence."""
 import re
 
-VERSION = 'missing-requirements-plan-v5-typed-bindings'
+VERSION = 'missing-requirements-plan-v6-distinct-probes'
 FACETS = (
     ('project', r'哪个项目|哪些项目|什么项目|which project', '项目名称及这些记录属于同一项目的原话依据'),
     ('adoption', r'采用|选用|使用[^？?。;；]*方案|\b(?:adopt(?:ed|s|ing)?|chos(?:e|en)|choos(?:e|es|ing))\b', '原问题所询问的选择/采用行为、相关主体与对象的原话'),
@@ -173,6 +173,31 @@ def supplemental_targets(query_plan, decision):
             targets.append({'requirement':spec['fact'],'query':query[:300],
                 'basis':'question_locator_with_advice' if suggestion else 'question_locator'})
         if len(targets) == 2: break
+    # A single missing requirement used to spend only one query, commonly the
+    # identical failed question. Use the second existing slot for a distinct
+    # short probe. The immutable request still supplies all access filters and
+    # the frozen question still governs Gate/Reader; a probe is never evidence.
+    if len(targets) == 1 and specs:
+        spec = specs[0]
+        anchors = list(dict.fromkeys(re.findall(r'\b[A-Z][\w-]*\b', spec['locator'])))
+        anchors = [t for t in anchors if t.casefold() not in _STOP][:6]
+        related = [q.strip() for q in suggestions if literal_terms(q) & set(spec['lexical_terms'])]
+        # Prefer the alternative suggestion over repeating the first one with
+        # fewer question words. An identifier may occur only in that alternative.
+        suggestion = next((q for q in related if q not in targets[0]['query']), None)
+        if suggestion is None:suggestion = next(iter(related),None)
+        if suggestion:
+            probe = ' '.join([*anchors, suggestion])[:300]
+            basis = 'distinct_missing_fact_advice'
+        else:
+            # Remove grammatical query framing only, not negation, conditions,
+            # objects, numbers or dates. This changes ranking, never scope.
+            words = re.findall(r'[A-Za-z][\w+-]*|\d+|[\u4e00-\u9fff]+', spec['question_text'])
+            framing = _STOP | {'kind','type','describe','describes','description'}
+            probe = ' '.join(dict.fromkeys([*anchors, *(w for w in words if w.casefold() not in framing)]))[:300]
+            basis = 'distinct_question_terms'
+        if probe and literal_terms(probe) != literal_terms(targets[0]['query']):
+            targets.append({'requirement':spec['fact'], 'query':probe, 'basis':basis})
     return targets
 
 

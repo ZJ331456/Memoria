@@ -205,7 +205,7 @@ def test_targeted_locator_actually_adds_an_absent_candidate(core, empty):
     model.missing = 0 if empty else 1
     result = asyncio.run(kernel.answer(QueryRequest(query=QUERY, use_adaptive_retrieval=True, include_experiences=False, budget_chars=16000)))
     assert result['status'] == 'answer', result
-    assert len(calls) == (3 if empty else 2) and calls[0] == QUERY and all(q != QUERY for q in calls[1:])
+    assert len(calls) == 3 and calls[0] == QUERY and all(q != QUERY for q in calls[1:])
     assert result['access']['adaptive']['policy']['retrieval_rounds'] == 1
     if empty:
         assert not result['access']['adaptive']['rounds'][0]['candidate_ids']

@@ -1,23 +1,23 @@
 {
   "schema": "memoria-fixed-diagnostic-public-v1",
-  "date": "2026-10-23",
-  "protocol": "kernel-memory-llm-judge-v15-value-closure-36",
-  "registration_sha256": "87f9a2ded6220ab5988486f07294ce01efc56bfa1798370e188871fa336d0a5c",
-  "run_id": "20261023T155546Z-f32ea127",
+  "date": "2026-10-24",
+  "protocol": "kernel-memory-llm-judge-v18-distinct-locators-36",
+  "registration_sha256": "f0cffdb42f5e78338f77138962f247c6c4bb37b0b36c53a3641b313695759cb0",
+  "run_id": "20261023T165527Z-001b251a",
   "status": "failed",
-  "manifest_sha256": "7f403fc611d535c13242f724b55104e3fdb49f84cb1b3cf8cb2529cef745ebdc",
-  "elapsed_ms": 330108.19,
+  "manifest_sha256": "92249a8ee1778dbc63f3598cfa804a3d63993a8ea539eb28156a3e012c63cc12",
+  "elapsed_ms": 379809.666,
   "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
   "model": "deepseek-flash",
   "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
-  "code_commit": "926e193a05a9c500185663143daaa272aaf6d6ba",
-  "dirty_diff_sha256": "57a2060b49a06ecd0c905a4870b43e8449d695c1c97911812d2f81f9cc74b898",
+  "code_commit": "955b0c6d2bf9fa33dd4fb1c874c2448ff9f2bf8b",
+  "dirty_diff_sha256": "a9c5aac5a9261d22392526821e3d8a3b1844019fced69e3fe85c4e73e23315e0",
   "arms": {
     "memoria": {
       "items": 36,
       "scored": 35,
       "errors": 1,
-      "correct": 21,
+      "correct": 23,
       "by_group": {
         "1": {
           "items": 8,
@@ -35,23 +35,23 @@
         },
         "3": {
           "items": 4,
-          "correct": 2,
-          "scored": 3,
-          "accuracy": 0.5,
-          "unknown": 1
+          "correct": 1,
+          "scored": 4,
+          "accuracy": 0.25,
+          "unknown": 0
         },
         "4": {
           "items": 8,
-          "correct": 6,
-          "scored": 8,
-          "accuracy": 0.75,
-          "unknown": 0
+          "correct": 7,
+          "scored": 7,
+          "accuracy": 0.875,
+          "unknown": 1
         },
         "5": {
           "items": 8,
-          "correct": 6,
+          "correct": 8,
           "scored": 8,
-          "accuracy": 0.75,
+          "accuracy": 1.0,
           "unknown": 0
         }
       },
@@ -62,12 +62,12 @@
         "accuracy": 0.5357142857142857,
         "scope": "LoCoMo categories 1-4; category 5 separately"
       },
-      "latency_ms": 6200.052780545472,
+      "latency_ms": 8428.640099989329,
       "outcomes": {
         "ordinary_answered": 18,
         "ordinary_wrong_answers": 3,
         "ordinary_incorrect_refusals": 9,
-        "adversarial_overanswers": 2,
+        "adversarial_overanswers": 0,
         "unscored_or_failed": 1
       },
       "diagnostics": {
@@ -86,19 +86,29 @@
           "planned": 8,
           "scored": 8,
           "errors_or_unknown": 0,
-          "answer_actions": 2,
-          "refusal_actions": 6,
+          "answer_actions": 0,
+          "refusal_actions": 8,
           "clarify_actions": 0,
-          "wrong_answers": 2,
+          "wrong_answers": 0,
           "wrong_refusals": 0,
           "wrong_clarifications": 0,
-          "overanswer_actions": 2,
-          "wrong_overanswers": 2
+          "overanswer_actions": 0,
+          "wrong_overanswers": 0
         },
         "pipeline_stages": {
           "initial_candidates": {
             "observed_cases": 36,
-            "cases_with_consolidated_summaries": 25,
+            "cases_with_consolidated_summaries": 15,
+            "cases_with_observation_hints": 36,
+            "cases_with_visible_observation_summaries": 36,
+            "all_gold_visible_eligible_cases": 34,
+            "all_gold_visible_observed_cases": 34,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 17
+          },
+          "final_candidates": {
+            "observed_cases": 36,
+            "cases_with_consolidated_summaries": 15,
             "cases_with_observation_hints": 36,
             "cases_with_visible_observation_summaries": 36,
             "all_gold_visible_eligible_cases": 34,
@@ -106,21 +116,11 @@
             "all_gold_visible_unknown_stage_cases": 0,
             "all_gold_ids_present_cases": 19
           },
-          "final_candidates": {
-            "observed_cases": 36,
-            "cases_with_consolidated_summaries": 25,
-            "cases_with_observation_hints": 36,
-            "cases_with_visible_observation_summaries": 36,
-            "all_gold_visible_eligible_cases": 34,
-            "all_gold_visible_observed_cases": 34,
-            "all_gold_visible_unknown_stage_cases": 0,
-            "all_gold_ids_present_cases": 20
-          },
           "gate_bound_evidence": {
             "observed_cases": 36,
             "cases_with_consolidated_summaries": 0,
-            "cases_with_observation_hints": 21,
-            "cases_with_visible_observation_summaries": 21,
+            "cases_with_observation_hints": 20,
+            "cases_with_visible_observation_summaries": 20,
             "all_gold_visible_eligible_cases": 34,
             "all_gold_visible_observed_cases": 34,
             "all_gold_visible_unknown_stage_cases": 0,
@@ -134,12 +134,12 @@
             "all_gold_visible_eligible_cases": 34,
             "all_gold_visible_observed_cases": 34,
             "all_gold_visible_unknown_stage_cases": 0,
-            "all_gold_ids_present_cases": 8
+            "all_gold_ids_present_cases": 9
           },
           "published_citations": {
             "observed_cases": 36,
             "cases_with_consolidated_summaries": 0,
-            "cases_with_observation_hints": 18,
+            "cases_with_observation_hints": 16,
             "cases_with_visible_observation_summaries": 0,
             "all_gold_visible_eligible_cases": 34,
             "all_gold_visible_observed_cases": 34,
@@ -150,7 +150,7 @@
         "gate_bindings": {
           "observed_cases": 36,
           "sufficient_cases": 21,
-          "cases_with_unassessed_candidates": 13,
+          "cases_with_unassessed_candidates": 17,
           "semantic_sufficiency_verified": false
         },
         "answer_repairs": {
@@ -162,18 +162,18 @@
         "unavailable_gold_cases": 0
       },
       "accounting": {
-        "calls": 223,
+        "calls": 230,
         "usage": {
-          "calls": 223,
-          "known_cache_calls": 223,
+          "calls": 230,
+          "known_cache_calls": 230,
           "unknown_cache_calls": 0,
           "invalid_cache_calls": 0,
-          "prompt_cache_hit_tokens": 247280,
-          "prompt_cache_miss_tokens": 951349,
-          "known_prompt_tokens": 1198629,
-          "completion_tokens_known": 91670,
+          "prompt_cache_hit_tokens": 247152,
+          "prompt_cache_miss_tokens": 984666,
+          "known_prompt_tokens": 1231818,
+          "completion_tokens_known": 94827,
           "unknown_completion_calls": 0,
-          "token_weighted_hit_rate": 0.20630236712110253,
+          "token_weighted_hit_rate": 0.20064002961476451,
           "complete": true,
           "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
         },
@@ -192,16 +192,16 @@
           },
           "estimate": {
             "off_peak": {
-              "known_input_usd": 0.14344419,
-              "known_input_output_usd": 0.19844619,
-              "effective_input_usd_per_million": 0.11967355203319793,
-              "input_without_cache_usd": 0.17979435000000002
+              "known_input_usd": 0.148441356,
+              "known_input_output_usd": 0.20533755599999998,
+              "effective_input_usd_per_million": 0.12050591564662962,
+              "input_without_cache_usd": 0.18477269999999998
             },
             "peak": {
-              "known_input_usd": 0.28688838,
-              "known_input_output_usd": 0.39689238,
-              "effective_input_usd_per_million": 0.23934710406639587,
-              "input_without_cache_usd": 0.35958870000000004
+              "known_input_usd": 0.296882712,
+              "known_input_output_usd": 0.41067511199999995,
+              "effective_input_usd_per_million": 0.24101183129325923,
+              "input_without_cache_usd": 0.36954539999999997
             }
           },
           "invoice": false,
@@ -212,7 +212,7 @@
       },
       "stages": {
         "formation": {
-          "calls": 88,
+          "calls": 93,
           "cost": {
             "rates": {
               "off_peak": {
@@ -228,16 +228,16 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.085164666,
-                "known_input_output_usd": 0.124327866,
-                "effective_input_usd_per_million": 0.1099445092078,
-                "input_without_cache_usd": 0.11619225
+                "known_input_usd": 0.08669641800000001,
+                "known_input_output_usd": 0.126754218,
+                "effective_input_usd_per_million": 0.11041274422028444,
+                "input_without_cache_usd": 0.11778045
               },
               "peak": {
-                "known_input_usd": 0.170329332,
-                "known_input_output_usd": 0.248655732,
-                "effective_input_usd_per_million": 0.2198890184156,
-                "input_without_cache_usd": 0.2323845
+                "known_input_usd": 0.17339283600000002,
+                "known_input_output_usd": 0.253508436,
+                "effective_input_usd_per_million": 0.22082548844056887,
+                "input_without_cache_usd": 0.2355609
               }
             },
             "invoice": false,
@@ -246,7 +246,7 @@
           }
         },
         "answer_and_support": {
-          "calls": 100,
+          "calls": 102,
           "cost": {
             "rates": {
               "off_peak": {
@@ -262,16 +262,16 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.057219846,
-                "known_input_output_usd": 0.072237246,
-                "effective_input_usd_per_million": 0.14100469441918576,
-                "input_without_cache_usd": 0.06087014999999999
+                "known_input_usd": 0.060733308,
+                "known_input_output_usd": 0.076751508,
+                "effective_input_usd_per_million": 0.1417856312420333,
+                "input_without_cache_usd": 0.0642519
               },
               "peak": {
-                "known_input_usd": 0.114439692,
-                "known_input_output_usd": 0.144474492,
-                "effective_input_usd_per_million": 0.2820093888383715,
-                "input_without_cache_usd": 0.12174029999999998
+                "known_input_usd": 0.121466616,
+                "known_input_output_usd": 0.153503016,
+                "effective_input_usd_per_million": 0.2835712624840666,
+                "input_without_cache_usd": 0.1285038
               }
             },
             "invoice": false,
@@ -296,16 +296,16 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.0010596779999999999,
-                "known_input_output_usd": 0.001881078,
-                "effective_input_usd_per_million": 0.05818250700049415,
-                "input_without_cache_usd": 0.00273195
+                "known_input_usd": 0.00101163,
+                "known_input_output_usd": 0.0018318299999999998,
+                "effective_input_usd_per_million": 0.055374131041655256,
+                "input_without_cache_usd": 0.00274035
               },
               "peak": {
-                "known_input_usd": 0.0021193559999999998,
-                "known_input_output_usd": 0.003762156,
-                "effective_input_usd_per_million": 0.1163650140009883,
-                "input_without_cache_usd": 0.0054639
+                "known_input_usd": 0.00202326,
+                "known_input_output_usd": 0.0036636599999999996,
+                "effective_input_usd_per_million": 0.11074826208331051,
+                "input_without_cache_usd": 0.0054807
               }
             },
             "invoice": false,
@@ -318,19 +318,19 @@
   },
   "paired_ordinary": {
     "historical_memoria_to_current": {
-      "both_correct": 11,
-      "both_incorrect": 10,
-      "improved": 3,
-      "regressed": 1,
-      "unknown": 3
+      "both_correct": 13,
+      "both_incorrect": 9,
+      "improved": 2,
+      "regressed": 2,
+      "unknown": 2
     }
   },
   "input_policy": {
     "includes_separate_machine_captions": true,
     "historical_comparison": {
-      "previous_includes_machine_captions": false,
+      "previous_includes_machine_captions": true,
       "current_includes_machine_captions": true,
-      "same_caption_input_policy": false,
+      "same_caption_input_policy": true,
       "isolated_algorithm_effect": false
     },
     "source_counts": {
@@ -340,7 +340,7 @@
   },
   "publication_scope": "Memoria only; other arms are private mechanism diagnostics",
   "entire_diagnostic_accounting": {
-    "calls": 223,
+    "calls": 230,
     "cost": {
       "rates": {
         "off_peak": {
@@ -356,16 +356,16 @@
       },
       "estimate": {
         "off_peak": {
-          "known_input_usd": 0.14344419,
-          "known_input_output_usd": 0.19844619,
-          "effective_input_usd_per_million": 0.11967355203319793,
-          "input_without_cache_usd": 0.17979435000000002
+          "known_input_usd": 0.148441356,
+          "known_input_output_usd": 0.20533755599999998,
+          "effective_input_usd_per_million": 0.12050591564662962,
+          "input_without_cache_usd": 0.18477269999999998
         },
         "peak": {
-          "known_input_usd": 0.28688838,
-          "known_input_output_usd": 0.39689238,
-          "effective_input_usd_per_million": 0.23934710406639587,
-          "input_without_cache_usd": 0.35958870000000004
+          "known_input_usd": 0.296882712,
+          "known_input_output_usd": 0.41067511199999995,
+          "effective_input_usd_per_million": 0.24101183129325923,
+          "input_without_cache_usd": 0.36954539999999997
         }
       },
       "invoice": false,
@@ -378,9 +378,28 @@
     "Planned denominators include all execution and grading failures.",
     "Incorrect refusals are judge-based, not independently annotated answerability.",
     "Evidence budget is complete JSON characters, not equal actual token/call cost.",
-    "RRF-only removes the whole adaptive gate/support loop, not only the planner.",
-    "Frozen-price estimates are not invoices; missing usage remains unknown."
+    "Frozen-price estimates are not invoices; missing usage remains unknown.",
+    "Same raw caption input as v15; formation is rerun, and model/Judge variation remains.",
+    "One adversarial reference has a plausible source-grounded alternative reading in the AI-assisted audit; original gold and score remain unchanged.",
+    "No paid Oracle or four-arm experiment; audit labels are AI-assisted, not independent human ground truth."
   ],
-  "runtime_core_bytes_sha256": "b26116833fe2a7bb669470156988e383e813b65dc36ada1d09e574de3df86281",
-  "completed_local_date": "2026-10-24"
+  "runtime_core_bytes_sha256": "8c47a7bbfcbdfb3d620da3da7f95f210f02987e3e4cdfdbe36c26b85a6badce1",
+  "source_locator_flow": {
+    "eligible_ordinary": 26,
+    "previous": {
+      "initial_candidates": 14,
+      "final_candidates": 15,
+      "gate_bound_evidence": 9,
+      "reader_evidence": 8,
+      "published_citations": 8
+    },
+    "current": {
+      "initial_candidates": 13,
+      "final_candidates": 14,
+      "gate_bound_evidence": 9,
+      "reader_evidence": 9,
+      "published_citations": 8
+    },
+    "interpretation": "Post-hoc complete official-ID presence, not semantic necessity or recall."
+  }
 }

@@ -1,6 +1,6 @@
 # 评测记录
 
-当前正式仅[完整Memoria原36题单组](evidence-flow36.json)：v15普通15/28（53.57%下界，1题预算未评分）、对抗6/8；相比v13普通增加但对抗退步，未达到全面改善目标。候选来源ID覆盖没有提升，实际Reader摘要为0、仅保留定位回执，明确巩固Reader/引用仍0。[完整归因与限制](../../docs/implemented/证据流召回判断与回答修复.md) · [同指纹验收与全部尝试费用](evidence-flow-acceptance.json) · [源码指纹](evidence-flow-code.manifest.json)。旧v13公开组通过`926e193`追溯，原始QA、失败、费用和库保持私有不可变。
+当前正式仅[完整Memoria原36题单组](evidence-flow36.json)：v18与v15同输入，普通15/28持平（1项支持契约未评分）、对抗8/8（前轮6/8）。普通2已知改对/2退步/2未知配对；官方来源ID初始/补检/Reader/引用13/14/9/8，不能称候选召回提高。三次QA与全部模拟/失败费用一并保留。[详细分析](../../docs/implemented/目标复核与同输入36题优化.md) · [同指纹功能验收与全部费用](evidence-flow-acceptance.json) · [源码指纹](evidence-flow-code.manifest.json)。旧v15公共聚合通过`955b0c6`、v13通过`926e193`追溯，原始QA、失败、费用和库保持私有不可变。
 
 前轮：[原36题最终实现复测](final36-retest.json)，v11固定普通28/对抗8。Memoria14/28、对抗7/8、0错误；完整历史Baseline21/28、1题无效契约未评分。相比无故障v9仅净增1道普通题，仍不接近Baseline；形成349批准/38关联核验/6巩固头，但最终Reader巩固引用0。只新增登记、聚合和文档，不改算法或覆盖旧记录；[详细说明](../../docs/implemented/固定36题最终代码复测.md)。
 

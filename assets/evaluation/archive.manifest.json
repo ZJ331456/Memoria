@@ -80,5 +80,25 @@
         "sha256": "ec61b38283dd6b1f6f4f204a210569878abbaaa3c162c2d177e29aac4385221b"
       }
     ]
+  },
+  "superseded_fixed36_v15": {
+    "archive_commit": "955b0c6d2bf9fa33dd4fb1c874c2448ff9f2bf8b",
+    "replacement": "assets/evaluation/evidence-flow36.json",
+    "private_raw_ledgers_untouched": true,
+    "files": [
+      {
+        "path": "assets/evaluation/evidence-flow36.json",
+        "sha256": "8ce9f51846ee893d5f9b4d2d8b075cad04c6e95e133cf529f4e7c887d10491a6"
+      },
+      {
+        "path": "assets/evaluation/evidence-flow-acceptance.json",
+        "sha256": "a374be4c226252abf444926e3610540682b71a5b453e2bae46f99ee81003e4ed"
+      },
+      {
+        "path": "assets/evaluation/evidence-flow-code.manifest.json",
+        "sha256": "861598c2344402cbfbe767782cc5a265a0a6ebed758c19ac7cf79f967dcf554f"
+      }
+    ],
+    "sha256_scope": "archived Git blob bytes"
   }
 }

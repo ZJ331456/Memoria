@@ -41,7 +41,21 @@ def speech_act_clock(question, quoted_events):
 
 
 def derivation_blockers(statement, quoted_events, clocks, *, clock_only, basis, question=''):
-    target = precision(statement)
+    # An explanation may name BOTH the source calendar and the derived event
+    # value. Only a narrowly framed, actually matching source-date explanation
+    # can exclude its anchor from event precision/arithmetic. The literal answer
+    # and quotes are still checked in full by AnswerRisk.
+    event_statement = statement
+    explanation = re.search(
+        r"\brelative to (?:the )?source(?:['’]s)? (?:declared |original )?date(?: of)?\s+"
+        r"(?P<anchor>[^;.!?]{3,120}?),?\s+(?:that|this)\s+(?:is|means|gives)\b", statement, re.I)
+    if explanation:
+        anchor = re.sub(r'\W+', '', explanation['anchor']).casefold()
+        if (re.search(YEAR,explanation['anchor']) and anchor and
+                any(anchor in re.sub(r'\W+','',clock).casefold() for clock in clocks)):
+            start,end=explanation.span('anchor')
+            event_statement=statement[:start]+statement[end:]
+    target = precision(event_statement)
     blockers=[]
     if clock_only and basis!='derived':blockers.append('clock_only_fact_requires_derived_basis')
     if target is None:
@@ -60,7 +74,7 @@ def derivation_blockers(statement, quoted_events, clocks, *, clock_only, basis, 
         for token in re.findall(r'\b(?:last|this|next)\s+year\b|去年|今年|明年',text,re.I):
             relations.append(-1 if token.casefold() in {'last year','去年'} else 1 if token.casefold() in {'next year','明年'} else 0)
     source_years=set(re.findall(YEAR,' '.join(clocks)))
-    stated_years=set(re.findall(YEAR,statement))
+    stated_years=set(re.findall(YEAR,event_statement))
     if len(set(relations))==1 and len(source_years)==1 and stated_years:
         expected=str(int(next(iter(source_years)))+relations[0])
         if stated_years!={expected}:blockers.append('derived_calendar_year_mismatch')

@@ -24,7 +24,7 @@ from .evidence_sufficiency import SYSTEM as GATE_SYSTEM, calendar_derivations
 from .verification import verify, support_envelope, REPAIR_INSTRUCTION
 from ..llm.call_scope import inference_scope
 
-VERSION = 'production-missing-evidence-v6-typed-bindings'
+VERSION = 'production-missing-evidence-v7-target-reassessment'
 SUPPORT_SYSTEM += ('\nCover EVERY literal character of the proposed answer, including prefixes such as '
     '根据来源记录 and final provenance caveats. Include a framing prefix in the adjacent factual statement '
     'rather than silently omitting it. A statement must be a literal substring of the PROPOSED ANSWER. '
@@ -41,7 +41,11 @@ READER_STYLE = ('\n仅给出回答问题必需的事实，不添加“根据来�
     'Distinguish the speaker\'s own actions from praise, questions or advice addressed to another person: '
     '"I admire your pottery" does not mean the speaker makes pottery. For multiple supported instances, '
     'include the complementary instances, not just the most recent passage. Never claim an exhaustive '
-    'list or count if its required event set is not established.')
+    'list or count if its required event set is not established. '
+    'When answering when/year/month, resolve supported source-relative time to a self-contained '
+    'calendar answer at the original precision, e.g. this month plus a September 2024 source '
+    'means September 2024. Do not leave a bare this/last/next month or year without its anchor. '
+    'An event month is different from narrating the exact day of the message.')
 READER_REPAIR = '\n上一次输出JSON格式或长度不合要求。请从相同证据重新生成完整合法JSON；不要接续或修补上一段文本，不更改证据或引用。'
 
 
@@ -107,7 +111,11 @@ GATE = (GATE_SYSTEM + '\nThe query_plan is frozen before evidence inspection. As
     'personal premises; do not require an impossible verbatim counterfactual statement. Lack of a '
     'self-identification never supports a negative sensitive identity or group-membership inference. '
     'A binding does not make its value true; source identity, conditions, modality and all required '
-    'links must still be established. Use sufficient ONLY when every binding is complete.')
+    'links must still be established. '
+    'If previous_gaps is present, reassess those exact missing links using the new pool. Local '
+    'binding blockers describe failed contracts, not proof of corpus absence. Correct a '
+    'paraphrased object/value locator by copying the shortest actual quoted wording, but never '
+    'change a missing property into a related topic. Use sufficient ONLY when every binding is complete.')
 
 
 class Personal:
@@ -566,18 +574,26 @@ async def read_adaptive(kernel, request):
             if not pool and (round_index or all_candidates): return finish('no_bounded_live_candidates')
             guard, _, evidence, owners = adapter.present(access, pool)
             if guard.freshness(): return finish('source_changed_before_gate')
-            # Reserve complete Reader plus two support attempts BEFORE spending on gates.
+            # Reserve a complete Reader plus two support attempts BEFORE gates.
+            # The optional Reader format retry is held only if the first output
+            # actually needs it, under the same shared cap. Reserving both Reader
+            # branches here blocked a valid second gate with mostly unused budget.
             # Whole pool is a conservative envelope, never clipped to pretend it fits.
             _, future_messages, _, _ = adapter.present(access, pool)
             future = await meter.prepare(reader_messages(future_messages))
-            future_repair = await meter.prepare(reader_messages(future_messages, repair=True))
             support_bound = await support_envelope(meter, SUPPORT_SYSTEM,
                 {'question': request.query, 'query_plan':query_plan, 'evidence': evidence},deepseek_cache=True)
             policy.release('answer_pipeline')
-            if not policy.hold_calls('answer_pipeline', [future.report, future_repair.report, support_bound, support_bound]):
+            if not policy.hold_calls('answer_pipeline', [future.report, support_bound, support_bound]):
                 return finish('complete_answer_reservation_unavailable')
             payload = {'question': request.query, 'query_plan': query_plan, 'evidence': evidence,
                 'calendar_derivations':calendar_derivations(evidence)}
+            if trace['rounds']:
+                payload['previous_gaps'] = [{
+                    'requirement':r['requirement'], 'blockers':r['blockers'],
+                    'missing_components':(r.get('binding') or {}).get('missing_components',[])}
+                    for r in trace['rounds'][-1]['decision'].get('binding_decisions',[])
+                    if r['status']=='missing']
             if SECRET.search(canonical(payload) + canonical(future_messages)): return finish('credential_bearing_source_not_sent')
             if pool:
                 decision = await verify(call, 'coverage', GATE, payload,
@@ -628,11 +644,15 @@ async def read_adaptive(kernel, request):
                 final_support = await support_envelope(meter, SUPPORT_SYSTEM,
                     {'question': request.query, 'query_plan':query_plan, 'evidence': evidence},deepseek_cache=True)
                 policy.release('answer_pipeline')
-                if not policy.hold_calls('answer_pipeline', [prepared.report, repaired.report, final_support, final_support]):
+                if not policy.hold_calls('answer_pipeline', [prepared.report, final_support, final_support]):
                     return finish('final_answer_reservation_unavailable')
                 for attempt in range(2):
                     phase='reader'
-                    if attempt: prepared = repaired
+                    if attempt:
+                        prepared = repaired
+                        policy.release('answer_pipeline')
+                        if not policy.hold_calls('answer_pipeline', [prepared.report, final_support, final_support]):
+                            return finish('reader_repair_reservation_unavailable')
                     if guard.freshness(): return finish('source_changed_before_reader')
                     for diagnostic in record['requirement_diagnostics']:
                         diagnostic['presented_to_reader']=diagnostic['selected_for_reader']
