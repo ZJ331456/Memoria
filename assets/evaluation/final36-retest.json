@@ -1,0 +1,650 @@
+{
+  "schema": "memoria-final36-frozen-retest-v1",
+  "date": "2026-10-23",
+  "protocol": "kernel-vs-context-llm-judge-v11-final-36-retest",
+  "registration_sha256": "366c1f37f3bcfbb9a71226ee57dccfbe4ad48ea824e96b1887b3753bd964845a",
+  "run_id": "20261023T061445Z-1749d8a6",
+  "status": "failed",
+  "manifest_sha256": "65bfbacdf0885140b4ed034b9be1890fd0f17ee2c8784ce9b0a2ce6755357082",
+  "elapsed_seconds": 358.74161499999997,
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "model": "deepseek-flash",
+  "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
+  "implementation_source_commit": "581268f1b992e72c03757354927137fe58403ce3",
+  "implementation_acceptance_core_sha256": "258a3e7c2883a038ff36639d682edececab732bbbb81b2041ad05c94c965c861",
+  "runtime_core_sha256": "94e1e3a2aa2dbbd2ccd27ae61d3b8ee737387d85df25c0cb63d4f1ba3d2ab7c7",
+  "implementation_files_unchanged": true,
+  "sample": {
+    "questions_per_arm": 36,
+    "ordinary": 28,
+    "adversarial": 8,
+    "by_group": {
+      "1": 8,
+      "2": 8,
+      "3": 4,
+      "4": 8,
+      "5": 8
+    },
+    "repeated_development_sample": true
+  },
+  "arms": {
+    "memoria": {
+      "items": 36,
+      "scored": 36,
+      "errors": 0,
+      "correct": 21,
+      "primary": {
+        "items": 28,
+        "correct": 14,
+        "scored": 28,
+        "accuracy": 0.5,
+        "scope": "LoCoMo categories 1-4; category 5 separately"
+      },
+      "by_group": {
+        "1": {
+          "items": 8,
+          "correct": 2,
+          "scored": 8,
+          "accuracy": 0.25,
+          "unknown": 0
+        },
+        "2": {
+          "items": 8,
+          "correct": 6,
+          "scored": 8,
+          "accuracy": 0.75,
+          "unknown": 0
+        },
+        "3": {
+          "items": 4,
+          "correct": 1,
+          "scored": 4,
+          "accuracy": 0.25,
+          "unknown": 0
+        },
+        "4": {
+          "items": 8,
+          "correct": 5,
+          "scored": 8,
+          "accuracy": 0.625,
+          "unknown": 0
+        },
+        "5": {
+          "items": 8,
+          "correct": 7,
+          "scored": 8,
+          "accuracy": 0.875,
+          "unknown": 0
+        }
+      },
+      "latency_ms": 5367.037425003622,
+      "accounting": {
+        "calls": 224,
+        "input_tokens": 979837,
+        "output_tokens": 84767,
+        "cache_hit_rate": 0.078497750135992,
+        "unknown_usage_calls": 0,
+        "known_cost_usd": {
+          "off_peak": 0.18652924499999998,
+          "peak": 0.37305848999999996
+        },
+        "unknown_reserved_upper_usd": 0
+      },
+      "phases": {
+        "answer_and_support": {
+          "calls": 97,
+          "input_tokens": 280369,
+          "output_tokens": 19515,
+          "cache_hit_rate": 0.11687454747136809,
+          "unknown_usage_calls": 0,
+          "known_cost_usd": {
+            "off_peak": 0.048947454,
+            "peak": 0.097894908
+          },
+          "unknown_reserved_upper_usd": 0
+        },
+        "formation": {
+          "calls": 91,
+          "input_tokens": 680667,
+          "output_tokens": 63755,
+          "cache_hit_rate": 0.047388811268946486,
+          "unknown_usage_calls": 0,
+          "known_cost_usd": {
+            "off_peak": 0.13561141799999998,
+            "peak": 0.27122283599999997
+          },
+          "unknown_reserved_upper_usd": 0
+        },
+        "independent_judge": {
+          "calls": 36,
+          "input_tokens": 18801,
+          "output_tokens": 1497,
+          "cache_hit_rate": 0.6324663581724377,
+          "unknown_usage_calls": 0,
+          "known_cost_usd": {
+            "off_peak": 0.001970373,
+            "peak": 0.003940746
+          },
+          "unknown_reserved_upper_usd": 0
+        }
+      }
+    },
+    "raw_context": {
+      "items": 36,
+      "scored": 35,
+      "errors": 1,
+      "correct": 29,
+      "primary": {
+        "items": 28,
+        "correct": 21,
+        "scored": 27,
+        "accuracy": 0.75,
+        "scope": "LoCoMo categories 1-4; category 5 separately"
+      },
+      "by_group": {
+        "1": {
+          "items": 8,
+          "correct": 5,
+          "scored": 8,
+          "accuracy": 0.625,
+          "unknown": 0
+        },
+        "2": {
+          "items": 8,
+          "correct": 7,
+          "scored": 8,
+          "accuracy": 0.875,
+          "unknown": 0
+        },
+        "3": {
+          "items": 4,
+          "correct": 3,
+          "scored": 4,
+          "accuracy": 0.75,
+          "unknown": 0
+        },
+        "4": {
+          "items": 8,
+          "correct": 6,
+          "scored": 7,
+          "accuracy": 0.75,
+          "unknown": 1
+        },
+        "5": {
+          "items": 8,
+          "correct": 8,
+          "scored": 8,
+          "accuracy": 1.0,
+          "unknown": 0
+        }
+      },
+      "latency_ms": 1638.4063999996417,
+      "accounting": {
+        "calls": 71,
+        "input_tokens": 978295,
+        "output_tokens": 5141,
+        "cache_hit_rate": 0.9845700938878355,
+        "unknown_usage_calls": 0,
+        "known_cost_usd": {
+          "off_peak": 0.008238450000000001,
+          "peak": 0.016476900000000003
+        },
+        "unknown_reserved_upper_usd": 0
+      },
+      "phases": {
+        "answer_and_support": {
+          "calls": 36,
+          "input_tokens": 958457,
+          "output_tokens": 3642,
+          "cache_hit_rate": 0.9909260405005128,
+          "unknown_usage_calls": 0,
+          "known_cost_usd": {
+            "off_peak": 0.00633903,
+            "peak": 0.01267806
+          },
+          "unknown_reserved_upper_usd": 0
+        },
+        "independent_judge": {
+          "calls": 35,
+          "input_tokens": 19838,
+          "output_tokens": 1499,
+          "cache_hit_rate": 0.6774876499647142,
+          "unknown_usage_calls": 0,
+          "known_cost_usd": {
+            "off_peak": 0.0018994199999999998,
+            "peak": 0.0037988399999999995
+          },
+          "unknown_reserved_upper_usd": 0
+        }
+      }
+    }
+  },
+  "baseline_truncation": {
+    "questions": 0,
+    "max_dropped_turns": 0
+  },
+  "previous": {
+    "v9": {
+      "run_id": "20261023T023459Z-42b2fa74",
+      "arms": {
+        "memoria": {
+          "items": 36,
+          "scored": 36,
+          "errors": 0,
+          "correct": 21,
+          "primary": {
+            "items": 28,
+            "correct": 13,
+            "scored": 28,
+            "accuracy": 0.4642857142857143,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 2,
+              "scored": 8,
+              "accuracy": 0.25,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 5,
+              "scored": 8,
+              "accuracy": 0.625,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 1,
+              "scored": 4,
+              "accuracy": 0.25,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 5,
+              "scored": 8,
+              "accuracy": 0.625,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 4968.195233330738
+        },
+        "raw_context": {
+          "items": 36,
+          "scored": 36,
+          "errors": 0,
+          "correct": 31,
+          "primary": {
+            "items": 28,
+            "correct": 23,
+            "scored": 28,
+            "accuracy": 0.8214285714285714,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 3,
+              "scored": 4,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 1566.5564777834031
+        }
+      },
+      "old_to_current_memoria_pairs": {
+        "both_wrong": 13,
+        "both_correct": 12,
+        "second_only_correct": 2,
+        "first_only_correct": 1
+      }
+    },
+    "v10": {
+      "run_id": "20261023T042223Z-3631db57",
+      "arms": {
+        "memoria": {
+          "items": 36,
+          "scored": 23,
+          "errors": 13,
+          "correct": 17,
+          "primary": {
+            "items": 28,
+            "correct": 9,
+            "scored": 15,
+            "accuracy": 0.32142857142857145,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 0,
+              "scored": 0,
+              "accuracy": 0.0,
+              "unknown": 8
+            },
+            "2": {
+              "items": 8,
+              "correct": 3,
+              "scored": 3,
+              "accuracy": 0.375,
+              "unknown": 5
+            },
+            "3": {
+              "items": 4,
+              "correct": 1,
+              "scored": 4,
+              "accuracy": 0.25,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 5,
+              "scored": 8,
+              "accuracy": 0.625,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 6156.960486114258
+        },
+        "raw_context": {
+          "items": 36,
+          "scored": 36,
+          "errors": 0,
+          "correct": 31,
+          "primary": {
+            "items": 28,
+            "correct": 23,
+            "scored": 28,
+            "accuracy": 0.8214285714285714,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 3,
+              "scored": 4,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 1393.4448527709012
+        }
+      },
+      "old_to_current_memoria_pairs": {
+        "unknown_pairs": 13,
+        "both_correct": 7,
+        "first_only_correct": 2,
+        "both_wrong": 5,
+        "second_only_correct": 1
+      }
+    },
+    "v7": {
+      "run_id": "20261023T005745Z-2ecd50f5",
+      "arms": {
+        "memoria": {
+          "primary": {
+            "items": 28,
+            "correct": 13,
+            "scored": 28,
+            "accuracy": 0.4642857142857143,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "errors": 0,
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 1,
+              "scored": 8,
+              "accuracy": 0.125,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 0,
+              "scored": 4,
+              "accuracy": 0.0,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          }
+        },
+        "raw_context": {
+          "primary": {
+            "items": 28,
+            "correct": 22,
+            "scored": 28,
+            "accuracy": 0.7857142857142857,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "errors": 0,
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 5,
+              "scored": 8,
+              "accuracy": 0.625,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 3,
+              "scored": 4,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "paired_memoria_then_baseline": {
+    "both_wrong": 6,
+    "second_only_correct": 8,
+    "both_correct": 13,
+    "unknown_pairs": 1
+  },
+  "formation": {
+    "observation_status_counts": {
+      "approved": 349,
+      "needs_assistance": 15
+    },
+    "stored_approved_heads": 6,
+    "topic_links": {
+      "not_proposed": 309,
+      "verified": 38,
+      "authority_mismatch": 13,
+      "independent_grouping_not_supported": 4
+    },
+    "consolidation_read_counts": {
+      "candidate_questions": 35,
+      "reader_selected_questions": 0,
+      "published_citation_questions": 0
+    }
+  },
+  "reader_statuses": {
+    "ordinary_answer": 19,
+    "ordinary_answered_wrong": 5,
+    "ordinary_abstain": 9,
+    "adversarial_abstain": 7,
+    "adversarial_answered_wrong": 1,
+    "adversarial_answer": 1
+  },
+  "baseline_error_counts": {
+    "invalid_answer_contract": 1
+  },
+  "reader_validation_reasons": {
+    "accepted": 20,
+    "required_evidence_not_established": 14,
+    "answer_support_not_established": 2
+  },
+  "structured_failure_codes": {
+    "selection:required_evidence_not_established": 14,
+    "support:answer_support_not_established": 2
+  },
+  "native_source_dense_checks": {
+    "available": 36
+  },
+  "compaction": {},
+  "posthoc_id_coverage": {
+    "questions_with_gold_ids": 26,
+    "initial_all_ids": 16,
+    "final_all_ids": 17,
+    "reader_packet_all_ids": 10,
+    "questions_with_unavailable_official_ids": 1,
+    "ids_in_pool_reader_not_called": 4,
+    "questions_without_gold_ids": 2
+  },
+  "accounting": {
+    "calls": 295,
+    "input_tokens": 1958132,
+    "output_tokens": 89908,
+    "cache_hit_rate": 0.5311771627244741,
+    "unknown_usage_calls": 0,
+    "known_cost_usd": {
+      "off_peak": 0.19476769499999996,
+      "peak": 0.3895353899999999
+    },
+    "unknown_reserved_upper_usd": 0
+  },
+  "production_isolation": {
+    "databases": 2,
+    "experimental_source_ids": 38,
+    "checks": [
+      {
+        "quick_check": "ok",
+        "foreign_key_violations": 0,
+        "experimental_source_ids_found": 0
+      },
+      {
+        "quick_check": "ok",
+        "foreign_key_violations": 0,
+        "experimental_source_ids_found": 0
+      }
+    ]
+  },
+  "limits": [
+    "Exactly the original 36 development IDs; not full evaluation, unseen generalization or statistical proof of improvement.",
+    "Same backbone/Reader cap and kernel 8000-character evidence budget; full-history Baseline is not an equal-actual-token ablation.",
+    "All planned questions and failures remain in denominators. Missing usage is not zero cost.",
+    "All formation/consolidation/answer/support/repair/independent scoring calls charged in the private ledger.",
+    "Source ID coverage is post-hoc only, not semantic sufficiency; gold never enters online retrieval.",
+    "Formation/head/association counts are not extraction F1 or proof of memory benefit.",
+    "No implementation changes or QA repeats within this run; only a new preregistration, aggregate and documentation.",
+    "Original inputs, prompts, answers, individual labels and private databases are not published.",
+    "Baseline has one invalid-answer-contract ordinary case: its 21/28 planned-denominator score is a lower bound; do not interpret an unscored case as a verified wrong answer."
+  ]
+}

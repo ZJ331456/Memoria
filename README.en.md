@@ -1,6 +1,6 @@
 # Memoria
 
-Latest: [verified source-topic reuse and Reader failure attribution](docs/implemented/形成分组与回答链路归因.md) separate utterance speakers from event subjects, fix consolidation scheduling, cost the actual Reader packet and retain literal source windows. Final acceptance: all 1609 engineering tests pass, synthetic functionality is 49/49, and actual personal/source BGE is 4/4 each under one final core fingerprint. The one new 36-question diagnostic had 13 upstream failures and is retained with unknown usage; it predates the final JSON example fix and is not a final-revision quality result. No new full evaluation or proven Baseline advantage.
+Latest: [the unchanged final implementation retested on the original 36 cases](docs/implemented/固定36题最终代码复测.md): Memoria ordinary **14/28 (50%)**, full-history Baseline **21/28 (75%, one unscored contract failure)**; at least a 25-point gap remains. Memoria gains only one ordinary answer over error-free v9 (13/28), with adversarial 7/8 and zero execution errors. No new full evaluation or implementation changes. Raw checkpoints and all costs remain private; aggregates are in [final36-retest.json](assets/evaluation/final36-retest.json).
 
 <p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 
