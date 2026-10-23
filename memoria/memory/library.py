@@ -327,6 +327,62 @@ class EvidenceLibrary:
                 card.update(self.formation.card_provenance(card['id']))
             return cards[:2]
 
+    def retrieval_observations(self, revision_ids, *, session_id=None, limit=2000, budget=1600000):
+        """Bounded reviewed descriptions for routing back to immutable raw passages.
+
+        These are organization hints, never a substitute for their original quote.
+        Scope, head and approval filters run before LIMIT, and the formation lease
+        is checked again after any asynchronous embedding work by the consumer.
+        """
+        revisions = sorted(set(revision_ids))
+        if not revisions:
+            return [], {'scanned_observations': 0, 'observation_scan_truncated': False}
+        marks = ','.join('?' for _ in revisions)
+        with self.store.lock:
+            rows = self.store.db.execute(f'''SELECT o.id FROM library_observations o
+                JOIN library_cards c ON c.id=o.card_id
+                JOIN library_sources s ON s.id=o.source_id
+                WHERE o.revision_id IN ({marks}) AND c.status='approved'
+                AND s.status='active' AND s.head_id=o.revision_id
+                AND (s.scope='personal' OR s.session_id=?)
+                AND o.feedback_id IS (SELECT id FROM library_feedback
+                    WHERE revision_id=o.revision_id ORDER BY rowid DESC LIMIT 1)
+                ORDER BY o.rowid DESC LIMIT ?''', (*revisions, session_id, limit + 1)).fetchall()
+            result, used = [], 0
+            truncated = len(rows) > limit
+            for row in rows[:limit]:
+                item = self.formation._observation(row['id'])
+                if not self.formation._live(item, complete=False):
+                    continue
+                group = json.loads(item['group_json'])
+                text = '\n'.join((item['content'], item['applicability'],
+                                  group.get('topic', ''), group.get('subject', ''),
+                                  group.get('conditions', '')))
+                if used + len(text) > budget:
+                    truncated = True
+                    continue
+                used += len(text)
+                result.append({**item, 'group': group, 'retrieval_text': text})
+            return result, {'scanned_observations': len(rows[:limit]),
+                            'live_observations': len(result),
+                            'observation_scan_truncated': truncated}
+
+    @staticmethod
+    def formation_reference(observation):
+        return {'observation_id': observation['id'], 'card_id': observation['card_id'],
+                'sha256': digest(json.dumps([observation['content'], observation['applicability'],
+                                             observation['group_json']], ensure_ascii=False,
+                                            separators=(',', ':')))}
+
+    def retrieval_observation_valid(self, observation):
+        """Refresh the review row, not just the original source lease after awaits."""
+        try:
+            current = self.formation._observation(observation['id'])
+            return (self.formation_reference(current) == self.formation_reference(observation)
+                    and self.formation._live(current, complete=False))
+        except (LibraryError, KeyError, TypeError):
+            return False
+
     def entity_supplement(self,query,lexical,*,session_id=None,entity_type=None,limit=8):
         catalog=self.store.entities
         rows,lookup=catalog.candidates('library',query,session_id=session_id,entity_type=entity_type,limit=limit)
@@ -409,8 +465,18 @@ class EvidenceLibrary:
                     if (not card or card['status']!='approved' or card['revision_id']!=source['head_id']
                         or card['feedback_id']!=(feedback['id'] if feedback else None)
                         or not self.formation.card_available(cid)):return False
+                refs = dependency.get('formation_refs', [])
+                if not isinstance(refs, list) or len(refs) > 4:return False
+                for ref in refs:
+                    if not isinstance(ref, dict) or set(ref) != {'observation_id', 'card_id', 'sha256'}:return False
+                    if any(not isinstance(value, str) for value in ref.values()):return False
+                    observation = self.formation._observation(ref['observation_id'])
+                    if (observation['source_id'] != source['id'] or
+                        observation['revision_id'] != source['head_id'] or
+                        self.formation_reference(observation) != ref or
+                        not self.formation._live(observation, complete=False)):return False
                 return True
-            except (LibraryError,KeyError):return False
+            except (LibraryError,KeyError,TypeError):return False
 
     async def _call(self, rid, stage, messages, maximum):
         selected=self.llm.settings.preferred_chat_model(prefer_fast=True)

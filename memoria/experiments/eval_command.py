@@ -15,6 +15,28 @@ from .eval_runner import LlmJudge, build_report, run_arms, run_ordered_histories
 from .eval_systems import KernelMemorySystem, RawContextSystem
 
 READER_SYSTEM = SOURCE_CONTRACT
+ARM_CONFIGURATION = {
+    "memoria": {"formation": True, "include_formed_memory": True, "adaptive_gate_supplement_support": True},
+    "source_only": {"formation": False, "include_formed_memory": False, "adaptive_gate_supplement_support": True},
+    "rrf_only": {"formation": False, "include_formed_memory": False, "adaptive_gate_supplement_support": False},
+    "raw_context": {"full_visible_history": True},
+}
+
+
+def registered_arm_order(arms, registration):
+    """An ablation changes the protocol: require exact arm, order and mechanism registration."""
+    registered = registration.get("arms", ["memoria", "raw_context"])
+    if (not isinstance(registered, list) or len(registered) != len(set(registered))
+            or set(registered) != set(arms)):
+        raise ValueError("Requested arms differ from frozen registration")
+    order = registration.get("arm_order", ["memoria", "raw_context"])
+    if not isinstance(order, list) or len(order) != len(set(order)) or set(order) != set(arms):
+        raise ValueError("Registered arm_order must list every requested arm exactly once")
+    if set(arms) - {"memoria", "raw_context"}:
+        expected = {name: ARM_CONFIGURATION[name] for name in arms}
+        if registration.get("arm_configuration") != expected:
+            raise ValueError("Ablation arm_configuration differs from the executable mechanisms")
+    return order
 
 
 async def run(workspace, settings, *, benchmark, dataset, arms=None, conversations=10,
@@ -28,8 +50,9 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
     from ..llm.deepseek_cache import official
     from ..config import ModelConfig
 
-    if sorted(arms or ["raw_context", "memoria"]) != ["memoria", "raw_context"]:
-        raise ValueError("Official evaluation requires exactly raw_context and memoria")
+    arms = list(arms) if arms is not None else ["memoria", "raw_context"]
+    if not arms or len(set(arms)) != len(arms) or set(arms) - ARM_CONFIGURATION.keys():
+        raise ValueError("Evaluation requires unique known arms")
     if write_mode != "library" or not judge:
         raise ValueError("Public benchmark requires external sources and independent binary judging")
     if concurrency not in {1, 2} or not 1 <= history_concurrency <= 8 or not 1 <= max_tokens <= 2048 or context_chars < 4096:
@@ -49,7 +72,7 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         raise ValueError("No benchmark items")
     if len({item.id for item in items}) != len(items):
         raise ValueError("Duplicate benchmark item IDs; rejected before model calls")
-    plan = estimate(items, dataset, model=settings.main.model, context_bytes=context_chars)
+    plan = estimate(items, dataset, model=settings.main.model, context_bytes=context_chars, arms=arms)
     if not execute:
         # Crucially no LLM client, kernel, embedding or production database is constructed.
         if output:
@@ -57,9 +80,14 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
             target.mkdir(parents=True, exist_ok=True)
             (target / "estimate.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
         return plan
-    if not allow_remote or not official(settings.main) or not max_calls or not max_cost_usd:
+    if not allow_remote or not official(settings.main) or not max_calls or max_calls <= 0 or not max_cost_usd or max_cost_usd <= 0:
         raise ValueError("Execution requires --allow-remote and positive --max-calls/--max-cost-usd")
     registration = json.loads(Path(registration or settings.root / "eval/protocols/kernel-vs-context-judge-v1.json").read_text(encoding="utf-8"))
+    arm_order = registered_arm_order(arms, registration)
+    if set(arms) - {"memoria", "raw_context"} and concurrency != 1:
+        raise ValueError("Ablation arms require registered sequential execution")
+    if max_calls > registration.get("max_calls", max_calls) or max_cost_usd > registration.get("max_cost_usd", max_cost_usd):
+        raise ValueError("Requested execution caps exceed frozen registration")
     if item_ids_file and [item.id for item in items]!=registration.get('item_ids'):
         raise ValueError('Diagnostic subset differs from frozen registration')
     if registration.get('item_ids') and [item.id for item in items]!=registration['item_ids']:
@@ -91,7 +119,8 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         "scope": "full_development_retest" if len(items)==1986 else "diagnostic_subset",
         "item_ids": [item.id for item in items],
         "concurrency_scope": registration["concurrency_scope"],
-        "arm_order": ["memoria", "raw_context"],
+        "arm_order": arm_order,
+        "arms": arms, "arm_configuration": {name: ARM_CONFIGURATION[name] for name in arms},
         "history_concurrency": history_concurrency,
         "reader_max_tokens": max_tokens, "temperature": 0, "top_p": 1,
         "timeout_seconds": 120, "max_retries": 0, "thinking": "disabled",
@@ -99,7 +128,9 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         "write_mode": "external-source-session-windows", "max_calls": max_calls,
         "max_cost_usd": max_cost_usd, "cold_warm": "provider best effort, no forced warmup",
         "main_score": "categories 1-4; category 5 is supplementary",
-        "interpretation": "same backbone, complete kernel versus raw context; no single-mechanism causal claim",
+        "interpretation": ("source_only versus memoria holds Reader/gate/support and evidence caps fixed; "
+            "rrf_only also removes adaptive gate/supplement/support; raw_context has full history. "
+            "Equal caps do not imply equal actual tokens, calls, cache exposure or lifecycle cost"),
         "source_time": "raw session clock retained; dataset timezone unknown",
         "resume": "not supported; checkpoints retained, never silently recomputed as free calls"}
     recorder = RunRecorder(Path(output) if output else workspace.path("experiments", registration["protocol"]),
@@ -117,10 +148,20 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         return MemoryKernel(kernel_settings, Store(database, vector_backend="json"),
                             llm=client, user_id=workspace.owner)
 
-    systems = {"memoria": KernelMemorySystem(factory, max_tokens=max_tokens,
-                    budget_chars=kernel_budget_chars, directory=recorder.path / "kernel"),
-               "raw_context": RawContextSystem(client, system=READER_SYSTEM,
-                    max_tokens=max_tokens, budget_chars=context_chars)}
+    def make_system(name, signature=None):
+        if name == "raw_context":
+            return RawContextSystem(client, system=READER_SYSTEM,
+                max_tokens=max_tokens, budget_chars=context_chars)
+        config = ARM_CONFIGURATION[name]
+        directory = recorder.path / "kernel" / name
+        if signature:
+            directory /= signature
+        return KernelMemorySystem(factory, name=name, max_tokens=max_tokens,
+            budget_chars=kernel_budget_chars, directory=directory,
+            form_memory=config["formation"], include_formed_memory=config["include_formed_memory"],
+            adaptive=config["adaptive_gate_supplement_support"])
+
+    systems = {name: make_system(name) for name in arm_order}
     completed = {name: 0 for name in systems}
     def checkpoint(result):
         recorder.append("cases.jsonl", result.to_dict())
@@ -133,11 +174,7 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         if history_concurrency > 1:
             if concurrency != 1:
                 raise ValueError("History-parallel execution requires strictly ordered arms")
-            factories = {
-                "memoria": lambda signature: KernelMemorySystem(factory, max_tokens=max_tokens,
-                    budget_chars=kernel_budget_chars, directory=recorder.path / "kernel" / signature),
-                "raw_context": lambda _: RawContextSystem(client, system=READER_SYSTEM,
-                    max_tokens=max_tokens, budget_chars=context_chars)}
+            factories = {name: (lambda signature, name=name: make_system(name, signature)) for name in arm_order}
             results = await run_ordered_histories(factories, items, concurrency=history_concurrency,
                 judge=grader, checkpoint=checkpoint, stop_reason=lambda: client.halt_reason)
         else:
@@ -155,7 +192,9 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         recorder.finish({"errors": 1, "accounting": client.accounting()}, error=type(exc).__name__)
         raise
     finally:
-        systems["memoria"].close()
+        for system in systems.values():
+            if close := getattr(system, "close", None):
+                close()
 
 
 def main(argv=None):
@@ -168,6 +207,8 @@ def main(argv=None):
     parser.add_argument("--dataset", required=True)
     parser.add_argument("--conversations", type=int, default=10)
     parser.add_argument("--questions", type=int)
+    parser.add_argument("--arms", nargs="+", choices=list(ARM_CONFIGURATION),
+        help="Exact registered arms; defaults to memoria and raw_context")
     parser.add_argument("--output")
     parser.add_argument("--concurrency", type=int, default=2)
     parser.add_argument("--execute", action="store_true")

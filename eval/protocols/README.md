@@ -4,6 +4,10 @@
 
 # 冻结研究协议与角色
 
+[v13最终Memoria单臂36题](kernel-memory-judge-v13-final-36.json)按用户最终要求只执行完整框架，350调用/1美元保护；原36题、DeepSeek Flash与Judge保持。它在修复通用顿号覆盖错误后独立执行，不局部重试或追认v12失败，不重复内部对照。旧v12诊断和全部调用/费用保留。
+
+[v12原36题记忆读取诊断](kernel-vs-context-judge-v12-joint-memory-ablation-36.json)保留v11原36个ID、模型与Judge；内部原文/自适应/完整历史对照只用于定位机制，最终公开成绩仅Memoria一组。严格登记各臂开关、顺序及750调用/3美元保护，不新增全量或按分数挑选重跑。v11和旧协议原字节保持。
+
 [双组评估v1提案](kernel-vs-context-judge-v1.json)：完整历史Baseline vs生产Kernel＋同模型，独立LLM二分类，主1540/对抗446题；本轮仅0调用估算，付费执行待预算。核对输入SHA、模型、Reader/字节预算与Judge提示SHA，不把提案当作成绩。
 
 遗留的[20261023](locomo-deepseek-cache-20261023.json)与[20261024](locomo-deepseek-cache-20261024.json)候选缓存登记按原字节保留；其中整段子集重放、修复共用头及结构上限是未经验证的提议，不代表当前生产默认或收益。原budget-micro入口已由双组入口替代。

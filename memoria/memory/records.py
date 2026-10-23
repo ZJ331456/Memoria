@@ -21,6 +21,7 @@ class MemorySearch(BaseModel):
     limit: int = Field(default=8, ge=1, le=16)
     budget_chars: int = Field(default=8000, ge=800, le=16000)
     memory_mode: Literal['keyword', 'bm25', 'dense', 'rrf'] = 'rrf'
+    include_formed_memory: bool = True
     use_entities: bool | None = None
     entity_type: Literal['person','project','organization','place','concept'] | None = None
     event_start: str | None = Field(default=None,max_length=64)
@@ -147,18 +148,21 @@ class SourceReaders:
              'entity_identity':self.store.entities.evidence(lookup) if dependency.get('entity_lookup') else []},
             dependency)
 
-    def library_hit(self,item: dict):
+    def library_hit(self,item: dict, *, include_formed_memory=True):
         if item.get('representation')=='consolidated_memory':
+            from .formed_retrieval import compact_support
             return EvidenceRecord('library',item['source_id'],'consolidated_memory',item['quote'],0,len(item['quote']),
                 item['citation'],{'group':item['group'],'applicability':item['applicability'],
-                    'support':item['support'],'independence':item['independence'],'revision_id':item['revision_id']},item['dependency'])
+                    'support':compact_support(item['support'], self.library),
+                    'independence':item['independence'],'revision_id':item['revision_id']},item['dependency'])
         from .observation_semantics import library_clock,public_clock,source_observations
         from .library import LibraryError
         temporal={}
         try:
             source=self.library._source(item['source_id'],active=False);revision=self.library._revision(item['revision_id'])
             temporal={'source_clock':public_clock(library_clock(self.library,source,revision)),
-                'observations':source_observations(self.store,'library',revision['id'],start=item['start'],end=item['end'],library=self.library)}
+                'observations':source_observations(self.store,'library',revision['id'],start=item['start'],end=item['end'],library=self.library)
+                    if include_formed_memory else []}
             from .source_units import load as load_units
             unit=next((u for u in load_units(self.store,revision)
                        if (u.start,u.end)==(item['start'],item['end'])),None)
@@ -169,6 +173,7 @@ class SourceReaders:
         return EvidenceRecord('library', item['source_id'], 'source_quote', item['quote'], item['start'], item['end'],
             item['citation'], {'kind': item['kind'], 'title': item['title'], 'authorship': item['authorship'],
                 'scope': item['scope'], 'revision_id': item['revision_id'], 'sha': item['sha'],
-                'knowledge_cards': item['knowledge_cards'], 'file_location': item.get('file_location'),
+                'knowledge_cards': item['knowledge_cards'] if include_formed_memory else [], 'file_location': item.get('file_location'),
                 **temporal,
+                **({'formed_memory': item['formed_memory']} if include_formed_memory and item.get('formed_memory') else {}),
                 'entity_identity':item.get('entity_identity',[])}, item['dependency'])

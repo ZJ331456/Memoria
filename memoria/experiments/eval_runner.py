@@ -15,6 +15,7 @@ from typing import Any, Callable
 from .eval_judge import build_judge_prompt, parse_judgment
 from .eval_schema import ArmResult, ArmSummary, compare, summarize, write_report
 from .eval_accounting import phase
+from .eval_diagnostics import annotate_posthoc, paired_changes
 
 
 def parse_answer_payload(text: str) -> dict[str, Any]:
@@ -96,6 +97,7 @@ class ArmRunner:
             )
             if reason := self.stop_reason():
                 result.error = "not_run:" + reason
+                annotate_posthoc(result, item)
                 results.append(result)
                 if self.checkpoint:
                     self.checkpoint(result)
@@ -117,6 +119,7 @@ class ArmRunner:
             except Exception as exc:  # a failing item is reported, never silently dropped
                 result.error = f"{type(exc).__name__}: {exc}"
                 result.latency_ms = round((time.perf_counter() - started) * 1000, 3)
+                annotate_posthoc(result, item)
                 results.append(result)
                 if self.checkpoint:
                     self.checkpoint(result)
@@ -149,6 +152,7 @@ class ArmRunner:
                     result.score = 1.0 if verdict["label"] == "CORRECT" else 0.0
                     result.correct = verdict["label"] == "CORRECT"
                 result.extras["judge"] = verdict
+            annotate_posthoc(result, item)
             results.append(result)
             if self.checkpoint:
                 self.checkpoint(result)
@@ -204,6 +208,12 @@ def build_report(
             if name == "raw_context":
                 continue
             comparisons.append(compare(baseline, summary))
+    for baseline_name, treatment_name in (("source_only", "memoria"), ("rrf_only", "source_only")):
+        if baseline_name in by_name and treatment_name in by_name:
+            comparisons.append(compare(by_name[baseline_name], by_name[treatment_name]))
+    for comparison in comparisons:
+        comparison["paired_changes"] = paired_changes(results_by_arm[comparison["baseline_arm"]],
+            results_by_arm[comparison["treatment_arm"]])
     payload["comparisons"] = comparisons
     Path(directory, "report.json").write_text(
         __import__("json").dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

@@ -85,6 +85,7 @@ class MemorySearchService:
                     limit=request.limit,
                     mode=request.memory_mode,
                     expand=True,
+                    include_formed_memory=request.include_formed_memory,
                 )
                 if entity_enabled:
                     items = self.library.entity_supplement(
@@ -96,11 +97,11 @@ class MemorySearchService:
                     )
                 consolidated = self.library.formation.search(
                     search_query, session_id=request.session_id, limit=min(4, request.limit)
-                )
+                ) if request.include_formed_memory else []
                 # Raw passages keep their RRF order. Reserve a bounded alternative
                 # for complete consolidated support without displacing half the raw
                 # multi-hop pool. Retrieval hints never become fact dependencies.
-                raw = [self.readers.library_hit(item) for item in items]
+                raw = [self.readers.library_hit(item, include_formed_memory=request.include_formed_memory) for item in items]
                 formed = [self.readers.library_hit(item) for item in consolidated[:2]]
                 if any(r.provenance.get('source_unit') for r in raw):
                     mixed = raw[:4] + formed[:1] + raw[4:] + formed[1:]

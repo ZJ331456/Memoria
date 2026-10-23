@@ -91,15 +91,21 @@ class KernelMemorySystem:
     name = "memoria"
 
     def __init__(self, kernel_factory, *, max_tokens=1024, budget_chars=8000,
-                 write_mode="library", directory=None):
+                 write_mode="library", directory=None, name="memoria",
+                 form_memory=True, include_formed_memory=True, adaptive=True):
         if write_mode != "library":
             raise ValueError("Public multi-speaker histories must use external library sources")
         self.kernel_factory, self.max_tokens = kernel_factory, max_tokens
+        self.name = name
+        self.form_memory, self.include_formed_memory = form_memory, include_formed_memory
+        self.adaptive = adaptive
+        if include_formed_memory and not form_memory:
+            raise ValueError("A formed-memory arm must execute and account for formation")
         self.budget_chars = budget_chars
         self.directory = Path(directory) if directory else Path(tempfile.mkdtemp(prefix="memoria-eval-"))
         self.directory.mkdir(parents=True, exist_ok=True)
         self.kernel, self._signature = None, None
-        self._sources, self._ingested, self._formation = [], set(), []
+        self._sources, self._ingested, self._formation, self._source_index = [], set(), [], {}
 
     def reset(self, sources=None):
         signature = hashlib.sha256(canonical(sources or []).encode()).hexdigest()
@@ -110,7 +116,7 @@ class KernelMemorySystem:
         self.kernel = self.kernel_factory(self.directory / (signature + ".db"))
         self.session_id = self.kernel.store.create_session("Isolated public benchmark history")["id"]
         self._signature, self._drained, self._formation_error = signature, False, None
-        self._sources, self._ingested, self._formation = [], set(), []
+        self._sources, self._ingested, self._formation, self._source_index = [], set(), [], {}
 
     async def ingest(self, source):
         if source["id"] not in self._ingested:
@@ -128,27 +134,40 @@ class KernelMemorySystem:
                     scope="working", title=f"Public conversation session {batch['session']} window {index}",
                     session_id=self.session_id, content=batch["content"], source_units=batch['source_units'],
                     origin="benchmark:public-conversation"))
-                receipt = await self.kernel.library.formation.form(source["id"], FormRequest())
-                self._formation.append(receipt)
+                if revision_id := source.get("head_id") or source.get("revision", {}).get("id"):
+                    self._source_index[revision_id] = batch["source_units"]
+                if self.form_memory:
+                    receipt = await self.kernel.library.formation.form(source["id"], FormRequest())
+                    self._formation.append(receipt)
         except Exception as exc:
             self._formation_error = "formation_failed:" + type(exc).__name__
             raise
         self._drained = True
 
     async def answer(self, question):
+        from .eval_diagnostics import inspect_kernel_result
+        from ..memory.read_diagnostics import failure
         started = time.perf_counter()
         result = await self.kernel.answer(KnowledgeAnswer(query=question, limit=12,
-            session_id=self.session_id, budget_chars=self.budget_chars, use_adaptive_retrieval=True))
+            session_id=self.session_id, budget_chars=self.budget_chars,
+            use_adaptive_retrieval=self.adaptive, include_formed_memory=self.include_formed_memory))
         ids = [c.get("citation") or c.get("id") for c in result.get("citations", []) if isinstance(c, dict)]
         reason = str(result.get("validation", {}).get("reason") or "")
         adaptive = result.get("access", {}).get("adaptive", {})
-        technical_failure = bool(adaptive.get('failure',{}).get('technical_failure')) or bool(adaptive.get("error_type")) or any(marker in reason for marker in (
-            "budget", "reservation", "provider", "invalid_answer_schema", "incomplete_reader", "tool_reader"))
+        diagnostic = adaptive.get("failure") or failure("reader", reason)
+        technical_failure = bool(diagnostic.get('technical_failure')) or bool(adaptive.get("error_type")) or any(marker in reason for marker in (
+            "budget", "reservation", "provider", "invalid_answer_schema", "incomplete_reader", "tool_reader", "not_fully_presented"))
         return {"error": "kernel_execution_failure:"+reason if technical_failure else None,
                 "answer": json.dumps({k: result.get(k) for k in
                 ("status", "answer")} | {"evidence_ids": [v for v in ids if v]}, ensure_ascii=False),
                 "latency_ms": (time.perf_counter()-started)*1000, "usage": None,
                 "extras": {"mode": self.name, "stored_turns": len(self._sources),
+                           "ablation": {"formation": self.form_memory,
+                               "include_formed_memory": self.include_formed_memory,
+                               "adaptive_gate_supplement_support": self.adaptive,
+                               "evidence_budget_chars": self.budget_chars,
+                               "reader": "production Kernel.answer(KnowledgeAnswer)"},
+                           "pipeline": inspect_kernel_result(result, self._source_index),
                            "formation_receipts": self._formation, "kernel_result": result}}
 
     def close(self):

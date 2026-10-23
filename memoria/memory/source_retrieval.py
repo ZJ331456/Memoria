@@ -181,9 +181,9 @@ class SourceRetrieval:
         feedback = self.library._feedback(revision_id)
         return feedback['id'] if feedback else None
 
-    def hit(self, row, retrieval, query):
+    def hit(self, row, retrieval, query, *, observations=(), include_formed_memory=True):
         rid = row['revision_id']
-        cards=self.library.passage_cards(rid,query) if not row['unit'] else []
+        cards=self.library.passage_cards(rid,query) if include_formed_memory and not row['unit'] else []
         result = {k: row[k] for k in ('source_id','revision_id','sha','title','kind','authorship',
             'scope','start','end','quote')} | {
             'knowledge_cards': cards, 'file_location': self.library.files.locations(rid,row['start'],row['end']),
@@ -191,9 +191,16 @@ class SourceRetrieval:
             'dependency': {'dependency_type':'library','id':row['source_id'],'revision_id':rid,
                            'sha':row['sha'],'feedback_id':self.feedback_id(rid)}}
         if cards:result['dependency']['card_ids']=[c['id'] for c in cards]
+        if observations:
+            from .formed_retrieval import passage_organization
+            organization, refs = passage_organization(row, observations, self.library.formation_reference)
+            if organization:
+                result['formed_memory'] = organization
+                result['dependency']['formation_refs'] = refs
         return result
 
-    async def search(self, query, *, session_id=None, limit=12, mode='rrf', expand=False):
+    async def search(self, query, *, session_id=None, limit=12, mode='rrf', expand=False,
+                     include_formed_memory=True):
         started = time.perf_counter()
         rows, truncated = self.snapshot(session_id)
         by_id = {r['id']: r for r in rows}
@@ -212,6 +219,11 @@ class SourceRetrieval:
         diagnostic = {'mode':mode,'policy':POLICY,'rrf_constant':60,'weights':WEIGHTS,
             'scanned_passages':n,'scan_truncated':truncated,'embedding_attempted':False,
             'dense_available':False,'indexed_passages':0,'index_written':0,'fallback':False}
+        observations, formed_diagnostic = (self.library.retrieval_observations(
+            [row['revision_id'] for row in rows], session_id=session_id)
+            if include_formed_memory else ([], {}))
+        diagnostic['formed_memory_enabled'] = include_formed_memory
+        diagnostic.update(formed_diagnostic)
         embedder = self.embedder()
         if rows and mode in {'dense','rrf'} and embedder and embedder.enabled:
             diagnostic['embedding_attempted'] = True
@@ -239,10 +251,34 @@ class SourceRetrieval:
         active = list(WEIGHTS) if mode == 'rrf' else [mode]
         lanes = {name: sorted((mid for mid,score in values.items() if score > 0),
                     key=lambda mid:(-values[mid],mid)) for name,values in scores.items()}
+        # Formation participates in recall by routing descriptions to raw source
+        # units. Its own JSON IDs are never tokenized as content or entity names.
+        # Recheck after embedding awaits: stale review/feedback cannot steer a read.
+        with self.store.lock:
+            observations = [o for o in observations if self.library.retrieval_observation_valid(o)]
+            if include_formed_memory:
+                diagnostic['live_observations'] = len(observations)
+                from .formed_retrieval import rank_observations, routes
+                ranked = rank_observations(observations, qt, terms)
+                lanes['observation'] = routes(rows, ranked)
+                consolidated = self.library.formation.search(query, session_id=session_id, limit=4)
+                # Preserve all support chunks as recall alternatives, while search
+                # also retains the complete consolidation as an atomic candidate.
+                supports = [{**s, 'subject_start': None, 'subject_end': None, 'subject_quote': ''}
+                            for memory in consolidated for s in memory['support']]
+                lanes['consolidation'] = routes(rows, supports)
+                active += ['observation', 'consolidation']
+                diagnostic.update(matched_observations=len(ranked),
+                    observation_hint_passages=len(lanes['observation']),
+                    consolidation_hint_passages=len(lanes['consolidation']),
+                    valid_consolidations=len(consolidated))
+        weights = {**WEIGHTS, 'observation': 0.9, 'consolidation': 0.9}
+        diagnostic['weights'] = {name: weights[name] for name in active}
+        diagnostic['formation_policy'] = 'reviewed-description-to-original-v1'
         fused = Counter()
         for name in active:
             for rank,mid in enumerate(lanes[name],1):
-                fused[mid] += WEIGHTS[name]/(60+rank)
+                fused[mid] += weights[name]/(60+rank)
         ordered = sorted(fused,key=lambda mid:(-fused[mid],mid))
         with self.store.lock:
             ordered = [mid for mid in ordered if self.live(by_id[mid],session_id)]
@@ -271,7 +307,8 @@ class SourceRetrieval:
             hits = []
             for mid in chosen:
                 retrieval = {'score':fused[mid], 'lane_ranks':{name:lane.index(mid)+1 for name,lane in lanes.items() if mid in lane}}
-                hits.append(self.hit(by_id[mid],retrieval,query))
+                hits.append(self.hit(by_id[mid],retrieval,query,observations=observations,
+                                     include_formed_memory=include_formed_memory))
             diagnostic['lanes'] = {name:[f"[library:{by_id[mid]['revision_id']}:{by_id[mid]['start']}:{by_id[mid]['end']}]"
                 for mid in lane[:32]] for name,lane in lanes.items()}
             diagnostic['adjacency_hints'] = edges

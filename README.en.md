@@ -1,6 +1,6 @@
 # Memoria
 
-Latest: [the unchanged final implementation retested on the original 36 cases](docs/implemented/固定36题最终代码复测.md): Memoria ordinary **14/28 (50%)**, full-history Baseline **21/28 (75%, one unscored contract failure)**; at least a 25-point gap remains. Memoria gains only one ordinary answer over error-free v9 (13/28), with adversarial 7/8 and zero execution errors. No new full evaluation or implementation changes. Raw checkpoints and all costs remain private; aggregates are in [final36-retest.json](assets/evaluation/final36-retest.json).
+Latest: [the original 36 cases evaluated on the final Memoria framework only](docs/implemented/记忆读取优化与36题诊断.md): ordinary **12/28 (42.86% lower bound, two unscored failures)** and adversarial **8/8**. The previous Memoria result was 14/28; this run does not establish an accuracy improvement. Approved observations now reach the Reader, while explicit consolidation use remains zero on these cases. Final functional acceptance: **1671 engineering tests, 49/49 model-backed synthetic checks, and both actual local BGE suites passed**. Raw data stay private; [the single formal group](assets/evaluation/joint-memory36.json) and [all attempts/costs](assets/evaluation/joint-memory-acceptance.json) are public aggregates.
 
 <p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 

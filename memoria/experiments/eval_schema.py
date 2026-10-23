@@ -65,6 +65,7 @@ class ArmSummary:
     cost: dict[str, Any] = field(default_factory=dict)
     cache: dict[str, Any] = field(default_factory=dict)
     latency_ms: float | None = None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -99,6 +100,8 @@ def summarize(arm: str, results: list[ArmResult], *, pass_threshold: float = 0.5
     summary.tokens={'scope':'answer only; full lifecycle costs are in report accounting',
         'calls_without_usage':sum(not r.usage for r in results),
         'total_tokens_known':sum(u.get('total_tokens',0) for u in known if type(u.get('total_tokens')) is int)}
+    from .eval_diagnostics import summarize_diagnostics
+    summary.diagnostics = summarize_diagnostics(results)
     return summary
 
 

@@ -1,0 +1,350 @@
+{
+  "schema": "memoria-fixed-diagnostic-public-v1",
+  "date": "2026-10-23",
+  "protocol": "kernel-memory-llm-judge-v13-final-36",
+  "registration_sha256": "b87c36f635696e1e5f197d5bc09a56229c0005ca038160b6c2ab7b0a82f8a9a3",
+  "run_id": "20261023T080526Z-7f9e5888",
+  "status": "failed",
+  "manifest_sha256": "3595d1a18af2d7c174df594a114a3064a49d1f87fd8a531e9d5879434da0dc20",
+  "elapsed_ms": 364237.601,
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "model": "deepseek-flash",
+  "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
+  "code_commit": "02a6ab3f995491fa1924080bd3f3245dd9095fb3",
+  "dirty_diff_sha256": "c75baadd8af4e218ce933ce6ed3e138999a18cc8efc6b24fa23f200f7ea29e1b",
+  "arms": {
+    "memoria": {
+      "items": 36,
+      "scored": 34,
+      "errors": 2,
+      "correct": 20,
+      "by_group": {
+        "1": {
+          "items": 8,
+          "correct": 3,
+          "scored": 8,
+          "accuracy": 0.375,
+          "unknown": 0
+        },
+        "2": {
+          "items": 8,
+          "correct": 5,
+          "scored": 8,
+          "accuracy": 0.625,
+          "unknown": 0
+        },
+        "3": {
+          "items": 4,
+          "correct": 1,
+          "scored": 4,
+          "accuracy": 0.25,
+          "unknown": 0
+        },
+        "4": {
+          "items": 8,
+          "correct": 3,
+          "scored": 6,
+          "accuracy": 0.375,
+          "unknown": 2
+        },
+        "5": {
+          "items": 8,
+          "correct": 8,
+          "scored": 8,
+          "accuracy": 1.0,
+          "unknown": 0
+        }
+      },
+      "primary": {
+        "items": 28,
+        "correct": 12,
+        "scored": 26,
+        "accuracy": 0.42857142857142855,
+        "scope": "LoCoMo categories 1-4; category 5 separately"
+      },
+      "latency_ms": 5867.4893055479815,
+      "outcomes": {
+        "ordinary_answered": 17,
+        "ordinary_wrong_answers": 5,
+        "ordinary_incorrect_refusals": 9,
+        "adversarial_overanswers": 0,
+        "unscored_or_failed": 2
+      },
+      "diagnostics": {
+        "ordinary": {
+          "planned": 28,
+          "scored": 26,
+          "errors_or_unknown": 2,
+          "answer_actions": 17,
+          "refusal_actions": 9,
+          "clarify_actions": 0,
+          "wrong_answers": 5,
+          "wrong_refusals": 9,
+          "wrong_clarifications": 0
+        },
+        "adversarial": {
+          "planned": 8,
+          "scored": 8,
+          "errors_or_unknown": 0,
+          "answer_actions": 0,
+          "refusal_actions": 8,
+          "clarify_actions": 0,
+          "wrong_answers": 0,
+          "wrong_refusals": 0,
+          "wrong_clarifications": 0,
+          "overanswer_actions": 0,
+          "wrong_overanswers": 0
+        },
+        "pipeline_stages": {
+          "initial_candidates": {
+            "observed_cases": 36,
+            "cases_with_consolidated_summaries": 25,
+            "cases_with_observation_hints": 36,
+            "cases_with_visible_observation_summaries": 36,
+            "all_gold_visible_eligible_cases": 33,
+            "all_gold_visible_observed_cases": 33,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 20
+          },
+          "final_candidates": {
+            "observed_cases": 36,
+            "cases_with_consolidated_summaries": 25,
+            "cases_with_observation_hints": 36,
+            "cases_with_visible_observation_summaries": 36,
+            "all_gold_visible_eligible_cases": 33,
+            "all_gold_visible_observed_cases": 33,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 21
+          },
+          "reader_evidence": {
+            "observed_cases": 36,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 17,
+            "cases_with_visible_observation_summaries": 17,
+            "all_gold_visible_eligible_cases": 33,
+            "all_gold_visible_observed_cases": 33,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 10
+          },
+          "published_citations": {
+            "observed_cases": 36,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 15,
+            "cases_with_visible_observation_summaries": 15,
+            "all_gold_visible_eligible_cases": 33,
+            "all_gold_visible_observed_cases": 33,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 8
+          }
+        },
+        "gold_undefined_cases": 2,
+        "unavailable_gold_cases": 1
+      },
+      "accounting": {
+        "calls": 221,
+        "usage": {
+          "calls": 221,
+          "known_cache_calls": 220,
+          "unknown_cache_calls": 1,
+          "invalid_cache_calls": 0,
+          "prompt_cache_hit_tokens": 191222,
+          "prompt_cache_miss_tokens": 866996,
+          "known_prompt_tokens": 1058218,
+          "completion_tokens_known": 82181,
+          "unknown_completion_calls": 0,
+          "token_weighted_hit_rate": 0.18070189696262962,
+          "complete": false,
+          "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
+        },
+        "cost": {
+          "rates": {
+            "off_peak": {
+              "hit": 0.003,
+              "miss": 0.15,
+              "output": 0.6
+            },
+            "peak": {
+              "hit": 0.006,
+              "miss": 0.3,
+              "output": 1.2
+            }
+          },
+          "estimate": {
+            "off_peak": {
+              "known_input_usd": 0.13062306599999998,
+              "known_input_output_usd": 0.179931666,
+              "effective_input_usd_per_million": 0.12343682114649342,
+              "input_without_cache_usd": 0.15873269999999998
+            },
+            "peak": {
+              "known_input_usd": 0.26124613199999996,
+              "known_input_output_usd": 0.359863332,
+              "effective_input_usd_per_million": 0.24687364229298683,
+              "input_without_cache_usd": 0.31746539999999995
+            }
+          },
+          "invoice": false,
+          "complete_usage": false,
+          "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+        },
+        "unknown_reserved_upper_usd": 0.0018945
+      },
+      "stages": {
+        "formation": {
+          "calls": 92,
+          "cost": {
+            "rates": {
+              "off_peak": {
+                "hit": 0.003,
+                "miss": 0.15,
+                "output": 0.6
+              },
+              "peak": {
+                "hit": 0.006,
+                "miss": 0.3,
+                "output": 1.2
+              }
+            },
+            "estimate": {
+              "off_peak": {
+                "known_input_usd": 0.078610656,
+                "known_input_output_usd": 0.116012856,
+                "effective_input_usd_per_million": 0.11579735558226685,
+                "input_without_cache_usd": 0.10182959999999999
+              },
+              "peak": {
+                "known_input_usd": 0.157221312,
+                "known_input_output_usd": 0.232025712,
+                "effective_input_usd_per_million": 0.2315947111645337,
+                "input_without_cache_usd": 0.20365919999999998
+              }
+            },
+            "invoice": false,
+            "complete_usage": true,
+            "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+          }
+        },
+        "answer_and_support": {
+          "calls": 94,
+          "cost": {
+            "rates": {
+              "off_peak": {
+                "hit": 0.003,
+                "miss": 0.15,
+                "output": 0.6
+              },
+              "peak": {
+                "hit": 0.006,
+                "miss": 0.3,
+                "output": 1.2
+              }
+            },
+            "estimate": {
+              "off_peak": {
+                "known_input_usd": 0.050998848,
+                "known_input_output_usd": 0.062070047999999996,
+                "effective_input_usd_per_million": 0.14104911939109654,
+                "input_without_cache_usd": 0.0542352
+              },
+              "peak": {
+                "known_input_usd": 0.101997696,
+                "known_input_output_usd": 0.12414009599999999,
+                "effective_input_usd_per_million": 0.2820982387821931,
+                "input_without_cache_usd": 0.1084704
+              }
+            },
+            "invoice": false,
+            "complete_usage": true,
+            "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+          }
+        },
+        "independent_judge": {
+          "calls": 35,
+          "cost": {
+            "rates": {
+              "off_peak": {
+                "hit": 0.003,
+                "miss": 0.15,
+                "output": 0.6
+              },
+              "peak": {
+                "hit": 0.006,
+                "miss": 0.3,
+                "output": 1.2
+              }
+            },
+            "estimate": {
+              "off_peak": {
+                "known_input_usd": 0.001013562,
+                "known_input_output_usd": 0.0018487619999999999,
+                "effective_input_usd_per_million": 0.0569865062408636,
+                "input_without_cache_usd": 0.0026679
+              },
+              "peak": {
+                "known_input_usd": 0.002027124,
+                "known_input_output_usd": 0.0036975239999999998,
+                "effective_input_usd_per_million": 0.1139730124817272,
+                "input_without_cache_usd": 0.0053358
+              }
+            },
+            "invoice": false,
+            "complete_usage": false,
+            "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+          }
+        }
+      }
+    }
+  },
+  "paired_ordinary": {
+    "historical_memoria_to_current": {
+      "both_correct": 10,
+      "both_incorrect": 12,
+      "improved": 2,
+      "regressed": 2,
+      "unknown": 2
+    }
+  },
+  "publication_scope": "Memoria only; other arms are private mechanism diagnostics",
+  "entire_diagnostic_accounting": {
+    "calls": 221,
+    "cost": {
+      "rates": {
+        "off_peak": {
+          "hit": 0.003,
+          "miss": 0.15,
+          "output": 0.6
+        },
+        "peak": {
+          "hit": 0.006,
+          "miss": 0.3,
+          "output": 1.2
+        }
+      },
+      "estimate": {
+        "off_peak": {
+          "known_input_usd": 0.13062306599999998,
+          "known_input_output_usd": 0.179931666,
+          "effective_input_usd_per_million": 0.12343682114649342,
+          "input_without_cache_usd": 0.15873269999999998
+        },
+        "peak": {
+          "known_input_usd": 0.26124613199999996,
+          "known_input_output_usd": 0.359863332,
+          "effective_input_usd_per_million": 0.24687364229298683,
+          "input_without_cache_usd": 0.31746539999999995
+        }
+      },
+      "invoice": false,
+      "complete_usage": false,
+      "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
+    }
+  },
+  "limits": [
+    "Repeated development questions; no unseen generalization or new full-data claim.",
+    "Planned denominators include all execution and grading failures.",
+    "Incorrect refusals are judge-based, not independently annotated answerability.",
+    "Evidence budget is complete JSON characters, not equal actual token/call cost.",
+    "RRF-only removes the whole adaptive gate/support loop, not only the planner.",
+    "Frozen-price estimates are not invoices; missing usage remains unknown."
+  ]
+}

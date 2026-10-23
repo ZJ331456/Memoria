@@ -2,6 +2,8 @@
 
 # Experiments：来源、标注、runner 与评分
 
+2026-10-23：[原36题读取诊断](../../docs/implemented/记忆读取优化与36题诊断.md)可显式登记`--arms`做内部原文/形成对照；默认主协议仍为原两组，旧冻结协议不修改。`source_only`保留同Adaptive Reader/支持而关闭形成，`rrf_only`还关闭整段自适应链，不能解释为仅planner消融。逐题`pipeline`区分候选、Reader可见摘要和最终巩固引用，gold只在返回答案后关联。正式发布使用`publish_fixed36.py --primary-only`仅展示Memoria，完整诊断费用保留。
+
 当前效果入口eval-benchmark只比较完整历史Baseline与生产Kernel＋同模型，默认0调用估算；[实现与费用](../../docs/implemented/双组内核评估与费用估算.md)。必须显式execute及费用/请求上限才执行，原始账本/检查点/隔离库留账号私有目录。旧LoCoMo/LCCC工具仅用于历史复现，不作为当前分数。
 [rerank_comparison.py](rerank_comparison.py)只对预声明的四题LoCoMo资料库来源Reader做配对诊断，同候选/字符上限、轮换顺序、全部预测后才读取gold；不运行全量，不评测个人RRF或Claim形成。[CLI与结果边界](../../docs/implemented/LLM候选重排与同预算诊断.md)。
 

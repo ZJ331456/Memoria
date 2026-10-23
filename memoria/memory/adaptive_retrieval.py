@@ -19,15 +19,17 @@ from .adaptive_fallback import AdaptiveFallback
 from .answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM
 from .evidence.budget import EvidenceBudget
 from .evidence.closure import select_closed
-from .evidence.query_plan import plan, validate_plan
+from .evidence.query_plan import plan, validate_plan, literal_terms, supplemental_targets
 from .evidence_sufficiency import SYSTEM as GATE_SYSTEM
 from .verification import verify, support_envelope, REPAIR_INSTRUCTION
 from ..llm.call_scope import inference_scope
 
-VERSION = 'production-missing-evidence-v4-actionable-support-contract'
+VERSION = 'production-missing-evidence-v5-requirement-diversity'
 SUPPORT_SYSTEM += ('\nCover EVERY literal character of the proposed answer, including prefixes such as '
     '根据来源记录 and final provenance caveats. Include a framing prefix in the adjacent factual statement '
-    'rather than silently omitting it. A statement must be a literal substring, never a paraphrase. '
+    'rather than silently omitting it. A statement must be a literal substring of the PROPOSED ANSWER. '
+    'The answer may paraphrase source wording: test its semantic support independently. '
+    'Only evidence quotes must be literal substrings of the original source fields. '
     'Do not invent an evidence quote to cover an unsupported statement; reject unsupported content.')
 READER_STYLE = ('\n仅给出回答问题必需的事实，不添加“根据来源记录”等开场白或结尾元说明；'
     '来源与限制通过引用及已提供的元数据表达。只输出完整严格JSON，键名和值必须正确加引号。'
@@ -69,7 +71,10 @@ GATE = (GATE_SYSTEM + '\nThe query_plan is frozen before evidence inspection. As
     'calendar month; preserve month precision, do not demand or invent a day. Likewise a year or week '
     'answer is sufficient when that is all the question requests and the event is established. '
     'Do not mark a requested object/type/value as supported by a related description that does not '
-    'identify that object/type/value; suggest a targeted search for the missing attribute instead.')
+    'identify that object/type/value; suggest a targeted search for the missing attribute instead. '
+    'requirement_specs link each requirement to its literal question span; those spans constrain what is '
+    'requested, not which answer is expected. retrieval_hints contain approved memory organization only: '
+    'use them to find related original quotes, never cite hints as facts or add requirements from them.')
 
 
 class Personal:
@@ -243,6 +248,8 @@ class Sources:
                 quotes = [w['text'] for w in e['excerpts']] if e.get('excerpts') else [e['content']]
             quotes.extend(q['quote'] for ident in e['provenance'].get('entity_identity', []) for q in ident['evidence'])
             entry={'id': c['id'], 'text': '\n'.join(quotes), 'source_texts': quotes}
+            if hints:=e['provenance'].get('formed_memory'):
+                entry['retrieval_hints']=deepcopy(hints)
             if e.get('excerpts'):
                 original=next((item['data'] for item in access.get('candidates',[]) if item['id']==c['id']),None)
                 if not original or not original.get('content'):raise ValueError('Original source context unavailable')
@@ -310,6 +317,64 @@ def merge_candidates(previous, new):
             raise ValueError('Candidate changed between retrieval rounds')
         catalog.setdefault(c['id'], c)
     return list(catalog.values())
+
+
+def requirement_order(candidates, query_plan, *, priority_ids=()):
+    """Round-robin lexical locators prevent one subquestion filling the gate.
+
+    This changes only inspection order, not scores or semantic support. Required
+    and newly arrived complete units remain first, and every candidate is kept.
+    """
+    priority = set(priority_ids)
+    ranked = [c for c in candidates if c['id'] in priority]
+    seen = {c['id'] for c in ranked}
+    def append(candidate):
+        if candidate['id'] not in seen:
+            seen.add(candidate['id']); ranked.append(candidate)
+    for candidate in candidates[:2]: append(candidate)
+    terms = []
+    for candidate in candidates:
+        data = candidate['data']
+        # Summaries are allowed as routing hints, while only original text can
+        # subsequently support the model's requirement judgments.
+        if isinstance(data,dict):
+            provenance=data.get('provenance',{})
+            features=[data.get(k,'') for k in ('content','text','value')]
+            features.extend((provenance.get('support',[]),provenance.get('formed_memory',{})))
+        else: features=data
+        terms.append(literal_terms(canonical(features)))
+    queues = []
+    for spec in query_plan['requirement_specs']:
+        wanted = set(spec['lexical_terms'])
+        matches = [(len(wanted & value), i) for i, value in enumerate(terms)]
+        queues.append([candidates[i] for score, i in sorted(matches, key=lambda x:(-x[0], x[1])) if score])
+    for _ in range(2):
+        for queue in queues:
+            candidate = next((c for c in queue if c['id'] not in seen), None)
+            if candidate: append(candidate)
+    for candidate in candidates: append(candidate)
+    return ranked
+
+
+def requirement_diagnostics(decision, owners, selected, initial_ids, initial_selected_ids, omitted):
+    """Separate checked-pool missingness, selection loss and uninspected units."""
+    chosen = {c['id'] for c in selected['payload']['evidence']}
+    rows = []
+    for requirement in decision['requirements']:
+        ids = {cid for source in requirement['sources'] for cid in owners.get(source['id'], [])}
+        status = requirement['status']
+        rows.append({'requirement':requirement['fact'], 'status':status,
+            'supported_candidate_ids':sorted(ids),
+            'selected_for_reader':bool(ids) and ids <= chosen and selected['complete'],
+            'presented_to_reader':False,
+            'initially_recalled_but_not_selected':sorted((ids & set(initial_ids)) - set(initial_selected_ids)),
+            'supplementally_recalled':sorted(ids - set(initial_ids)),
+            'evidence_state': 'conflicting_support' if status=='conflicted' else
+                'not_supported_in_assessed_pool' if status=='missing' else
+                'supported_group_over_budget' if not selected['fits'] else
+                'supported_pending_other_requirements' if not selected['complete'] else 'supported_and_selected',
+            'unassessed_candidates_remain':bool(omitted), 'corpus_absence_established':False})
+    return rows
 
 
 async def read_adaptive(kernel, request):
@@ -405,6 +470,7 @@ async def read_adaptive(kernel, request):
         access['adaptive'] = trace
         trace['initial_selection_ids'] = [c['id'] for c in access['selection']['payload']['evidence']]
         trace['initial_candidates'] = deepcopy(access['candidates'])
+        initial_ids = {c['id'] for c in access['candidates']}
         query_plan = plan(request.query, access.get('parsed', {}))
         trace['query_plan'] = query_plan
         authority_block = (access.get('parsed', {}).get('requires_clarification') or access.get('pending_revisions')
@@ -418,11 +484,12 @@ async def read_adaptive(kernel, request):
             if access.get('state') and not access['state']['payload']['complete']:
                 return finish('incomplete_approved_state', status='clarify')
         all_candidates = access['candidates']
+        priority_ids = set()
         for round_index in range(2):
             phase='coverage'
             # Retain complete original candidates/ranks; only the model packet is bounded.
             pool, omitted = [], []
-            for c in all_candidates:
+            for c in requirement_order(all_candidates, query_plan, priority_ids=priority_ids):
                 _, _, packet, _ = adapter.present(access, pool + [c])
                 if len(pool) < POOL_LIMIT and len(canonical(packet)) <= POOL_CHARS:
                     pool.append(c)
@@ -467,8 +534,10 @@ async def read_adaptive(kernel, request):
                 'assessed_candidate_ids': [c['id'] for c in pool], 'omitted_from_gate': omitted,
                 'decision': decision, 'selection': selected,
                 'citation_owners': owners,
-                'initially_recalled_but_not_selected': sorted(required_ids - set(trace['initial_selection_ids'])),
-                'not_supported_in_assessed_pool': [r['fact'] for r in decision['requirements'] if r['status'] == 'missing']}
+                'initially_recalled_but_not_selected': sorted((required_ids & initial_ids) - set(trace['initial_selection_ids'])),
+                'not_supported_in_assessed_pool': [r['fact'] for r in decision['requirements'] if r['status'] == 'missing'],
+                'requirement_diagnostics': requirement_diagnostics(decision, owners, selected,
+                    initial_ids, trace['initial_selection_ids'], omitted)}
             trace['rounds'].append(record)
             if guard.freshness(): return finish('source_changed_during_gate')
             if decision['state'] == 'conflict': return finish('evidence_conflict', status='clarify')
@@ -495,6 +564,8 @@ async def read_adaptive(kernel, request):
                     if guard.freshness(): return finish('source_changed_before_reader')
                     policy.reserve_call('reader', prepared.report, reservation='answer_pipeline')
                     reader_called = True
+                    for diagnostic in record['requirement_diagnostics']:
+                        diagnostic['presented_to_reader']=diagnostic['selected_for_reader']
                     clock = time.perf_counter()
                     row = {'stage': 'reader', 'prompt_sha256': fingerprint(prepared.messages), 'prompt_chars': len(canonical(prepared.messages)), 'attempt': attempt+1, 'request_budget': prepared.report, 'usage': None, 'status': 'started'}
                     from ..llm.deepseek_cache import official
@@ -540,6 +611,7 @@ async def read_adaptive(kernel, request):
                 # single call receipt and the private experiment ledger.
                 trace['answer_support'] = {k:check[k] for k in ('version','accepted','query_risk',
                     'support_dependencies','rule_blockers','quote_integrity_verified',
+                    'answer_unit_coverage_verified','support_contract',
                     'semantic_entailment_verified','judgment_source')}
                 if not check['accepted']: return finish('answer_support_not_established')
                 phase='publication'
@@ -548,27 +620,29 @@ async def read_adaptive(kernel, request):
                 return finish(None, verdict=verdict)
             if round_index or decision['state'] != 'missing_fact':
                 return finish('required_evidence_not_established')
-            missing = record['not_supported_in_assessed_pool']
             # A single supplemental ROUND, at most two queries, same immutable access request.
-            queries = decision['missing_queries'][:2] or missing[:2]
-            if not queries: return finish('no_targeted_requirement')
+            targets = supplemental_targets(query_plan, decision)
+            if not targets: return finish('no_targeted_requirement')
             trace['retrieval_rounds'] = 1
             policy.retrieval_rounds = 1
-            for query in queries:
+            for target_spec in targets:
                 phase='supplemental_retrieval'
                 # Only the locator changes; original identity/time/conditions still govern _access/search.
-                target = query.strip()
+                target = target_spec['query']
                 supplement = await retrieve(target)
-                trace.setdefault('supplements', []).append({'query': target,
+                previous_ids={c['id'] for c in all_candidates}
+                trace.setdefault('supplements', []).append({**target_spec,
                     'candidate_ids': [c['id'] for c in supplement['candidates']], 'candidates': deepcopy(supplement['candidates']),
+                    'new_candidate_ids': [c['id'] for c in supplement['candidates'] if c['id'] not in previous_ids],
                     'retrieval': supplement.get('retrieval'),
                     'rejected': supplement.get('rejected', []), 'timings': supplement.get('timings')})
                 if supplement['path'] == 'clarify': return finish('authority_changed_during_supplement', status='clarify')
                 all_candidates = merge_candidates(all_candidates, supplement['candidates'])
                 access['candidates'] = all_candidates
             # Keep known necessary units and new arrivals ahead of unneeded old candidates.
-            new_ids = {cid for s in trace['supplements'] for cid in s['candidate_ids']}
+            new_ids = {cid for s in trace['supplements'] for cid in s['new_candidate_ids']}
             all_candidates.sort(key=lambda c: (c['id'] not in required_ids, c['id'] not in new_ids))
+            priority_ids = required_ids | new_ids
         return finish('supplement_round_limit')
     except (ValueError, TypeError, KeyError, ProviderError, RuntimeError, TimeoutError) as exc:
         from .read_diagnostics import failure
