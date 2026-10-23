@@ -107,3 +107,7 @@ research.py --user USERNAME eval-benchmark --dataset data/benchmarks/locomo/raw/
 
 
 正式顺序全量使用eval/protocols/kernel-vs-context-judge-v3-ordered-histories.json，参数--concurrency 1 --history-concurrency 8；先Memoria整组再Baseline，连续欠费停止新请求。publish_eval_summary.py --run PRIVATE_RUN --update-readme流式读取大检查点，只发布分类计数、阶段成本及失败汇总；不复制原文/逐题答案，前测单独计费。中间记录留`data/users/<UUID>/experiments`。
+
+## 资料域实际BGE检查
+
+`python scripts/check_library_retrieval.py --model model/bge-small-en-v1.5`在临时SQLite中用实际本地权重检查资料Keyword/BM25/Dense/RRF，0 API、不写生产账号。四路命中且Dense可用无退化才返回0；这是虚构功能验收，不是LoCoMo质量或替代完整模拟。

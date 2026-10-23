@@ -104,7 +104,8 @@ def test_source_rank_selection_preserves_all_domains_without_comparing_raw_score
     assert [e['representation'] for e in result['evidence']] == ['derived_memory', 'message_quote', 'source_quote']
     assert core.read('memory', memory['id'])['evidence']['representation'] == 'derived_memory'
     assert all(core.dependency_valid(d) for d in result['dependencies'])
-    assert 'embedding' not in json.dumps(result)
+    assert result['retrieval']['library']['embedding_attempted'] is False
+    assert all('embedding' not in json.dumps(e) for e in result['evidence'])
     core.llm.chat.assert_not_called()
 
 
@@ -189,12 +190,12 @@ def test_revisions_feedback_and_withdrawal_invalidate_the_same_read_contract(cor
 
 def test_mutation_between_candidates_and_selection_cannot_publish_stale_library(core, monkeypatch):
     item = source(core)
-    original = core.library.search
-    def race(*args, **kwargs):
-        rows = original(*args, **kwargs)
+    original = core.queries.sources.search
+    async def race(*args, **kwargs):
+        rows = await original(*args, **kwargs)
         core.library.retract(item['id'])
         return rows
-    monkeypatch.setattr(core.library, 'search', race)
+    monkeypatch.setattr(core.queries.sources, 'search', race)
     result = search(core, domains=['library'])
     assert result['evidence'] == [] and result['dependencies'] == []
     assert result['selection']['skipped_stale'] == 1

@@ -1,6 +1,6 @@
 # Memoria
 
-Latest small diagnostic: on the same 36 development questions, kernel execution errors fell from 8 to 0; ordinary answers improved from 6/28 to 13/28. Full-history Baseline scored 22/28. This does **not** establish an overall advantage over the Baseline or replace the frozen full evaluation. [Changes, all development attempts, costs and limitations](docs/implemented/来源片段绑定与回答稳定性.md).
+Latest: [native source-domain BGE/RRF and bounded multi-hop evidence chains](docs/implemented/资料域混合检索与多跳证据链.md) are connected. Final repeated 36-question diagnostic: ordinary **13/28**, full-history Baseline **23/28**, zero execution errors in either arm. Post-hoc source-ID coverage improved, but overall answer quality and lifecycle cost have **not** beaten the Baseline. All v8/v9 attempts are retained; no new full evaluation was run.
 
 <p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 

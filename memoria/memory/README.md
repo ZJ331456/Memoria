@@ -131,3 +131,5 @@ Query-only风险不再把月份/人名May当作推测授权；只有有限明确
 2026-10-16[LLM主审机制](../../docs/implemented/LLM自动审核与人工辅助.md)新增审计与有限历史重处理，保留原文归属/撤销/条件和事务检查；模型结果不作为现实核验。
 
 2026-10-16模型配置统一：config/models.toml管理API/本地LLM与Embedding，账号槽位在同文件UUID表；DPAPI仍隔离，系统/飞书/MCP各有对应统一文件。目录、设备/API参数与检查命令见[配置说明](../../docs/implemented/配置目录与模型后端.md)。
+
+[资料域混合检索与多跳证据链](../../docs/implemented/资料域混合检索与多跳证据链.md)：`source_retrieval.py`在统一search入口复用当前Embedding，保存有界、命名空间及版本绑定的派生向量缓存；Query规划、必要引用节点与一次补检仍由原自适应闭环约束。HTTP远程不暗中批量索引，源资料不转个人事实。

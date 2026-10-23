@@ -15,7 +15,11 @@ def select_closed(candidates, decision, citation_owners, budget: EvidenceBudget,
                 raise ValueError('Unpresented dependency')
             owners.update(citation_owners[source['id']])
         groups.append({'requirement': requirement['fact'], 'candidate_ids': sorted(owners),
-                       'status': requirement['status']})
+                       'status': requirement['status'],
+                       'quote_nodes': [{'citation':s['id'],'field':s.get('field','text')}
+                                       for s in requirement['sources']],
+                       'link_basis':'co_required_by_frozen_requirement',
+                       'semantic_link_verified':False})
         necessary.update(owners)
     pending = list(necessary)
     while pending:

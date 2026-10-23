@@ -35,7 +35,11 @@ READER_STYLE = ('\n仅给出回答问题必需的事实，不添加“根据来�
     'Use the same language as the question and a concise factual answer. Do not add administrative '
     'metadata narration (message timestamps, timezone unknown, citation explanations) unless requested. '
     'For relative dates use the source-local calendar only at its supported precision; a relative week '
-    'must stay a week/range, never an invented exact day. Do not invent a missing acceptance or event.')
+    'must stay a week/range, never an invented exact day. Do not invent a missing acceptance or event. '
+    'Distinguish the speaker\'s own actions from praise, questions or advice addressed to another person: '
+    '"I admire your pottery" does not mean the speaker makes pottery. For multiple supported instances, '
+    'include the complementary instances, not just the most recent passage. Never claim an exhaustive '
+    'list or count if its required event set is not established.')
 READER_REPAIR = '\n上一次输出JSON格式或长度不合要求。请从相同证据重新生成完整合法JSON；不要接续或修补上一段文本，不更改证据或引用。'
 
 
@@ -59,7 +63,13 @@ GATE = (GATE_SYSTEM + '\nThe query_plan is frozen before evidence inspection. As
     'Do not require an independent biography when a source-attributed question asks what that speaker reported. '
     'Each evidence item declares quote_fields. Use ONLY those fields. A composite consolidation has no '
     'single session clock: do not cite its constituent clocks as its session_date_raw. Do not add irrelevant '
-    'date quotes to a non-temporal question. For unavailable anchors use missing_fact and targeted retrieval.')
+    'date quotes to a non-temporal question. For unavailable anchors use missing_fact and targeted retrieval. '
+    'Match the question\'s requested precision: a generic "when" does NOT demand an exact day. '
+    'An explicitly reported event "this month" with its same-source raw session clock can support that '
+    'calendar month; preserve month precision, do not demand or invent a day. Likewise a year or week '
+    'answer is sufficient when that is all the question requests and the event is established. '
+    'Do not mark a requested object/type/value as supported by a related description that does not '
+    'identify that object/type/value; suggest a targeted search for the missing attribute instead.')
 
 
 class Personal:
@@ -195,6 +205,7 @@ class Sources:
                                'source_ids':[e['source_id']],'data':e,'dependency':d})
         ids = {e['citation'] for e in packet['evidence']}
         return {**packet, 'path': 'clarify' if packet['selection'].get('reason') == 'ambiguous_entity_identity' else 'retrieve',
+                'retrieval': captured.get('retrieval', {}),
                 'state': None, 'parsed': parsed, 'candidates': candidates,
                 'selection': {**packet['selection'], 'payload': {'evidence': [c for c in candidates if c['id'] in ids]}}}
 
@@ -480,6 +491,12 @@ async def read_adaptive(kernel, request):
                     {'question': request.query, 'proposed_answer': answer.answer,
                      'evidence': [e for e in evidence if e['id'] in answer.evidence_ids]},
                     lambda value: AnswerRisk().validate(value, request.query, answer.model_dump(), evidence), trace['contract_errors'])
+                # Keep the dependency proof, not a second copy of the answer and
+                # quoted personal/source text. Original verification remains in its
+                # single call receipt and the private experiment ledger.
+                trace['answer_support'] = {k:check[k] for k in ('version','accepted','query_risk',
+                    'support_dependencies','rule_blockers','quote_integrity_verified',
+                    'semantic_entailment_verified','judgment_source')}
                 if not check['accepted']: return finish('answer_support_not_established')
                 if guard.freshness(): return finish('source_changed_before_publish')
                 verdict = guard.validate(result, prepared.messages)

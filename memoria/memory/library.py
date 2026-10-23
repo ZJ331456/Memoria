@@ -310,6 +310,23 @@ class EvidenceLibrary:
                 if len(result)>=limit:break
             return result
 
+    def passage_cards(self, revision_id, query):
+        """Live formed knowledge/feedback for a raw document passage, not new facts."""
+        with self.store.lock:
+            feedback=self._feedback(revision_id)
+            fid=feedback['id'] if feedback else None
+            cards=[dict(c) for c in self.store.db.execute('''SELECT id,content,applicability,quote,start,end,feedback_quote
+                FROM library_cards WHERE revision_id=? AND feedback_id IS ? AND status='approved'
+                ORDER BY rowid DESC LIMIT 16''',(revision_id,fid))]
+            cards=[c for c in cards if self.formation.card_available(c['id'])]
+            query_terms=set(token_sequence(query))
+            cards.sort(key=lambda c:len(query_terms & set(token_sequence(c['content']+' '+c['quote']))),reverse=True)
+            for card in cards[:2]:
+                card['reported_outcome']=feedback['outcome'] if feedback else None
+                card['citation']=f"[library:{revision_id}:{card['start']}:{card['end']}]"
+                card.update(self.formation.card_provenance(card['id']))
+            return cards[:2]
+
     def entity_supplement(self,query,lexical,*,session_id=None,entity_type=None,limit=8):
         catalog=self.store.entities
         rows,lookup=catalog.candidates('library',query,session_id=session_id,entity_type=entity_type,limit=limit)

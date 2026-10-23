@@ -14,6 +14,8 @@ class MemorySearchService:
         self.entities = entities
         self.readers = readers
         self.dependency_valid = dependency_valid
+        from .source_retrieval import SourceRetrieval
+        self.sources = SourceRetrieval(library, lambda: self.memory.embedder)
 
     def check_session(self, session_id):
         if session_id is not None and not self.store.session(session_id):
@@ -56,6 +58,7 @@ class MemorySearchService:
                 raise LibraryError(413, "实体澄清元数据超过预算")
             return packet
         lanes = {}
+        retrieval = {}
         for domain in request.domains:
             if domain == "memory":
                 items = await self.memory.retrieve(
@@ -76,12 +79,12 @@ class MemorySearchService:
                     if (record := self.readers.conversation(item, search_query))
                 ]
             else:
-                items = self.library.search(
+                items, retrieval['library'] = await self.sources.search(
                     search_query,
                     session_id=request.session_id,
-                    limit=min(8, request.limit),
-                    budget=8000,
-                    chunks_per_source=2,
+                    limit=request.limit,
+                    mode=request.memory_mode,
+                    expand=True,
                 )
                 if entity_enabled:
                     items = self.library.entity_supplement(
@@ -94,12 +97,19 @@ class MemorySearchService:
                 consolidated = self.library.formation.search(
                     search_query, session_id=request.session_id, limit=min(4, request.limit)
                 )
-                mixed = []
-                for rank in range(max(len(items), len(consolidated))):
-                    for channel in (consolidated, items):
-                        if rank < len(channel):
-                            mixed.append(channel[rank])
-                lanes[domain] = [self.readers.library_hit(item) for item in mixed[: request.limit]]
+                # Raw passages keep their RRF order. Reserve a bounded alternative
+                # for complete consolidated support without displacing half the raw
+                # multi-hop pool. Retrieval hints never become fact dependencies.
+                raw = [self.readers.library_hit(item) for item in items]
+                formed = [self.readers.library_hit(item) for item in consolidated[:2]]
+                if any(r.provenance.get('source_unit') for r in raw):
+                    mixed = raw[:4] + formed[:1] + raw[4:] + formed[1:]
+                else:
+                    # Documents/task results retain priority for their complete
+                    # reviewed support group. Raw cards must not consume the budget
+                    # before a valid consolidation can be presented at all.
+                    mixed = formed[:1] + raw + formed[1:]
+                lanes[domain] = mixed[:16]
         from .temporal_evidence import filter_records, references
 
         temporal_rejected = []
@@ -226,6 +236,10 @@ class MemorySearchService:
                 r.dependency for lane in lanes.values() for r in lane
             ]
             capture["identity_rejected"] = list(identity_rejected)
+            capture["retrieval"] = retrieval
+        if retrieval and request.budget_chars >= 2000:
+            response['retrieval'] = {domain: {k: v for k,v in report.items()
+                if k not in {'lanes','adjacency_hints'}} for domain,report in retrieval.items()}
         response["selection"]["identity_rejected_count"] = len(identity_rejected)
         response["selection"]["temporal_rejected_count"] = len(temporal_rejected)
         response["selection"]["temporal_diagnostics_truncated"] = False
