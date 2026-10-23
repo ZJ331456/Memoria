@@ -148,7 +148,7 @@ class KernelMemorySystem:
         from .eval_diagnostics import inspect_kernel_result
         from ..memory.read_diagnostics import failure
         started = time.perf_counter()
-        result = await self.kernel.answer(KnowledgeAnswer(query=question, limit=12,
+        result = await self.kernel.answer(KnowledgeAnswer(query=question, limit=16,
             session_id=self.session_id, budget_chars=self.budget_chars,
             use_adaptive_retrieval=self.adaptive, include_formed_memory=self.include_formed_memory))
         ids = [c.get("citation") or c.get("id") for c in result.get("citations", []) if isinstance(c, dict)]

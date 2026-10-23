@@ -8,6 +8,7 @@ from ..observability.memory_trace import fingerprint
 import re
 import time
 import asyncio
+import json
 from copy import deepcopy
 
 from ..claims import canonical, sha
@@ -19,12 +20,15 @@ from .adaptive_fallback import AdaptiveFallback
 from .answer_risk import AnswerRisk, SYSTEM as SUPPORT_SYSTEM
 from .evidence.budget import EvidenceBudget
 from .evidence.closure import select_closed
+from .evidence.derivation_review import DERIVE_SYSTEM, clock_pairs, missing_time_requirements, merge as merge_derivation, validate as validate_derivation
 from .evidence.query_plan import plan, validate_plan, literal_terms, supplemental_targets
 from .evidence_sufficiency import SYSTEM as GATE_SYSTEM, calendar_derivations
+from .knowledge_fallback import SYSTEM as FALLBACK_SYSTEM, VERSION as FALLBACK_VERSION
+from .knowledge_fallback import allowed as fallback_allowed, payload as fallback_payload, verdict as fallback_verdict
 from .verification import verify, support_envelope, REPAIR_INSTRUCTION
 from ..llm.call_scope import inference_scope
 
-VERSION = 'production-missing-evidence-v7-target-reassessment'
+VERSION = 'production-missing-evidence-v8-derived-time-and-knowledge-fallback'
 SUPPORT_SYSTEM += ('\nCover EVERY literal character of the proposed answer, including prefixes such as '
     '根据来源记录 and final provenance caveats. Include a framing prefix in the adjacent factual statement '
     'rather than silently omitting it. A statement must be a literal substring of the PROPOSED ANSWER. '
@@ -99,7 +103,12 @@ GATE = (GATE_SYSTEM + '\nThe query_plan is frozen before evidence inspection. As
     'possibly different event. calendar_derivations are program arithmetic hints, not identity proof: '
     'last year + same-source 2023 clock supports 2022 when that quote establishes the requested event. '
     'Cite BOTH event text and complete same-ID clock; never require a literal absolute year if it is '
-    'defensibly derived. For count targets binding.scope MUST copy the frozen count_scope: '
+    'defensibly derived. derivation_candidates, when present, list same-source utterance/clock pairs '
+    'for a missing time requirement: if one shows the asked event itself already true, underway or '
+    'introduced as current at that clock date, mark that requirement supported and put '
+    '{"value":"<calendar value at the supported precision>","basis":"derived","missing_components":[],"scope":null} '
+    'in its binding object; a pair whose utterance does not establish the asked event, a plan or another '
+    'person\'s praise never binds. For count targets binding.scope MUST copy the frozen count_scope: '
     'If the question asks when someone proposed/agreed/decided, a quoted performative proposal '
     '("Let us/Let\'s...") and explicit agreement are themselves source-time speech events: their '
     'same-source clock can date that decision. This cannot date performance of the future activity, '
@@ -231,11 +240,16 @@ class Sources:
     def __init__(self, kernel, request):
         self.kernel, self.request = kernel, request
 
-    async def retrieve(self, query=None):
+    async def retrieve(self, query=None, lane=None):
         from .records import MemorySearch
         from .temporal_query import TemporalQueryParser
         captured = {}
         r = MemorySearch.model_validate(self.request.model_dump(exclude={'use_adaptive_retrieval', 'use_llm_rerank'}))
+        if lane == 'dense':
+            # A distinct probe on the fused lanes commonly re-fetches the same
+            # top windows; the dense-only ranking surfaces lexical-mismatched
+            # turns instead. Degradation back to fusion stays explicit.
+            r = r.model_copy(update={'memory_mode': 'dense'})
         parsed = TemporalQueryParser().parse(self.request.query)
         if parsed['range_start'] and not r.event_start and not r.recorded_as_of:
             if parsed['axis'] == 'fact':
@@ -247,6 +261,10 @@ class Sources:
         parsed.update(subject_id=r.subject_ref, fact_interval={'lower':r.event_start,'upper':r.event_end} if r.event_start else None,
             recorded_as_of=r.recorded_as_of)
         packet = await self.kernel.search(r, capture=captured, retrieval_query=query)
+        if lane == 'dense' and not captured.get('candidates'):
+            captured = {}
+            r = MemorySearch.model_validate(self.request.model_dump(exclude={'use_adaptive_retrieval', 'use_llm_rerank'}))
+            packet = await self.kernel.search(r, capture=captured, retrieval_query=query)
         candidates, remap = [], {}
         for i,(e,d) in enumerate(zip(captured['candidates'], captured['candidate_dependencies'])):
             original=e['citation']
@@ -462,10 +480,12 @@ async def read_adaptive(kernel, request):
         record_call(row)
         return row
 
-    async def retrieve(query=None):
+    async def retrieve(query=None, lane=None):
         async with asyncio.timeout(min(kernel.settings.request_timeout_seconds, 90)):
             with inference_scope(observe_embedding):
-                return await adapter.retrieve(query)
+                if lane is None:
+                    return await adapter.retrieve(query)
+                return await adapter.retrieve(query, lane=lane)
 
     async def call(stage, system, packet):
         from ..llm.deepseek_cache import evidence_messages, official, layout_of
@@ -540,6 +560,27 @@ async def read_adaptive(kernel, request):
             'answer_unit_coverage_verified','question_requirement_coverage_verified','support_contract',
             'semantic_entailment_verified','judgment_source')}
 
+    async def attempt_knowledge_fallback(state):
+        """One bounded inference-marked fallback for would/could/might questions.
+
+        Never cited, never support-verified, never written as memory. A refusal,
+        contract problem or exhausted budget keeps the original evidence refusal,
+        so this can only convert a refusal into an answer, never the reverse.
+        """
+        nonlocal phase
+        from .answer_risk import query_risk
+        if not fallback_allowed(query_risk(request.query), state):
+            return None
+        phase = 'knowledge_fallback'
+        trace['knowledge_fallback'] = {'version': FALLBACK_VERSION, 'attempted': True, 'accepted': False}
+        try:
+            policy.release('answer_pipeline')
+            fallback_result = await call('knowledge_fallback', FALLBACK_SYSTEM,
+                fallback_payload(request.query, evidence))
+            return fallback_verdict(fallback_result.content)
+        except (ValueError, TypeError, KeyError, RuntimeError, TimeoutError):
+            return None
+
     try:
         from .auto_review import SECRET
         if SECRET.search(request.query): return finish('credential_bearing_query_not_sent')
@@ -571,7 +612,14 @@ async def read_adaptive(kernel, request):
                 if len(pool) < POOL_LIMIT and len(canonical(packet)) <= POOL_CHARS:
                     pool.append(c)
                 else: omitted.append(c['id'])
-            if not pool and (round_index or all_candidates): return finish('no_bounded_live_candidates')
+            if not pool and (round_index or all_candidates):
+                fallback = await attempt_knowledge_fallback('missing_fact')
+                if 'knowledge_fallback' in trace:
+                    trace['knowledge_fallback'].update(accepted=fallback is not None,
+                        exit='no_bounded_live_candidates')
+                if fallback is not None:
+                    return finish(None, verdict=fallback)
+                return finish('no_bounded_live_candidates')
             guard, _, evidence, owners = adapter.present(access, pool)
             if guard.freshness(): return finish('source_changed_before_gate')
             # Reserve a complete Reader plus two support attempts BEFORE gates.
@@ -594,6 +642,11 @@ async def read_adaptive(kernel, request):
                     'missing_components':(r.get('binding') or {}).get('missing_components',[])}
                     for r in trace['rounds'][-1]['decision'].get('binding_decisions',[])
                     if r['status']=='missing']
+                offers = []
+                for spec, _missing in missing_time_requirements(query_plan, trace['rounds'][-1]['decision']):
+                    pairs = clock_pairs(evidence, spec)
+                    if pairs: offers.append({'requirement': spec['fact'], 'pairs': pairs})
+                if offers: payload['derivation_candidates'] = offers[:2]
             if SECRET.search(canonical(payload) + canonical(future_messages)): return finish('credential_bearing_source_not_sent')
             if pool:
                 decision = await verify(call, 'coverage', GATE, payload,
@@ -603,6 +656,43 @@ async def read_adaptive(kernel, request):
                 decision = {'state': 'missing_fact', 'requirements': [{**r, 'status': 'missing', 'sources': []}
                     for r in query_plan['requirements']], 'missing_queries': [], 'reason': 'empty_initial_pool',
                     'judgment_source': 'query_only_empty_pool', 'semantic_sufficiency_verified': False}
+            if round_index and decision['state'] == 'missing_fact':
+                # The gate often refuses to bind a derivable calendar date even when the
+                # pool holds the event utterance and its same-source clock. One focused
+                # adjudication may bind it as basis=derived; any failure keeps the missing
+                # judgment unchanged, so this can only convert a refusal, never break one.
+                time_missing = missing_time_requirements(query_plan, decision)
+                if time_missing:
+                    spec, requirement = time_missing[0]
+                    pairs = clock_pairs(evidence, spec)
+                    if pairs:
+                        phase = 'derivation_review'
+                        trace['derivation_review'] = {'attempted': True, 'requirement': spec['fact'],
+                            'offered_pairs': len(pairs), 'accepted': False}
+                        try:
+                            reviewed = await verify(call, 'derivation_review', DERIVE_SYSTEM,
+                                {'question': request.query, 'requirement': spec['fact'],
+                                 'question_text': spec['question_text'], 'pairs': pairs},
+                                lambda value: validate_derivation(value, spec, pairs), trace['contract_errors'])
+                            if reviewed:
+                                base = {'state': decision['state'],
+                                    'missing_queries': decision.get('missing_queries', []),
+                                    'reason': decision['reason'],
+                                    'requirements': [{'fact': r['fact'], 'status': r['status'],
+                                        'kind': r.get('kind', 'fact'),
+                                        'sources': [{k: s[k] for k in ('id', 'field', 'quote')} for s in r['sources']],
+                                        'binding': r.get('binding')} for r in decision['requirements']]}
+                                merged = merge_derivation(base, requirement, reviewed['value'], reviewed['sources'])
+                                decision = validate_plan(merged, evidence, query_plan)
+                                if decision['state'] == 'sufficient':
+                                    trace['derivation_review'].update(accepted=True, bound_value=reviewed['value'])
+                                else:
+                                    trace['derivation_review']['reason'] = 'derived_binding_downgraded_by_shared_checks'
+                            else:
+                                trace['derivation_review']['reason'] = 'adjudication_kept_missing'
+                        except (ValueError, TypeError, RuntimeError, TimeoutError):
+                            trace['derivation_review']['reason'] = 'adjudication_contract_failed'
+                        phase = 'selection'
             phase='selection'
             closure_access={**access,'closure_advice':{'decision':decision,'citation_owners':owners}}
             render=(lambda chosen:adapter.render(closure_access,chosen)) if isinstance(adapter,Sources) else None
@@ -662,7 +752,17 @@ async def read_adaptive(kernel, request):
                         and verdict['validation']['reason'] in {'invalid_answer_schema','incomplete_reader_output'})
                     if not repairable: break
                     trace['contract_errors'].append({'stage':'reader','attempt':attempt+1,'code':verdict['validation']['reason']})
-                if verdict['status'] != 'answer': return finish(None, verdict=verdict)
+                if verdict['status'] != 'answer':
+                    # A sufficient gate can still leave the evidence-bound Reader
+                    # declining (e.g. counterfactuals). Inference-flavored questions
+                    # get the same one bounded, inference-marked fallback as refusals.
+                    if verdict['validation'].get('reason') is None:
+                        fallback = await attempt_knowledge_fallback('reader_abstained')
+                        if 'knowledge_fallback' in trace:
+                            trace['knowledge_fallback'].setdefault('exit', 'reader_abstained')
+                        if fallback is not None:
+                            return finish(None, verdict=fallback)
+                    return finish(None, verdict=verdict)
                 policy.release('answer_pipeline')
                 if not policy.hold_calls('answer_pipeline', [final_support, final_support]):
                     return finish('support_reservation_unavailable')
@@ -670,8 +770,22 @@ async def read_adaptive(kernel, request):
                 from .answer_risk import is_refusal
                 if is_refusal(answer.answer): return finish('refusal_status_conflict')
                 # Citing only a subset cannot drop a necessary name/fact/condition dependency.
+                # The necessary citations are already verified quotes of presented sources,
+                # so append them and revalidate the SAME answer text instead of discarding a
+                # supported answer; unseen citations remain a hard publication failure.
                 required_citations = {q['id'] for r in decision['requirements'] for q in r['sources']}
-                if not required_citations <= set(answer.evidence_ids): return finish('necessary_citations_omitted')
+                omitted = sorted(required_citations - set(answer.evidence_ids))
+                if omitted:
+                    from ..llm.types import ChatResult
+                    if not set(answer.evidence_ids) <= {e['id'] for e in evidence}:
+                        return finish('necessary_citations_omitted')
+                    answer = answer.model_copy(update={'evidence_ids': [*answer.evidence_ids, *omitted]})
+                    result = ChatResult(content=json.dumps(answer.model_dump(mode='json'), ensure_ascii=False),
+                        usage=result.usage, finish_reason=result.finish_reason)
+                    verdict = guard.validate(result, prepared.messages)
+                    if verdict['status'] != 'answer': return finish(None, verdict=verdict)
+                    trace['citation_augmentation'] = {'policy': 'verified_necessary_provenance_appended_v1',
+                        'added': omitted}
                 phase='support'
                 check = await verify(call, 'support', SUPPORT_SYSTEM,
                     {'question': request.query, 'query_plan':query_plan, 'proposed_answer': answer.answer,
@@ -731,6 +845,13 @@ async def read_adaptive(kernel, request):
                 verdict = guard.validate(result, prepared.messages)
                 return finish(None, verdict=verdict)
             if round_index or decision['state'] != 'missing_fact':
+                # Inference-flavored questions (would/could/might...) legitimately reach beyond
+                # the corpus; one bounded fallback may answer them with explicit basis=inference.
+                fallback = await attempt_knowledge_fallback(decision['state'])
+                if 'knowledge_fallback' in trace:
+                    trace['knowledge_fallback'].setdefault('exit', 'required_evidence_not_established')
+                if fallback is not None:
+                    return finish(None, verdict=fallback)
                 return finish('required_evidence_not_established')
             # A single supplemental ROUND, at most two queries, same immutable access request.
             targets = supplemental_targets(query_plan, decision)
@@ -741,7 +862,10 @@ async def read_adaptive(kernel, request):
                 phase='supplemental_retrieval'
                 # Only the locator changes; original identity/time/conditions still govern _access/search.
                 target = target_spec['query']
-                supplement = await retrieve(target)
+                # The second probe runs on the dense-only lane so a lexical re-query
+                # cannot simply re-fetch the same fused top windows.
+                lane = target_spec.get('lane') if isinstance(adapter, Sources) else None
+                supplement = await retrieve(target, lane=lane)
                 previous_ids={c['id'] for c in all_candidates}
                 trace.setdefault('supplements', []).append({**target_spec,
                     'candidate_ids': [c['id'] for c in supplement['candidates']], 'candidates': deepcopy(supplement['candidates']),

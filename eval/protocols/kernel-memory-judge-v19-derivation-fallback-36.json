@@ -1,0 +1,123 @@
+{
+  "protocol": "kernel-memory-llm-judge-v19-derivation-fallback-36",
+  "date": "2026-10-24",
+  "status": "registered before the paid retest of the same 36 frozen items after full-suite green; covers time-derivation adjudication, necessary-citation augmentation, dense second probe, recall limit 12->16 and the inference-marked knowledge fallback",
+  "dataset": "data/benchmarks/locomo/raw/locomo10.json",
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "questions_per_arm": 36,
+  "primary_categories": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "primary_questions": 28,
+  "supplementary_category": 5,
+  "supplementary_questions": 8,
+  "arms": [
+    "memoria"
+  ],
+  "backbone": "deepseek-flash",
+  "endpoint": "https://api.deepseek.com/v1",
+  "thinking": "disabled",
+  "temperature": 0,
+  "top_p": 1,
+  "reader_max_tokens": 1024,
+  "request_timeout_seconds": 120,
+  "max_retries": 0,
+  "concurrency": 1,
+  "concurrency_scope": "Only the final Memoria framework; two isolated histories in parallel, questions serial within history.",
+  "input_request_byte_cap": 240000,
+  "baseline": "Full visible conversation before question; drop oldest whole turns only if byte/window budget exceeded. Record every truncation.",
+  "memoria": "Native Memoria with distinct bounded missing-demand probes, prior-gap reassessment, calendar-complete time answers, one targeted same-source clock derivation adjudication for a missing time requirement, verified necessary-citation augmentation instead of answer discard, dense-lane second supplement probe with fused degradation, recall limit 16, and one inference-marked knowledge fallback for explicitly inference-flavored questions; fallback answers are never cited, never support-verified and never written as memory.",
+  "kernel_evidence_chars": 8000,
+  "kernel_local_embedding": "model/bge-small-en-v1.5",
+  "judge": "Independent binary LLM with frozen adapted permissive rubric; no arm label or evidence override. Gold used only after answering.",
+  "failure_policy": "Planned IDs stay in denominator; unknown judge coverage and answer errors are separate. No filtered-accuracy promotion.",
+  "accounting": "Every formation, consolidation, Reader, support, repair and grading call. Shared ingestion once per visible-history hash. Missing usage stays unknown; retained upper reservation is not an invoice.",
+  "execution_gate": [
+    "--execute",
+    "--allow-remote",
+    "positive --max-calls",
+    "positive --max-cost-usd"
+  ],
+  "resume": "Not implemented. Keep checkpoints, isolated databases and append-only calls. New execution is a new charged run.",
+  "interpretation_limits": [
+    "Repeated development sample; no unseen generalization or independent human labels.",
+    "One complete Memoria framework group; no four-arm experiment or pure causal attribution.",
+    "Same locomo-dialogue-and-blip-caption-v2 input as v15, with original question IDs, Judge, models and per-case caps unchanged.",
+    "Unanswerable reference labels may conflict with plausible original-text readings; report unchanged scores and AI-assisted source audit separately.",
+    "Official source IDs measure post-hoc visibility, not semantic necessity or sufficiency."
+  ],
+  "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
+  "arm_order": [
+    "memoria"
+  ],
+  "billing_policy": "Two consecutive insufficient-balance responses open a global circuit; retain every planned ID as not_run. No automatic top-up or retry.",
+  "max_calls": 450,
+  "max_cost_usd": 1.5,
+  "authorization": "User approved P0-P3 performance work and the 36-question paid retest; full-benchmark reruns still require separate explicit authorization.",
+  "history_concurrency": 2,
+  "item_ids": [
+    "conv-26-q43",
+    "conv-26-q37",
+    "conv-26-q56",
+    "conv-26-q40",
+    "conv-26-q80",
+    "conv-26-q49",
+    "conv-26-q1",
+    "conv-26-q57",
+    "conv-26-q14",
+    "conv-26-q46",
+    "conv-26-q27",
+    "conv-26-q30",
+    "conv-26-q126",
+    "conv-26-q119",
+    "conv-26-q115",
+    "conv-26-q127",
+    "conv-26-q154",
+    "conv-26-q188",
+    "conv-26-q177",
+    "conv-26-q153",
+    "conv-30-q9",
+    "conv-30-q25",
+    "conv-30-q24",
+    "conv-30-q31",
+    "conv-30-q14",
+    "conv-30-q36",
+    "conv-30-q1",
+    "conv-30-q12",
+    "conv-30-q73",
+    "conv-30-q63",
+    "conv-30-q53",
+    "conv-30-q60",
+    "conv-30-q103",
+    "conv-30-q91",
+    "conv-30-q82",
+    "conv-30-q99"
+  ],
+  "sampling": {
+    "seed": 20261023,
+    "method": "first two histories; four uniformly sampled questions per category per history; no answer/gold/failure filters",
+    "used_for_development": true
+  },
+  "diagnostic_parent_run": "20261023T165527Z-001b251a",
+  "additional_changes": [
+    "Second supplement probe runs on the dense-only ranking lane and degrades explicitly to fused lanes when dense recall is empty.",
+    "One bounded adjudication may bind a missing time requirement as basis=derived from a same-source utterance/clock pair; any contract failure keeps the missing judgment.",
+    "Reader answers citing a subset of verified necessary citations are published with the necessary provenance appended instead of being discarded; unseen citations still fail publication.",
+    "Knowledge fallback fires only for explicitly inference-flavored questions (would/could/might...) on a final missing/unsupported state, is marked basis=inference, and never bypasses adversarial refusals.",
+    "Kernel recall limit raised from 12 to 16 candidates within the same gate pool and evidence budgets."
+  ],
+  "budget_note": "One complete 36-case paid retest of the same frozen items after full engineering suite, 38-scenario simulation and both local BGE checks pass on the final code fingerprint. The v18 run, all failures and unknown usage stay immutable. No selected-item retries, no new full benchmark.",
+  "arm_configuration": {
+    "memoria": {
+      "formation": true,
+      "include_formed_memory": true,
+      "adaptive_gate_supplement_support": true
+    }
+  },
+  "historical_comparison_run": "20261023T165527Z-001b251a",
+  "include_captions": true,
+  "source_input_policy": "locomo-dialogue-and-blip-caption-v2"
+}

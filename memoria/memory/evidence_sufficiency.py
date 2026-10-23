@@ -215,10 +215,14 @@ def assess_bindings(decision, evidence, query_plan):
                 has_absolute=any(re.search(r'(?<!\d)(?:19|20)\d{2}(?!\d)|\d+[年月日]',t) for t in texts)
                 has_relative=any(_RELATIVE_YEAR.search(t) or re.search(
                     r'\b(?:yesterday|today|tomorrow|ago|last|this|next)\b|昨天|今天|明天|上周|上月',t,re.I) for t in texts)
-                if not source_act and not any(_TIME.search(t) for t in texts):blockers.append('event_time_not_bound')
+                # An as-of derivation binds an undated utterance to its same-ID
+                # session clock; its event text legitimately carries no time words.
+                dated_derivation=binding['basis']=='derived' and clock_ids and clock_ids<=text_ids
+                if not source_act and not any(_TIME.search(t) for t in texts) and not dated_derivation:
+                    blockers.append('event_time_not_bound')
                 if has_relative and not has_absolute and not clock_ids:
                     blockers.append('relative_time_missing_source_clock')
-                if spec['precision'] in {'year','month','day'} and not has_absolute and not has_relative and not source_act:
+                if spec['precision'] in {'year','month','day'} and not has_absolute and not has_relative and not source_act and not dated_derivation:
                     blockers.append('requested_time_precision_not_bound')
                 if not has_absolute and any(_RELATIVE_YEAR.search(t) for t in texts):
                     # Resolve only a uniquely quoted relation/clock pair. Do not

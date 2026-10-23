@@ -64,6 +64,16 @@ def derivation_blockers(statement, quoted_events, clocks, *, clock_only, basis, 
     allowed={'day':{'day','week','month','year'},'week':{'week'},'month':{'month','year'},'year':{'year'}}
     source_precisions={precision(text) for text in quoted_events}
     if clocks and speech_act_clock(question, quoted_events):source_precisions.add('day')
+    # An adjudicated as-of derivation bounds its event by the same-source recording
+    # clock when the event utterance itself carries no time expression at all. The
+    # clock may ground a month/year answer only: an exact day is never established
+    # by recency plus its recording clock, and an utterance that states its own
+    # week/month precision still governs and cannot be sharpened by the clock.
+    if basis=='derived' and quoted_events and all(precision(text) is None for text in quoted_events):
+        for clock in clocks:
+            unit=precision(clock)
+            if unit in {'month','year'}:source_precisions.add(unit)
+            elif unit=='day':source_precisions.add('month')
     if not any(target in allowed.get(p,set()) for p in source_precisions):
         blockers.append('event_time_expression_or_precision_not_bound')
     # A same-source clock is an arithmetic anchor, never proof that an un-timed

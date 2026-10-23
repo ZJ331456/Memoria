@@ -42,3 +42,23 @@ def test_utterance_clock_can_date_a_proposal_but_not_future_performance():
         question='When did Morgan propose working together?')==[]
     assert derivation_blockers(clock,[text],[clock],clock_only=False,basis='explicit',
         question='When did Morgan complete the exhibition?')
+
+
+def test_as_of_derived_answer_uses_its_clock_precision():
+    """An undated underway event + its same-source clock bounds a derived answer."""
+    event = "I'm expanding my studio's social media presence and offering workshops."
+    clock = '1:26 pm on 3 April, 2023'
+    # Derived: the recording clock supplies the answer precision (month answer, day clock).
+    assert derivation_blockers('April 2023', [event], [clock],
+        clock_only=False, basis='derived',
+        question="When did Jon start expanding his studio's social media presence?") == []
+    # Explicit basis keeps the original boundary: an undated quote cannot time an event.
+    assert derivation_blockers('April 2023', [event], [clock],
+        clock_only=False, basis='explicit',
+        question="When did Jon start expanding his studio's social media presence?") == [
+        'event_time_expression_or_precision_not_bound']
+    # A clock-only derived day answer stays forbidden at month clock precision.
+    assert derivation_blockers('3 April 2023', [event], ['April 2023'],
+        clock_only=True, basis='derived',
+        question="When did Jon start expanding his studio's social media presence?") == [
+        'event_time_expression_or_precision_not_bound']

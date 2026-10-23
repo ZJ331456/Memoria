@@ -1,7 +1,7 @@
 """Question-faithful bounded requirements; retrieval hints never become evidence."""
 import re
 
-VERSION = 'missing-requirements-plan-v6-distinct-probes'
+VERSION = 'missing-requirements-plan-v7-dense-second-probe'
 FACETS = (
     ('project', r'哪个项目|哪些项目|什么项目|which project', '项目名称及这些记录属于同一项目的原话依据'),
     ('adoption', r'采用|选用|使用[^？?。;；]*方案|\b(?:adopt(?:ed|s|ing)?|chos(?:e|en)|choos(?:e|es|ing))\b', '原问题所询问的选择/采用行为、相关主体与对象的原话'),
@@ -198,6 +198,11 @@ def supplemental_targets(query_plan, decision):
             basis = 'distinct_question_terms'
         if probe and literal_terms(probe) != literal_terms(targets[0]['query']):
             targets.append({'requirement':spec['fact'], 'query':probe, 'basis':basis})
+    # The second probe runs on a different ranking lane (dense-only) so a lexical
+    # re-query cannot just re-fetch the same fused top windows. Pure routing
+    # metadata: it never changes scope, filters or evidence status.
+    if len(targets) == 2:
+        targets[1]['lane'] = 'dense'
     return targets
 
 
