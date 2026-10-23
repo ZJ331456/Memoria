@@ -67,6 +67,10 @@ def validate_quotes(sources, evidence):
         if (not source.id.strip() or not source.quote.strip() or not isinstance(field_text,str)
                 or source.quote not in field_text or (source.field=='text' and not any(
                 source.quote in text for text in item.get('source_texts', [field_text])))):
+            if item and source.field not in item:
+                available=[key for key in ('text','session_date_raw') if key in item]
+                raise ValueError('Quote not present in exact source text; field '+source.field+
+                                 ' is absent on '+source.id+'; available fields: '+','.join(available))
             raise ValueError('Quote not present in exact source text')
         if source.field=='session_date_raw' and source.quote!=field_text:
             raise ValueError('Temporal anchor must quote the complete original date field')

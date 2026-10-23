@@ -379,7 +379,8 @@ def test_deepseek_contract_repair_uses_legacy_layout_and_keeps_total_budget(core
     assert result['status']=='answer'
     assert model.gates==2 and len(model.wire)==4
     assert model.wire[0][0]['content']==COMMON_SYSTEM
-    assert model.wire[1][0]['content']==GATE+REPAIR_INSTRUCTION
+    assert model.wire[1][0]['content'].startswith(GATE+REPAIR_INSTRUCTION)
+    assert 'Contract error: Quote not present' in model.wire[1][0]['content']
     assert len(model.wire[1])==2
     assert json.loads(model.wire[1][1]['content'])['evidence']==evidence_payload(model.wire[0][1])['evidence']
     assert result['access']['adaptive']['contract_errors'][0]['code']=='invalid_contract'

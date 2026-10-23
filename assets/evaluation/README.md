@@ -1,5 +1,7 @@
 # 当前双组全量
 
+最新另有[36题小批量修复聚合](source-units-small.json)：同ID旧预测、v4–v7全部开发尝试、失败/形成/分阶段成本/后验ID覆盖均保留；v7普通13/28、执行错误0/36，Baseline22/28。小批量不覆盖下方冻结全量，不是未见泛化，也不代表个人Claim/View或Dense收益。[具体修复与限制](../../docs/implemented/来源片段绑定与回答稳定性.md)。
+
 [项目分类表](../../README.md#locomo-全量评测) · [顺序协议](../../eval/protocols/kernel-vs-context-judge-v3-ordered-histories.json) · [完整口径](../../docs/implemented/双组内核评估与费用估算.md)
 
 当前从Memoria原生Kernel＋同模型与完整/截断历史Baseline首轮开始。主分1–4类1540题，第5类446题独立。按完整计划分母计算；未完成不是0分实测，也不只算已评分项。运行中/停止/完整状态明确分开。

@@ -68,21 +68,23 @@ def source_batches(sources, max_chars=12000):
 
     The benchmark supplies no timezone: its raw clock is data, not a trusted UTC event time.
     """
+    from ..memory.source_units import render_turns
     batch, size, key = [], 0, None
     for source in sources:
-        line = canonical({k: source.get(k) for k in
-                          ("id", "speaker", "session_date_raw", "text")})
+        line, _ = render_turns([source])
         if len(line) > max_chars:
             raise ValueError("Single benchmark turn exceeds declared formation window")
         session = source.get("session")
         if batch and (session != key or size + len(line) + 1 > max_chars):
-            yield {"session": key, "content": "\n".join(batch)}
+            content, units = render_turns(batch)
+            yield {"session": key, "content": content, "source_units": units}
             batch, size = [], 0
         key = session
-        batch.append(line)
+        batch.append(source)
         size += len(line) + 1
     if batch:
-        yield {"session": key, "content": "\n".join(batch)}
+        content, units = render_turns(batch)
+        yield {"session": key, "content": content, "source_units": units}
 
 
 class KernelMemorySystem:
@@ -124,7 +126,8 @@ class KernelMemorySystem:
             for index, batch in enumerate(source_batches(self._sources)):
                 source = self.kernel.ingest(SourceInput(kind="note", authorship="external",
                     scope="working", title=f"Public conversation session {batch['session']} window {index}",
-                    session_id=self.session_id, content=batch["content"], origin="benchmark:public-conversation"))
+                    session_id=self.session_id, content=batch["content"], source_units=batch['source_units'],
+                    origin="benchmark:public-conversation"))
                 receipt = await self.kernel.library.formation.form(source["id"], FormRequest())
                 self._formation.append(receipt)
         except Exception as exc:

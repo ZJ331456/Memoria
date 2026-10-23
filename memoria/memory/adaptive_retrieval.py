@@ -24,13 +24,18 @@ from .evidence_sufficiency import SYSTEM as GATE_SYSTEM
 from .verification import verify, support_envelope, REPAIR_INSTRUCTION
 from ..llm.call_scope import inference_scope
 
-VERSION = 'production-missing-evidence-v1'
+VERSION = 'production-missing-evidence-v4-actionable-support-contract'
 SUPPORT_SYSTEM += ('\nCover EVERY literal character of the proposed answer, including prefixes such as '
     '根据来源记录 and final provenance caveats. Include a framing prefix in the adjacent factual statement '
     'rather than silently omitting it. A statement must be a literal substring, never a paraphrase. '
     'Do not invent an evidence quote to cover an unsupported statement; reject unsupported content.')
 READER_STYLE = ('\n仅给出回答问题必需的事实，不添加“根据来源记录”等开场白或结尾元说明；'
-    '来源与限制通过引用及已提供的元数据表达。只输出完整严格JSON，键名和值必须正确加引号。')
+    '来源与限制通过引用及已提供的元数据表达。只输出完整严格JSON，键名和值必须正确加引号。'
+    '当系统提供required_evidence_ids时，回答若为answer，evidence_ids必须包含全部这些必要引用；不能删掉身份/时间/条件的支持。'
+    'Use the same language as the question and a concise factual answer. Do not add administrative '
+    'metadata narration (message timestamps, timezone unknown, citation explanations) unless requested. '
+    'For relative dates use the source-local calendar only at its supported precision; a relative week '
+    'must stay a week/range, never an invented exact day. Do not invent a missing acceptance or event.')
 READER_REPAIR = '\n上一次输出JSON格式或长度不合要求。请从相同证据重新生成完整合法JSON；不要接续或修补上一段文本，不更改证据或引用。'
 
 
@@ -44,7 +49,17 @@ GATE = (GATE_SYSTEM + '\nThe query_plan is frozen before evidence inspection. As
     'replace a requirement just because evidence is missing. Quotes for project identity, adoption, reason and '
     'outcome must establish the SAME subject/project/episode; shared vocabulary alone is not identity. '
     'If the identity/time relation is unknown mark missing, never infer it from similarity. '
-    'A missing query is only a search suggestion, not evidence. Source/identity/clock metadata are not new facts.')
+    'A missing query is only a search suggestion, not evidence. Source/identity/clock metadata are not new facts. '
+    'The ONLY requirement entries are the frozen query_plan entries, all kind=fact. Attach temporal anchors as '
+    'additional sources on that same fact, never add or rename requirements. Use field=session_date_raw ONLY '
+    'when the evidence item has a TOP-LEVEL session_date_raw field. JSON keys inside text are not fields: '
+    'quote them as field=text. A source_declared speaker is attribution within that source, not verified identity. '
+    'Resolve relative calendar days using its stated raw session date without inventing a timezone; preserve '
+    'date/month/year precision. A completed personal event can be established by that speaker\'s self-report. '
+    'Do not require an independent biography when a source-attributed question asks what that speaker reported. '
+    'Each evidence item declares quote_fields. Use ONLY those fields. A composite consolidation has no '
+    'single session clock: do not cite its constituent clocks as its session_date_raw. Do not add irrelevant '
+    'date quotes to a non-temporal question. For unavailable anchors use missing_fact and targeted retrieval.')
 
 
 class Personal:
@@ -89,6 +104,8 @@ class Personal:
         guard = CitationGuard(self.kernel.claims, value, self.request,
             access_policy=lambda: bool(self.kernel.guard_pending_revisions(dict(value), self.request).get('pending_revisions')))
         messages = PromptAssembler().assemble(ANSWER_CONTRACT, extra_sections=[guard.section()]).as_messages()
+        if required:=required_citations(access):
+            messages[0]['content']+='\nrequired_evidence_ids='+canonical(required)
         messages.append({'role': 'user', 'content': self.request.query})
         owners = {}
         # Build each unit separately so a multi-Claim slot remains indivisible.
@@ -171,8 +188,11 @@ class Sources:
         parsed.update(subject_id=r.subject_ref, fact_interval={'lower':r.event_start,'upper':r.event_end} if r.event_start else None,
             recorded_as_of=r.recorded_as_of)
         packet = await self.kernel.search(r, capture=captured, retrieval_query=query)
-        candidates = [{'id': e['citation'], 'kind': 'library', 'score': 1 / (i + 1), 'source_ids': [e['source_id']],
-            'data': e, 'dependency': d} for i, (e, d) in enumerate(zip(captured['candidates'], captured['candidate_dependencies']))]
+        candidates = []
+        for i,(e,d) in enumerate(zip(captured['candidates'], captured['candidate_dependencies'])):
+            e,d=source_packet_unit(e,d)
+            candidates.append({'id':e['citation'],'kind':'library','score':1/(i+1),
+                               'source_ids':[e['source_id']],'data':e,'dependency':d})
         ids = {e['citation'] for e in packet['evidence']}
         return {**packet, 'path': 'clarify' if packet['selection'].get('reason') == 'ambiguous_entity_identity' else 'retrieve',
                 'state': None, 'parsed': parsed, 'candidates': candidates,
@@ -185,9 +205,13 @@ class Sources:
     def present(self, access, candidates):
         from .reader import SOURCE_CONTRACT
         packet = self.packet(candidates)
+        if required:=required_citations(access):packet['required_evidence_ids']=required
         messages = PromptAssembler().assemble(SOURCE_CONTRACT,
             extra_sections=[PromptSection('Source Evidence', canonical(packet), 10, atomic=True)]).as_messages()
         messages.append({'role': 'user', 'content': self.request.query})
+        messages[0]['content']+=('\nsource_unit的speaker/date是该片段原文的归属及日历声明，未独立验证身份。'
+            '可用有原话支持的相对日历日期（如yesterday加该片段session_date_raw）回答日期问题；'
+            '保留年月日精度和未知时区，不生成UTC时刻，不用source_recorded_at/upload时间推算事件。')
         evidence = []
         for c in candidates:
             e = c['data']
@@ -196,7 +220,12 @@ class Sources:
             else:
                 quotes = [e['content']]
             quotes.extend(q['quote'] for ident in e['provenance'].get('entity_identity', []) for q in ident['evidence'])
-            evidence.append({'id': c['id'], 'text': '\n'.join(quotes), 'source_texts': quotes})
+            entry={'id': c['id'], 'text': '\n'.join(quotes), 'source_texts': quotes}
+            if unit:=e['provenance'].get('source_unit'):
+                entry.update(speaker=unit['speaker'],session_date_raw=unit['session_date_raw'],
+                             attribution='source_declared',timezone='unknown')
+            entry['quote_fields']=['text']+(['session_date_raw'] if entry.get('session_date_raw') else [])
+            evidence.append(entry)
         return SourceGuard(self.kernel, self.request, packet), messages, evidence, {c['id']: [c['id']] for c in candidates}
 
     def budget(self):
@@ -204,12 +233,35 @@ class Sources:
 
     def final_access(self, access, selection):
         packet = self.packet(selection['payload']['evidence'])
+        if required:=required_citations(access):packet['required_evidence_ids']=required
         # Reader JSON/dependency overhead also belongs to the source evidence budget.
         if len(canonical(packet)) > self.request.budget_chars:
             raise ContextLengthError('Complete source packet exceeds evidence budget')
         from ..observability.memory_trace import record_read
         record_read(self.request.model_dump(mode='json'), [c['data'] for c in access['candidates']], packet['evidence'])
         return {**access, **packet, 'selection': selection}
+
+
+def required_citations(access):
+    return sorted({s['id'] for r in access.get('closure_advice',{}).get('decision',{}).get('requirements',[])
+                   for s in r['sources']})
+
+
+def source_packet_unit(record, dependency):
+    """Raw evidence is stable across search queries; rankings/cards are retrieval hints.
+
+    Formed memories have their own complete-support representation. Never inject
+    query-selected auxiliary summaries as if they were part of this raw utterance.
+    Temporal filtering already ran and its observation_refs dependencies are retained.
+    """
+    record,dependency=deepcopy(record),deepcopy(dependency)
+    if record['representation']=='source_quote':
+        provenance=record['provenance']
+        provenance.pop('knowledge_cards',None)
+        dependency.pop('card_ids',None)
+        if provenance.get('source_unit'):
+            provenance.pop('observations',None)
+    return record,dependency
 
 
 def merge_candidates(previous, new):
@@ -273,7 +325,7 @@ async def read_adaptive(kernel, request):
         # Preserve the established fallback for the single contract repair. New layouts
         # cannot silently replace it in an attempt to increase cache hits.
         prepared = await meter.prepare(evidence_messages(kernel.settings.main,system,packet,
-                enabled=not system.endswith(REPAIR_INSTRUCTION)),
+                enabled=REPAIR_INSTRUCTION not in system),
                                        max_tokens=2048,atomic=True)
         if not policy.reserve_call(stage, prepared.report, reservation='answer_pipeline' if stage == 'support' else None):
             raise ContextLengthError('Shared adaptive call/input budget exhausted')

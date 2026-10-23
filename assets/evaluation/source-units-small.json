@@ -1,0 +1,1018 @@
+{
+  "schema": "memoria-small-diagnostic-v1",
+  "date": "2026-10-23",
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "model": "deepseek-flash",
+  "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
+  "sample": {
+    "histories": 2,
+    "questions": 36,
+    "primary": 28,
+    "adversarial": 8,
+    "by_category": {
+      "1": 8,
+      "2": 8,
+      "3": 4,
+      "4": 8,
+      "5": 8
+    },
+    "seed": 20261023
+  },
+  "parent": {
+    "run_id": "20261022T180422Z-2bca6b8b",
+    "scope": "read-only exact-ID slice from prior full run; no new old-code model calls",
+    "arms": {
+      "memoria": {
+        "items": 36,
+        "scored": 28,
+        "errors": 8,
+        "correct": 13,
+        "primary": {
+          "items": 28,
+          "correct": 6,
+          "scored": 21,
+          "accuracy": 0.21428571428571427,
+          "scope": "LoCoMo categories 1-4; category 5 separately"
+        },
+        "by_group": {
+          "1": {
+            "items": 8,
+            "correct": 2,
+            "scored": 8,
+            "accuracy": 0.25,
+            "unknown": 0
+          },
+          "2": {
+            "items": 8,
+            "correct": 0,
+            "scored": 2,
+            "accuracy": 0.0,
+            "unknown": 6
+          },
+          "3": {
+            "items": 4,
+            "correct": 0,
+            "scored": 4,
+            "accuracy": 0.0,
+            "unknown": 0
+          },
+          "4": {
+            "items": 8,
+            "correct": 4,
+            "scored": 7,
+            "accuracy": 0.5,
+            "unknown": 1
+          },
+          "5": {
+            "items": 8,
+            "correct": 7,
+            "scored": 7,
+            "accuracy": 0.875,
+            "unknown": 1
+          }
+        },
+        "latency_ms": 3390.956833336127
+      },
+      "raw_context": {
+        "items": 36,
+        "scored": 36,
+        "errors": 0,
+        "correct": 30,
+        "primary": {
+          "items": 28,
+          "correct": 22,
+          "scored": 28,
+          "accuracy": 0.7857142857142857,
+          "scope": "LoCoMo categories 1-4; category 5 separately"
+        },
+        "by_group": {
+          "1": {
+            "items": 8,
+            "correct": 5,
+            "scored": 8,
+            "accuracy": 0.625,
+            "unknown": 0
+          },
+          "2": {
+            "items": 8,
+            "correct": 7,
+            "scored": 8,
+            "accuracy": 0.875,
+            "unknown": 0
+          },
+          "3": {
+            "items": 4,
+            "correct": 3,
+            "scored": 4,
+            "accuracy": 0.75,
+            "unknown": 0
+          },
+          "4": {
+            "items": 8,
+            "correct": 7,
+            "scored": 8,
+            "accuracy": 0.875,
+            "unknown": 0
+          },
+          "5": {
+            "items": 8,
+            "correct": 8,
+            "scored": 8,
+            "accuracy": 1.0,
+            "unknown": 0
+          }
+        },
+        "latency_ms": 1534.1971249921091
+      }
+    },
+    "same_history_formation": {
+      "status_counts": {
+        "approved": 2,
+        "needs_assistance": 337
+      },
+      "source_windows": 38,
+      "consolidation_heads": 0
+    }
+  },
+  "attempts": [
+    {
+      "run_id": "20261023T002802Z-cb80fb96",
+      "protocol": "kernel-vs-context-llm-judge-v4-source-units-small",
+      "scope": "same 36 development questions, two complete histories",
+      "elapsed_seconds": 260.576792,
+      "manifest_sha256": "9b7ef1748c5eb387c5c56f67b827476cec8c34e0211a05dcc0b5cfe33addc7e5",
+      "arms": {
+        "memoria": {
+          "items": 36,
+          "scored": 8,
+          "errors": 28,
+          "correct": 5,
+          "primary": {
+            "items": 28,
+            "correct": 4,
+            "scored": 7,
+            "accuracy": 0.14285714285714285,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 1,
+              "scored": 3,
+              "accuracy": 0.125,
+              "unknown": 5
+            },
+            "2": {
+              "items": 8,
+              "correct": 0,
+              "scored": 0,
+              "accuracy": 0.0,
+              "unknown": 8
+            },
+            "3": {
+              "items": 4,
+              "correct": 0,
+              "scored": 1,
+              "accuracy": 0.0,
+              "unknown": 3
+            },
+            "4": {
+              "items": 8,
+              "correct": 3,
+              "scored": 3,
+              "accuracy": 0.375,
+              "unknown": 5
+            },
+            "5": {
+              "items": 8,
+              "correct": 1,
+              "scored": 1,
+              "accuracy": 0.125,
+              "unknown": 7
+            }
+          },
+          "latency_ms": 2952.444463887433,
+          "calls": 147,
+          "prompt_tokens": 710319,
+          "output_tokens": 68299,
+          "cache_hit_rate": 0.05441639601362205,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.141845259,
+            "peak": 0.283690518
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 61,
+              "input_tokens": 159020,
+              "output_tokens": 11862,
+              "peak_usd": 0.059042736
+            },
+            "formation": {
+              "calls": 78,
+              "input_tokens": 547125,
+              "output_tokens": 56134,
+              "peak_usd": 0.223821372
+            },
+            "independent_judge": {
+              "calls": 8,
+              "input_tokens": 4174,
+              "output_tokens": 303,
+              "peak_usd": 0.00082641
+            }
+          }
+        },
+        "raw_context": {
+          "items": 36,
+          "scored": 36,
+          "errors": 0,
+          "correct": 31,
+          "primary": {
+            "items": 28,
+            "correct": 23,
+            "scored": 28,
+            "accuracy": 0.8214285714285714,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 3,
+              "scored": 4,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 1542.9141277725446,
+          "calls": 72,
+          "prompt_tokens": 978835,
+          "output_tokens": 5168,
+          "cache_hit_rate": 0.9842884653695465,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.008298018,
+            "peak": 0.016596036
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 36,
+              "input_tokens": 958457,
+              "output_tokens": 3666,
+              "peak_usd": 0.01270686
+            },
+            "independent_judge": {
+              "calls": 36,
+              "input_tokens": 20378,
+              "output_tokens": 1502,
+              "peak_usd": 0.0038891759999999994
+            }
+          }
+        }
+      },
+      "errors": {
+        "kernel_execution_failure:adaptive_budget_or_contract_failure": 23,
+        "kernel_execution_failure:necessary_group_over_budget": 5
+      },
+      "reader_validation_reasons": {
+        "required_evidence_not_established": 2,
+        "accepted": 4,
+        "necessary_citations_omitted": 1,
+        "adaptive_budget_or_contract_failure": 23,
+        "necessary_group_over_budget": 5,
+        "answer_support_not_established": 1
+      },
+      "formation": {
+        "status_counts": {
+          "approved": 369,
+          "needs_assistance": 6
+        },
+        "admission_reasons": {
+          "model_support_or_scope_not_verified": 5,
+          "sensitive_observation": 1,
+          "subject_binding_missing": 1
+        },
+        "source_windows": 38,
+        "consolidation_heads": 1,
+        "interpretation": "admission/publication counts, not extraction F1 or independently verified person identity"
+      },
+      "posthoc_id_diagnostics": {
+        "counts": {
+          "questions_with_gold_ids": 26,
+          "final_pool_missing_some_gold_ids": 17,
+          "reader_called": 9,
+          "initial_pool_contains_all_gold_ids": 9,
+          "final_pool_contains_all_gold_ids": 9,
+          "gold_ids_in_pool_but_reader_not_called": 5,
+          "questions_with_unavailable_gold_ids": 1,
+          "reader_packet_contains_all_gold_ids": 4,
+          "questions_without_gold_ids": 2
+        },
+        "online_gold_used": false,
+        "meaning": "Post-answer ID coverage only; gold IDs are neither semantic sufficiency nor strict necessary-support labels. Missing official IDs retained."
+      }
+    },
+    {
+      "run_id": "20261023T003601Z-6a7cf7be",
+      "protocol": "kernel-vs-context-llm-judge-v5-stable-packets-small",
+      "scope": "same 36 development questions, two complete histories",
+      "elapsed_seconds": 289.886571,
+      "manifest_sha256": "278c56a9036192cddcba580472f9dc741a08cfd778f90c9f69630f1e094ee9a1",
+      "arms": {
+        "memoria": {
+          "items": 36,
+          "scored": 32,
+          "errors": 4,
+          "correct": 19,
+          "primary": {
+            "items": 28,
+            "correct": 11,
+            "scored": 24,
+            "accuracy": 0.39285714285714285,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 3,
+              "scored": 8,
+              "accuracy": 0.375,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 2,
+              "scored": 6,
+              "accuracy": 0.25,
+              "unknown": 2
+            },
+            "3": {
+              "items": 4,
+              "correct": 2,
+              "scored": 4,
+              "accuracy": 0.5,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 4,
+              "scored": 6,
+              "accuracy": 0.5,
+              "unknown": 2
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 4139.9841749921,
+          "calls": 222,
+          "prompt_tokens": 860990,
+          "output_tokens": 80180,
+          "cache_hit_rate": 0.2165948501144032,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.14984305799999997,
+            "peak": 0.29968611599999995
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 98,
+              "input_tokens": 279873,
+              "output_tokens": 20491,
+              "peak_usd": 0.10125049200000001
+            },
+            "formation": {
+              "calls": 92,
+              "input_tokens": 564383,
+              "output_tokens": 58392,
+              "peak_usd": 0.19497954
+            },
+            "independent_judge": {
+              "calls": 32,
+              "input_tokens": 16734,
+              "output_tokens": 1297,
+              "peak_usd": 0.003456084
+            }
+          }
+        },
+        "raw_context": {
+          "items": 36,
+          "scored": 35,
+          "errors": 1,
+          "correct": 29,
+          "primary": {
+            "items": 28,
+            "correct": 21,
+            "scored": 27,
+            "accuracy": 0.75,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 2,
+              "scored": 4,
+              "accuracy": 0.5,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 6,
+              "scored": 7,
+              "accuracy": 0.75,
+              "unknown": 1
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 1383.5210805555107,
+          "calls": 71,
+          "prompt_tokens": 978394,
+          "output_tokens": 5193,
+          "cache_hit_rate": 0.9843365760624043,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.008303757,
+            "peak": 0.016607514
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 36,
+              "input_tokens": 958457,
+              "output_tokens": 3746,
+              "peak_usd": 0.01280286
+            },
+            "independent_judge": {
+              "calls": 35,
+              "input_tokens": 19937,
+              "output_tokens": 1447,
+              "peak_usd": 0.0038046539999999998
+            }
+          }
+        }
+      },
+      "errors": {
+        "kernel_execution_failure:adaptive_budget_or_contract_failure": 4,
+        "invalid_answer_contract": 1
+      },
+      "reader_validation_reasons": {
+        "answer_support_not_established": 2,
+        "required_evidence_not_established": 17,
+        "accepted": 13,
+        "adaptive_budget_or_contract_failure": 4
+      },
+      "formation": {
+        "status_counts": {
+          "approved": 368,
+          "needs_assistance": 5
+        },
+        "admission_reasons": {
+          "model_support_or_scope_not_verified": 3,
+          "subject_binding_missing": 1,
+          "sensitive_observation": 1
+        },
+        "source_windows": 38,
+        "consolidation_heads": 6,
+        "interpretation": "admission/publication counts, not extraction F1 or independently verified person identity"
+      },
+      "posthoc_id_diagnostics": {
+        "counts": {
+          "questions_with_gold_ids": 26,
+          "final_pool_missing_some_gold_ids": 14,
+          "reader_called": 17,
+          "questions_with_unavailable_gold_ids": 1,
+          "final_pool_contains_all_gold_ids": 12,
+          "gold_ids_in_pool_but_reader_not_called": 5,
+          "initial_pool_contains_all_gold_ids": 10,
+          "reader_packet_contains_all_gold_ids": 6,
+          "questions_without_gold_ids": 2
+        },
+        "online_gold_used": false,
+        "meaning": "Post-answer ID coverage only; gold IDs are neither semantic sufficiency nor strict necessary-support labels. Missing official IDs retained."
+      }
+    },
+    {
+      "run_id": "20261023T004705Z-8558dc85",
+      "protocol": "kernel-vs-context-llm-judge-v6-support-contract-small",
+      "scope": "same 36 development questions, two complete histories",
+      "elapsed_seconds": 304.214701,
+      "manifest_sha256": "cd00b75ea55c155cb45d9a13ec2837f0c13e9b53328d7abbd1d5116765471790",
+      "arms": {
+        "memoria": {
+          "items": 36,
+          "scored": 34,
+          "errors": 2,
+          "correct": 17,
+          "primary": {
+            "items": 28,
+            "correct": 9,
+            "scored": 26,
+            "accuracy": 0.32142857142857145,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 1,
+              "scored": 8,
+              "accuracy": 0.125,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 2,
+              "scored": 6,
+              "accuracy": 0.25,
+              "unknown": 2
+            },
+            "3": {
+              "items": 4,
+              "correct": 0,
+              "scored": 4,
+              "accuracy": 0.0,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 4232.644608331611,
+          "calls": 214,
+          "prompt_tokens": 872789,
+          "output_tokens": 78683,
+          "cache_hit_rate": 0.21131682457042883,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.151016205,
+            "peak": 0.30203241
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 100,
+              "input_tokens": 293709,
+              "output_tokens": 19239,
+              "peak_usd": 0.10438810800000001
+            },
+            "formation": {
+              "calls": 80,
+              "input_tokens": 561450,
+              "output_tokens": 58077,
+              "peak_usd": 0.19394743199999998
+            },
+            "independent_judge": {
+              "calls": 34,
+              "input_tokens": 17630,
+              "output_tokens": 1367,
+              "peak_usd": 0.0036968699999999997
+            }
+          }
+        },
+        "raw_context": {
+          "items": 36,
+          "scored": 36,
+          "errors": 0,
+          "correct": 30,
+          "primary": {
+            "items": 28,
+            "correct": 22,
+            "scored": 28,
+            "accuracy": 0.7857142857142857,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 5,
+              "scored": 8,
+              "accuracy": 0.625,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 3,
+              "scored": 4,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 1455.9355888874659,
+          "calls": 72,
+          "prompt_tokens": 978729,
+          "output_tokens": 5058,
+          "cache_hit_rate": 0.9845258493413397,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.008197302,
+            "peak": 0.016394604
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 36,
+              "input_tokens": 958457,
+              "output_tokens": 3536,
+              "peak_usd": 0.01255086
+            },
+            "independent_judge": {
+              "calls": 36,
+              "input_tokens": 20272,
+              "output_tokens": 1522,
+              "peak_usd": 0.0038437439999999996
+            }
+          }
+        }
+      },
+      "errors": {
+        "kernel_execution_failure:adaptive_budget_or_contract_failure": 2
+      },
+      "reader_validation_reasons": {
+        "required_evidence_not_established": 18,
+        "accepted": 13,
+        "answer_support_not_established": 3,
+        "adaptive_budget_or_contract_failure": 2
+      },
+      "formation": {
+        "status_counts": {
+          "approved": 379,
+          "needs_assistance": 8
+        },
+        "admission_reasons": {
+          "model_support_or_scope_not_verified": 5,
+          "unknown_subject_topic_or_epistemic": 1,
+          "sensitive_observation": 1,
+          "subject_binding_missing": 1
+        },
+        "source_windows": 38,
+        "consolidation_heads": 1,
+        "interpretation": "admission/publication counts, not extraction F1 or independently verified person identity"
+      },
+      "posthoc_id_diagnostics": {
+        "counts": {
+          "questions_with_gold_ids": 26,
+          "final_pool_missing_some_gold_ids": 15,
+          "reader_called": 17,
+          "questions_with_unavailable_gold_ids": 1,
+          "initial_pool_contains_all_gold_ids": 9,
+          "final_pool_contains_all_gold_ids": 11,
+          "gold_ids_in_pool_but_reader_not_called": 5,
+          "reader_packet_contains_all_gold_ids": 6,
+          "questions_without_gold_ids": 2
+        },
+        "online_gold_used": false,
+        "meaning": "Post-answer ID coverage only; gold IDs are neither semantic sufficiency nor strict necessary-support labels. Missing official IDs retained."
+      }
+    },
+    {
+      "run_id": "20261023T005745Z-2ecd50f5",
+      "protocol": "kernel-vs-context-llm-judge-v7-date-closure-small",
+      "scope": "same 36 development questions, two complete histories",
+      "elapsed_seconds": 327.629043,
+      "manifest_sha256": "248e83d7c1e561407e45cebc990ab280c4f78eb96f857d7276d6218388911699",
+      "arms": {
+        "memoria": {
+          "items": 36,
+          "scored": 36,
+          "errors": 0,
+          "correct": 21,
+          "primary": {
+            "items": 28,
+            "correct": 13,
+            "scored": 28,
+            "accuracy": 0.4642857142857143,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 1,
+              "scored": 8,
+              "accuracy": 0.125,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 0,
+              "scored": 4,
+              "accuracy": 0.0,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 6,
+              "scored": 8,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 4696.816941671487,
+          "calls": 219,
+          "prompt_tokens": 871385,
+          "output_tokens": 77047,
+          "cache_hit_rate": 0.21503009576708343,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.14939197199999998,
+            "peak": 0.29878394399999997
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 101,
+              "input_tokens": 300995,
+              "output_tokens": 18921,
+              "peak_usd": 0.10577835600000002
+            },
+            "formation": {
+              "calls": 82,
+              "input_tokens": 551724,
+              "output_tokens": 56670,
+              "peak_usd": 0.18915307199999998
+            },
+            "independent_judge": {
+              "calls": 36,
+              "input_tokens": 18666,
+              "output_tokens": 1456,
+              "peak_usd": 0.003852516
+            }
+          }
+        },
+        "raw_context": {
+          "items": 36,
+          "scored": 36,
+          "errors": 0,
+          "correct": 30,
+          "primary": {
+            "items": 28,
+            "correct": 22,
+            "scored": 28,
+            "accuracy": 0.7857142857142857,
+            "scope": "LoCoMo categories 1-4; category 5 separately"
+          },
+          "by_group": {
+            "1": {
+              "items": 8,
+              "correct": 5,
+              "scored": 8,
+              "accuracy": 0.625,
+              "unknown": 0
+            },
+            "2": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "3": {
+              "items": 4,
+              "correct": 3,
+              "scored": 4,
+              "accuracy": 0.75,
+              "unknown": 0
+            },
+            "4": {
+              "items": 8,
+              "correct": 7,
+              "scored": 8,
+              "accuracy": 0.875,
+              "unknown": 0
+            },
+            "5": {
+              "items": 8,
+              "correct": 8,
+              "scored": 8,
+              "accuracy": 1.0,
+              "unknown": 0
+            }
+          },
+          "latency_ms": 1673.9425527824399,
+          "calls": 72,
+          "prompt_tokens": 978866,
+          "output_tokens": 5160,
+          "cache_hit_rate": 0.9845147343967408,
+          "unknown_usage": 0,
+          "cost_usd": {
+            "off_peak": 0.008260824,
+            "peak": 0.016521648
+          },
+          "phases": {
+            "answer_and_support": {
+              "calls": 36,
+              "input_tokens": 958457,
+              "output_tokens": 3694,
+              "peak_usd": 0.012740459999999999
+            },
+            "independent_judge": {
+              "calls": 36,
+              "input_tokens": 20409,
+              "output_tokens": 1466,
+              "peak_usd": 0.0037811880000000004
+            }
+          }
+        }
+      },
+      "errors": {},
+      "reader_validation_reasons": {
+        "required_evidence_not_established": 16,
+        "accepted": 16,
+        "answer_support_not_established": 4
+      },
+      "formation": {
+        "status_counts": {
+          "approved": 367,
+          "needs_assistance": 6
+        },
+        "admission_reasons": {
+          "model_support_or_scope_not_verified": 4,
+          "sensitive_observation": 1,
+          "unknown_subject_topic_or_epistemic": 1
+        },
+        "source_windows": 38,
+        "consolidation_heads": 3,
+        "interpretation": "admission/publication counts, not extraction F1 or independently verified person identity"
+      },
+      "posthoc_id_diagnostics": {
+        "counts": {
+          "questions_with_gold_ids": 26,
+          "final_pool_missing_some_gold_ids": 14,
+          "reader_called": 19,
+          "questions_with_unavailable_gold_ids": 1,
+          "initial_pool_contains_all_gold_ids": 9,
+          "final_pool_contains_all_gold_ids": 12,
+          "gold_ids_in_pool_but_reader_not_called": 3,
+          "reader_packet_contains_all_gold_ids": 8,
+          "questions_without_gold_ids": 2
+        },
+        "online_gold_used": false,
+        "meaning": "Post-answer ID coverage only; gold IDs are neither semantic sufficiency nor strict necessary-support labels. Missing official IDs retained."
+      }
+    }
+  ],
+  "final_core_sha256": "43314f6b51fb3b60064d4deb331474dc4b886fa276bba80685d05b12e1be694c",
+  "limits": [
+    "All cases used for development; no unseen generalization or significance claim.",
+    "Correct / all planned; execution and judge failures remain in denominator. No scored-only accuracy.",
+    "Public source route; no personal Claim/View/Dense causal-benefit claim.",
+    "Baseline has complete history, no forced truncation. Cache conditions not matched cold/warm.",
+    "Costs from reported usage and frozen tariff bounds, not an invoice. Prior failures retained.",
+    "This subset does not replace the frozen 1986-case first evaluation. No new full run authorized."
+  ],
+  "engineering": {
+    "tests": 1575,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "junit_seconds": 839.033,
+    "core_sha256": "43314f6b51fb3b60064d4deb331474dc4b886fa276bba80685d05b12e1be694c",
+    "synthetic_functional": {
+      "cases": 38,
+      "questions": 49,
+      "question_outcomes": {
+        "passed": 49
+      },
+      "model_calls": 134,
+      "known_tokens": 203274,
+      "unknown_usage_calls": 0,
+      "case_execution_errors": 0,
+      "blocked_calls": 0,
+      "elapsed_seconds": 215.095,
+      "core_unchanged": true,
+      "acceptance_passed": true
+    },
+    "offline_retrieval": {
+      "passed": true,
+      "modes": {
+        "keyword": true,
+        "bm25": true,
+        "dense": true,
+        "rrf": true
+      },
+      "real_local_bge": true,
+      "dense_rrf_fallback": false
+    },
+    "production_isolation": {
+      "production_databases": 2,
+      "experimental_message_ids": 108,
+      "experimental_source_ids": 203,
+      "checks": [
+        {
+          "quick_check": "ok",
+          "foreign_key_violations": 0,
+          "experiment_ids_in_production": 0
+        },
+        {
+          "quick_check": "ok",
+          "foreign_key_violations": 0,
+          "experiment_ids_in_production": 0
+        }
+      ]
+    }
+  },
+  "development_accounting": {
+    "diagnostic_calls": 1089,
+    "synthetic_calls": 404,
+    "total_calls": 1493,
+    "unknown_usage_calls": 0,
+    "estimated_usd": {
+      "off_peak": 0.697650495,
+      "peak": 1.39530099
+    },
+    "includes_failed_attempts": true,
+    "invoice": false,
+    "no_new_full_run": true
+  }
+}

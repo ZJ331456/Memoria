@@ -9,15 +9,17 @@ REPAIR_INSTRUCTION = (
     'and short reasons. Never fabricate quotes, missing facts or conflicts. Missing_fact must list an explicit '
     'missing requirement; conflict must list a conflicted requirement with two distinct sources. '
     'An uncertain negative judgment must not be promoted to sufficient during repair; use unsupported if needed.')
+REPAIR_FEEDBACK_CHARS = 240
 
 
 async def verify(call, stage, system, packet, validate, errors):
     from .reader import strict_json
     forbid_sufficient = False
+    feedback = ''
     for attempt in range(2):
         value = None
         try:
-            result = await call(stage, system + (REPAIR_INSTRUCTION if attempt else ''), packet)
+            result = await call(stage, system + (REPAIR_INSTRUCTION + feedback if attempt else ''), packet)
             if result is None:
                 raise ContextLengthError('Verification budget unavailable')
             if result.finish_reason not in {None, 'stop'} or not result.content.strip():
@@ -36,6 +38,12 @@ async def verify(call, stage, system, packet, validate, errors):
                 forbid_sufficient = True
             errors.append({'stage':stage, 'attempt':attempt + 1, 'error':type(exc).__name__,
                            'code':'output_length' if isinstance(exc, IncompleteResponseError) else 'invalid_contract'})
+            # Explain the actual contract error; regenerating the same malformed
+            # field twice is not a repair. Keep source text/completions out of feedback.
+            if hasattr(exc,'errors'):
+                detail='; '.join(str(e['type'])+' at '+'.'.join(map(str,e['loc'])) for e in exc.errors(include_input=False))
+            else:detail=str(exc)
+            feedback=('\nContract error: '+detail)[:REPAIR_FEEDBACK_CHARS]
             if attempt:
                 raise
 
@@ -43,11 +51,11 @@ async def verify(call, stage, system, packet, validate, errors):
 async def support_envelope(meter, system, packet, *, selected=None, max_tokens=2048, deepseek_cache=False, shared_reader=None, **generation):
     """4000 answer characters x six JSON bytes; include all possible cited sources and repair text."""
     from ..llm.deepseek_cache import evidence_messages
-    messages = evidence_messages(selected or meter.settings.main,system+REPAIR_INSTRUCTION,
+    messages = evidence_messages(selected or meter.settings.main,system+REPAIR_INSTRUCTION+'\x00'*REPAIR_FEEDBACK_CHARS,
         {**packet,'proposed_answer':'\x00'*4000},enabled=deepseek_cache)
     if shared_reader is not None:
         from ..llm.deepseek_cache import shared_reader_messages
         reader_system,reader_packet=shared_reader
         messages=shared_reader_messages(selected or meter.settings.main,reader_system,reader_packet,
-            system+REPAIR_INSTRUCTION,{**packet,'proposed_answer':'\x00'*4000})
+            system+REPAIR_INSTRUCTION+'\x00'*REPAIR_FEEDBACK_CHARS,{**packet,'proposed_answer':'\x00'*4000})
     return await meter.measure(selected or meter.settings.main, messages, None, max_tokens, **generation)

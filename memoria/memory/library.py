@@ -16,6 +16,7 @@ from ..prompting.reader_budget import ReaderBudget
 from .auto_review import SECRET, SENSITIVE
 from .lexical import token_sequence
 from .source_support import digest
+from .source_units import SourceUnit
 
 
 class LibraryError(ValueError):
@@ -34,6 +35,7 @@ class SourceInput(BaseModel):
     session_id: str | None = Field(default=None, max_length=64)
     origin: str = Field(default='', max_length=500)
     source_time: str | None = Field(default=None,max_length=64)
+    source_units: list[SourceUnit] = Field(default_factory=list, max_length=256)
 
     @field_validator('source_time')
     @classmethod
@@ -48,6 +50,7 @@ class RevisionInput(BaseModel):
     title: str = Field(min_length=1, max_length=160)
     content: str = Field(min_length=1, max_length=120000)
     source_time: str | None = Field(default=None,max_length=64)
+    source_units: list[SourceUnit] = Field(default_factory=list, max_length=256)
     _time=field_validator('source_time')(SourceInput.original_time.__func__)
 
 
@@ -137,6 +140,8 @@ class EvidenceLibrary:
         from .file_source import FileSources
         self.files = FileSources(self)
         from .source_formation import SourceFormation
+        from .source_units import install as install_units
+        with store.memory_transaction():install_units(store)
         self.formation = SourceFormation(self)
         from .observation_semantics import install as install_semantics
         with store.memory_transaction():install_semantics(store)
@@ -158,17 +163,21 @@ class EvidenceLibrary:
     def _event(self, sid, action):
         self.store.db.execute('INSERT INTO library_events(source_id,action,created_at) VALUES(?,?,?)', (sid, action, now()))
 
-    def _append(self, sid, title, content, previous=None,source_time=None):
+    def _append(self, sid, title, content, previous=None,source_time=None,source_units=()):
         if not title.strip() or not content.strip():
             raise LibraryError(422, '标题和资料正文不能为空')
         rid = uuid.uuid4().hex
         self.store.db.execute('INSERT INTO library_revisions VALUES(?,?,?,?,?,?,?)',
             (rid, sid, previous, title, content, digest(content), now()))
+        from .source_units import save as save_units
+        save_units(self.store,rid,content,source_units)
         from .observation_semantics import library_role,record_clock
         revision=self._revision(rid)
         record_clock(self.store,'library',sid,rid,content,library_role(self._source(sid)),revision['created_at'],source_time)
-        for start in range(0, len(content), 720):
-            quote = content[start:start+800]
+        spans = [(u.start,u.end) for u in source_units] if source_units else [
+            (start,min(len(content),start+800)) for start in range(0,len(content),720)]
+        for start,end in spans:
+            quote = content[start:end]
             rowid = self.store.db.execute('INSERT INTO library_chunks(revision_id,start,end,quote) VALUES(?,?,?,?)',
                 (rid, start, start+len(quote), quote)).lastrowid
             self.store.db.execute('INSERT INTO library_fts(rowid,terms) VALUES(?,?)',
@@ -188,7 +197,7 @@ class EvidenceLibrary:
             sid = uuid.uuid4().hex
             self.store.db.execute('INSERT INTO library_sources VALUES(?,?,?,?,?,?,?,?,?)',
                 (sid, body.kind, body.authorship, body.scope, body.session_id, body.origin, '', 'active', now()))
-            self._append(sid, body.title, body.content,source_time=body.source_time)
+            self._append(sid, body.title, body.content,source_time=body.source_time,source_units=body.source_units)
             self._event(sid, 'create')
             return self.detail(sid)
 
@@ -199,8 +208,11 @@ class EvidenceLibrary:
                 raise LibraryError(409, '资料已更新，请重新核对当前版本')
             current = self._revision(source['head_id'])
             from .observation_semantics import library_clock
-            if (current['title'],current['content'],library_clock(self,source,current)['source_time']) != (body.title,body.content,body.source_time):
-                self._append(sid,body.title,body.content,source['head_id'],body.source_time); self._event(sid,'revise')
+            from .source_units import load as load_units
+            if (current['title'],current['content'],library_clock(self,source,current)['source_time'],
+                [u.model_dump() for u in load_units(self.store,current)]) != (body.title,body.content,body.source_time,
+                [u.model_dump() for u in body.source_units]):
+                self._append(sid,body.title,body.content,source['head_id'],body.source_time,body.source_units); self._event(sid,'revise')
             return self.detail(sid)
 
     def retract(self, sid):

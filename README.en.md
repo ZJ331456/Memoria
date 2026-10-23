@@ -1,5 +1,7 @@
 # Memoria
 
+Latest small diagnostic: on the same 36 development questions, kernel execution errors fell from 8 to 0; ordinary answers improved from 6/28 to 13/28. Full-history Baseline scored 22/28. This does **not** establish an overall advantage over the Baseline or replace the frozen full evaluation. [Changes, all development attempts, costs and limitations](docs/implemented/来源片段绑定与回答稳定性.md).
+
 <p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 
 2026-10-23: The first current [two-arm full evaluation](docs/implemented/双组内核评估与费用估算.md) has executed all planned questions: the entire Memoria arm first, then the full/truncated-context baseline. Independent histories are isolated and bounded in concurrency; repeated insufficient balance stops new requests. Only current aggregate results are published; raw checkpoints, prompts, answers and SQLite remain private.

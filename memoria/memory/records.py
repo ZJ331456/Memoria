@@ -159,6 +159,12 @@ class SourceReaders:
             source=self.library._source(item['source_id'],active=False);revision=self.library._revision(item['revision_id'])
             temporal={'source_clock':public_clock(library_clock(self.library,source,revision)),
                 'observations':source_observations(self.store,'library',revision['id'],start=item['start'],end=item['end'],library=self.library)}
+            from .source_units import load as load_units
+            unit=next((u for u in load_units(self.store,revision)
+                       if (u.start,u.end)==(item['start'],item['end'])),None)
+            if unit:
+                temporal['source_unit']={**unit.model_dump(), 'attribution':'source_declared',
+                    'timezone':'unknown','identity_verified':False}
         except LibraryError:pass  # The existing selection/dependency gate rejects this stale candidate.
         return EvidenceRecord('library', item['source_id'], 'source_quote', item['quote'], item['start'], item['end'],
             item['citation'], {'kind': item['kind'], 'title': item['title'], 'authorship': item['authorship'],

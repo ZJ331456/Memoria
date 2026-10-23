@@ -21,7 +21,7 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
               questions=None, output=None, concurrency=2, allow_remote=False,
               max_tokens=1024, context_chars=240000, kernel_budget_chars=8000,
               write_mode="library", judge=True, execute=False, max_calls=None, max_cost_usd=None,
-              registration=None, history_concurrency=1):
+              registration=None, history_concurrency=1, item_ids_file=None):
     from .runner import account_settings
     from .eval_accounting import EvaluationClient
     from .records import RunRecorder, safe_endpoint
@@ -38,6 +38,13 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
     items = load_items(benchmark, dataset, **(
         {"conversations": conversations, "questions_per_conversation": questions}
         if benchmark == "locomo" else {"limit": questions}))
+    if item_ids_file:
+        selected=json.loads(Path(item_ids_file).read_text(encoding='utf-8'))
+        if not isinstance(selected,list) or not selected or any(not isinstance(i,str) for i in selected) or len(set(selected))!=len(selected):
+            raise ValueError('Subset must contain unique explicit item IDs')
+        by_id={item.id:item for item in items}
+        if set(selected)-by_id.keys():raise ValueError('Subset contains unknown item IDs')
+        items=[by_id[mid] for mid in selected]
     if not items:
         raise ValueError("No benchmark items")
     if len({item.id for item in items}) != len(items):
@@ -53,6 +60,10 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
     if not allow_remote or not official(settings.main) or not max_calls or not max_cost_usd:
         raise ValueError("Execution requires --allow-remote and positive --max-calls/--max-cost-usd")
     registration = json.loads(Path(registration or settings.root / "eval/protocols/kernel-vs-context-judge-v1.json").read_text(encoding="utf-8"))
+    if item_ids_file and [item.id for item in items]!=registration.get('item_ids'):
+        raise ValueError('Diagnostic subset differs from frozen registration')
+    if registration.get('item_ids') and [item.id for item in items]!=registration['item_ids']:
+        raise ValueError('Registered diagnostic requires its exact subset; full execution forbidden')
     if benchmark != "locomo" or plan["dataset_sha256"] != registration["source_sha256"]:
         raise ValueError("Paid v1 execution requires the frozen LoCoMo source SHA")
     expected = (registration["backbone"], registration["reader_max_tokens"], registration["concurrency"],
@@ -78,6 +89,7 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
     settings.embedding = ModelConfig(str(embedding), "", "local://auto", backend="bge")
     frozen = {**plan, "protocol": registration["protocol"], "mode": "execution", "concurrency": concurrency,
         "scope": "full_development_retest" if len(items)==1986 else "diagnostic_subset",
+        "item_ids": [item.id for item in items],
         "concurrency_scope": registration["concurrency_scope"],
         "arm_order": ["memoria", "raw_context"],
         "history_concurrency": history_concurrency,
@@ -164,6 +176,7 @@ def main(argv=None):
     parser.add_argument("--max-cost-usd", type=float)
     parser.add_argument("--registration")
     parser.add_argument("--history-concurrency", type=int, default=1)
+    parser.add_argument("--item-ids-file", help="Exact registered diagnostic item IDs; never selected by gold or success")
     args = parser.parse_args(argv)
     result = asyncio.run(run(HistoryWorkspace(directory_for(args.user)), Settings.load(),
                              **{k: v for k, v in vars(args).items() if k != "user"}))
