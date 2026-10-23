@@ -2,7 +2,7 @@
 from .budget import EvidenceBudget
 
 
-def select_closed(candidates, decision, citation_owners, budget: EvidenceBudget, *, limit=8):
+def select_closed(candidates, decision, citation_owners, budget: EvidenceBudget, *, limit=8, render=None):
     catalog = {c['id']: c for c in candidates}
     if len(catalog) != len(candidates):
         raise ValueError('Duplicate closure candidate IDs')
@@ -33,11 +33,14 @@ def select_closed(candidates, decision, citation_owners, budget: EvidenceBudget,
     chosen = [c for c in candidates if c['id'] in necessary]
     facets = [r['fact'] for r in decision['requirements']]
     payload = {'evidence': chosen, 'requirements': facets}
-    fits = len(chosen) <= limit and budget.cost(payload) <= budget.limit
+    required_cost = budget.cost(render(chosen) if render else payload)
+    fits = len(chosen) <= limit and required_cost <= budget.limit
     # Never publish a partial necessary group just because its first member fits.
     if not fits:
         payload = {'evidence': [], 'requirements': []}
-    return {'payload': payload, 'strategy': 'dependency_closed_requirements', 'cost': budget.cost(payload),
+    cost=budget.cost(render(chosen if fits else []) if render else payload)
+    return {'payload': payload, 'strategy': 'dependency_closed_requirements', 'cost': cost,
+        'required_cost':required_cost,'necessary_count':len(chosen),'limit':limit,
         'budget': budget.public(), 'candidate_ids': list(catalog), 'groups': groups,
         'covered': facets if fits and decision['state'] == 'sufficient' else [],
         'uncovered': [] if fits and decision['state'] == 'sufficient' else facets,

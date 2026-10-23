@@ -142,7 +142,7 @@ class KernelMemorySystem:
         ids = [c.get("citation") or c.get("id") for c in result.get("citations", []) if isinstance(c, dict)]
         reason = str(result.get("validation", {}).get("reason") or "")
         adaptive = result.get("access", {}).get("adaptive", {})
-        technical_failure = bool(adaptive.get("error_type")) or any(marker in reason for marker in (
+        technical_failure = bool(adaptive.get('failure',{}).get('technical_failure')) or bool(adaptive.get("error_type")) or any(marker in reason for marker in (
             "budget", "reservation", "provider", "invalid_answer_schema", "incomplete_reader", "tool_reader"))
         return {"error": "kernel_execution_failure:"+reason if technical_failure else None,
                 "answer": json.dumps({k: result.get(k) for k in

@@ -154,7 +154,10 @@ class SourceGuard:
     def freshness(self):
         return ('source_changed' if (self.request.session_id and not self.kernel.store.session(self.request.session_id))
             or not all(self.kernel.dependency_valid(d, session_id=self.request.session_id)
-                for d in self.packet['dependencies']) else None)
+                for d in self.packet['dependencies']) or not all(
+                    all(e['start']<=w['start']<w['end']<=e['end'] for w in e['excerpts']) and
+                    self.kernel.library.validate_quote_windows(d,e['excerpts'],session_id=self.request.session_id)
+                    for e,d in zip(self.packet['evidence'],self.packet['dependencies']) if e.get('excerpts')) else None)
 
     def validate(self, result, messages):
         from .reader import ReaderAnswer, strict_json, SAFE_UNKNOWN, SAFE_REJECTED
@@ -198,12 +201,14 @@ class Sources:
         parsed.update(subject_id=r.subject_ref, fact_interval={'lower':r.event_start,'upper':r.event_end} if r.event_start else None,
             recorded_as_of=r.recorded_as_of)
         packet = await self.kernel.search(r, capture=captured, retrieval_query=query)
-        candidates = []
+        candidates, remap = [], {}
         for i,(e,d) in enumerate(zip(captured['candidates'], captured['candidate_dependencies'])):
+            original=e['citation']
             e,d=source_packet_unit(e,d)
+            remap[original]=e['citation']
             candidates.append({'id':e['citation'],'kind':'library','score':1/(i+1),
                                'source_ids':[e['source_id']],'data':e,'dependency':d})
-        ids = {e['citation'] for e in packet['evidence']}
+        ids = {remap.get(e['citation'],e['citation']) for e in packet['evidence']}
         return {**packet, 'path': 'clarify' if packet['selection'].get('reason') == 'ambiguous_entity_identity' else 'retrieve',
                 'retrieval': captured.get('retrieval', {}),
                 'state': None, 'parsed': parsed, 'candidates': candidates,
@@ -213,25 +218,38 @@ class Sources:
         return {'evidence': [c['data'] for c in candidates], 'dependencies': [c['dependency'] for c in candidates],
             'policy': 'Source-domain evidence, never approved personal state.'}
 
+    def render(self, access, candidates):
+        packet=self.packet(candidates)
+        if required:=required_citations(access):packet['required_evidence_ids']=required
+        return packet
+
     def present(self, access, candidates):
         from .reader import SOURCE_CONTRACT
-        packet = self.packet(candidates)
-        if required:=required_citations(access):packet['required_evidence_ids']=required
+        packet = self.render(access,candidates)
         messages = PromptAssembler().assemble(SOURCE_CONTRACT,
             extra_sections=[PromptSection('Source Evidence', canonical(packet), 10, atomic=True)]).as_messages()
         messages.append({'role': 'user', 'content': self.request.query})
         messages[0]['content']+=('\nsource_unit的speaker/date是该片段原文的归属及日历声明，未独立验证身份。'
             '可用有原话支持的相对日历日期（如yesterday加该片段session_date_raw）回答日期问题；'
-            '保留年月日精度和未知时区，不生成UTC时刻，不用source_recorded_at/upload时间推算事件。')
+            '保留年月日精度和未知时区，不生成UTC时刻，不用source_recorded_at/upload时间推算事件。'
+            'presentation=source_windows时，excerpts包含带原始绝对偏移的逐字原文窗口；content空字符串并不代表原文为空。'
+            '窗口之间省略的文字不可猜补、不可视为连续引文，也不能据省略部分断言不存在某事实。')
         evidence = []
         for c in candidates:
             e = c['data']
             if e['representation'] == 'consolidated_memory':
                 quotes = [s[key] for s in e['provenance']['support'] for key in ('quote', 'subject_quote', 'feedback_quote') if s.get(key)]
             else:
-                quotes = [e['content']]
+                quotes = [w['text'] for w in e['excerpts']] if e.get('excerpts') else [e['content']]
             quotes.extend(q['quote'] for ident in e['provenance'].get('entity_identity', []) for q in ident['evidence'])
             entry={'id': c['id'], 'text': '\n'.join(quotes), 'source_texts': quotes}
+            if e.get('excerpts'):
+                original=next((item['data'] for item in access.get('candidates',[]) if item['id']==c['id']),None)
+                if not original or not original.get('content'):raise ValueError('Original source context unavailable')
+                # Reader stays within its evidence budget; the already budgeted
+                # support call must still inspect omitted qualifiers/counterevidence.
+                # This field never becomes an allowed quote/citation source.
+                entry['verification_context_only']=original['content']
             if unit:=e['provenance'].get('source_unit'):
                 entry.update(speaker=unit['speaker'],session_date_raw=unit['session_date_raw'],
                              attribution='source_declared',timezone='unknown')
@@ -243,8 +261,7 @@ class Sources:
         return EvidenceBudget(self.request.budget_chars)
 
     def final_access(self, access, selection):
-        packet = self.packet(selection['payload']['evidence'])
-        if required:=required_citations(access):packet['required_evidence_ids']=required
+        packet = self.render(access,selection['payload']['evidence'])
         # Reader JSON/dependency overhead also belongs to the source evidence budget.
         if len(canonical(packet)) > self.request.budget_chars:
             raise ContextLengthError('Complete source packet exceeds evidence budget')
@@ -272,6 +289,13 @@ def source_packet_unit(record, dependency):
         dependency.pop('card_ids',None)
         if provenance.get('source_unit'):
             provenance.pop('observations',None)
+            from .source_units import SourceUnit
+            raw=provenance['source_unit']
+            unit=SourceUnit.model_validate({key:raw[key] for key in SourceUnit.model_fields})
+            if record['start']==unit.start and record['end']==unit.end:
+                if not record['content'].startswith(unit.header()):raise ValueError('Source unit header changed')
+                record.update(content=record['content'][unit.body_start-unit.start:],start=unit.body_start,
+                    citation=f"[library:{dependency['revision_id']}:{unit.body_start}:{unit.end}]")
     return record,dependency
 
 
@@ -300,8 +324,13 @@ async def read_adaptive(kernel, request):
     access = {'adaptive': trace, 'candidates': []}
     reader_called = False
     reader_usage = None
+    phase='retrieval'
 
     def finish(reason, *, status='abstain', verdict=None):
+        from .read_diagnostics import failure
+        actual_reason=reason or (verdict or {}).get('validation',{}).get('reason')
+        if actual_reason:
+            trace.setdefault('failure',failure(phase,actual_reason))
         policy.release('answer_pipeline')
         trace['policy'] = policy.public()
         trace['unknown_usage_count'] = sum(c['usage'] is None for c in trace['calls'])
@@ -390,6 +419,7 @@ async def read_adaptive(kernel, request):
                 return finish('incomplete_approved_state', status='clarify')
         all_candidates = access['candidates']
         for round_index in range(2):
+            phase='coverage'
             # Retain complete original candidates/ranks; only the model packet is bounded.
             pool, omitted = [], []
             for c in all_candidates:
@@ -419,7 +449,19 @@ async def read_adaptive(kernel, request):
                 decision = {'state': 'missing_fact', 'requirements': [{**r, 'status': 'missing', 'sources': []}
                     for r in query_plan['requirements']], 'missing_queries': [], 'reason': 'empty_initial_pool',
                     'judgment_source': 'query_only_empty_pool', 'semantic_sufficiency_verified': False}
-            selected = select_closed(pool, decision, owners, adapter.budget(), limit=getattr(request, 'top_k', request.limit if hasattr(request, 'limit') else 8))
+            phase='selection'
+            closure_access={**access,'closure_advice':{'decision':decision,'citation_owners':owners}}
+            render=(lambda chosen:adapter.render(closure_access,chosen)) if isinstance(adapter,Sources) else None
+            selection_limit=getattr(request,'top_k',request.limit if hasattr(request,'limit') else 8)
+            selected = select_closed(pool, decision, owners, adapter.budget(), limit=selection_limit,render=render)
+            if decision['state']=='sufficient' and not selected['fits'] and isinstance(adapter,Sources):
+                from .evidence.source_windows import compact
+                compact_pool=compact(pool,decision)
+                retry=select_closed(compact_pool,decision,owners,adapter.budget(),limit=selection_limit,render=render)
+                selected['compaction']={'attempted':True,'before_cost':selected['required_cost'],
+                    'after_cost':retry['required_cost'],'fits':retry['fits'],'policy':'literal_sentence_windows_v1'}
+                if retry['fits'] and retry['required_cost']<selected['required_cost']:
+                    selected={**retry,'compaction':selected['compaction']}
             required_ids = {cid for group in selected['groups'] for cid in group['candidate_ids']}
             record = {'round': round_index, 'candidate_ids': [c['id'] for c in all_candidates],
                 'assessed_candidate_ids': [c['id'] for c in pool], 'omitted_from_gate': omitted,
@@ -448,6 +490,7 @@ async def read_adaptive(kernel, request):
                 if not policy.hold_calls('answer_pipeline', [prepared.report, repaired.report, final_support, final_support]):
                     return finish('final_answer_reservation_unavailable')
                 for attempt in range(2):
+                    phase='reader'
                     if attempt: prepared = repaired
                     if guard.freshness(): return finish('source_changed_before_reader')
                     policy.reserve_call('reader', prepared.report, reservation='answer_pipeline')
@@ -487,6 +530,7 @@ async def read_adaptive(kernel, request):
                 # Citing only a subset cannot drop a necessary name/fact/condition dependency.
                 required_citations = {q['id'] for r in decision['requirements'] for q in r['sources']}
                 if not required_citations <= set(answer.evidence_ids): return finish('necessary_citations_omitted')
+                phase='support'
                 check = await verify(call, 'support', SUPPORT_SYSTEM,
                     {'question': request.query, 'proposed_answer': answer.answer,
                      'evidence': [e for e in evidence if e['id'] in answer.evidence_ids]},
@@ -498,6 +542,7 @@ async def read_adaptive(kernel, request):
                     'support_dependencies','rule_blockers','quote_integrity_verified',
                     'semantic_entailment_verified','judgment_source')}
                 if not check['accepted']: return finish('answer_support_not_established')
+                phase='publication'
                 if guard.freshness(): return finish('source_changed_before_publish')
                 verdict = guard.validate(result, prepared.messages)
                 return finish(None, verdict=verdict)
@@ -510,6 +555,7 @@ async def read_adaptive(kernel, request):
             trace['retrieval_rounds'] = 1
             policy.retrieval_rounds = 1
             for query in queries:
+                phase='supplemental_retrieval'
                 # Only the locator changes; original identity/time/conditions still govern _access/search.
                 target = query.strip()
                 supplement = await retrieve(target)
@@ -525,5 +571,7 @@ async def read_adaptive(kernel, request):
             all_candidates.sort(key=lambda c: (c['id'] not in required_ids, c['id'] not in new_ids))
         return finish('supplement_round_limit')
     except (ValueError, TypeError, KeyError, ProviderError, RuntimeError, TimeoutError) as exc:
+        from .read_diagnostics import failure
         trace['error_type'] = type(exc).__name__
+        trace['failure']=failure(phase,'adaptive_budget_or_contract_failure',exc)
         return finish('adaptive_budget_or_contract_failure')

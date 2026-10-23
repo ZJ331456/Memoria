@@ -36,8 +36,11 @@ async def verify(call, stage, system, packet, validate, errors):
                 raise
             if isinstance(value, dict) and value.get('state') in {'missing_fact', 'conflict'}:
                 forbid_sufficient = True
+            from .read_diagnostics import contract_code, VerificationFailure
+            code=contract_code(exc)
             errors.append({'stage':stage, 'attempt':attempt + 1, 'error':type(exc).__name__,
-                           'code':'output_length' if isinstance(exc, IncompleteResponseError) else 'invalid_contract'})
+                           'code':'output_length' if isinstance(exc, IncompleteResponseError) else 'invalid_contract',
+                           'reason_code':code})
             # Explain the actual contract error; regenerating the same malformed
             # field twice is not a repair. Keep source text/completions out of feedback.
             if hasattr(exc,'errors'):
@@ -45,7 +48,13 @@ async def verify(call, stage, system, packet, validate, errors):
             else:detail=str(exc)
             feedback=('\nContract error: '+detail)[:REPAIR_FEEDBACK_CHARS]
             if attempt:
-                raise
+                if isinstance(exc,IncompleteResponseError):
+                    # Preserve the public finish_reason contract for callers.
+                    exc.stage,exc.code=stage,code
+                    import hashlib
+                    exc.detail_sha256=hashlib.sha256(str(exc).encode()).hexdigest()
+                    raise
+                raise VerificationFailure(stage,code,exc) from exc
 
 
 async def support_envelope(meter, system, packet, *, selected=None, max_tokens=2048, deepseek_cache=False, shared_reader=None, **generation):

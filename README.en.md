@@ -1,6 +1,6 @@
 # Memoria
 
-Latest: [native source-domain BGE/RRF and bounded multi-hop evidence chains](docs/implemented/资料域混合检索与多跳证据链.md) are connected. Final repeated 36-question diagnostic: ordinary **13/28**, full-history Baseline **23/28**, zero execution errors in either arm. Post-hoc source-ID coverage improved, but overall answer quality and lifecycle cost have **not** beaten the Baseline. All v8/v9 attempts are retained; no new full evaluation was run.
+Latest: [verified source-topic reuse and Reader failure attribution](docs/implemented/形成分组与回答链路归因.md) separate utterance speakers from event subjects, fix consolidation scheduling, cost the actual Reader packet and retain literal source windows. Final acceptance: all 1609 engineering tests pass, synthetic functionality is 49/49, and actual personal/source BGE is 4/4 each under one final core fingerprint. The one new 36-question diagnostic had 13 upstream failures and is retained with unknown usage; it predates the final JSON example fix and is not a final-revision quality result. No new full evaluation or proven Baseline advantage.
 
 <p align="center"><img src="assets/brand/logo-main-lockup.png" alt="Memoria" width="360"></p>
 

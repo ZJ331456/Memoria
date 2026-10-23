@@ -90,6 +90,8 @@ class EvaluationClient(LLMClient):
             return result
         except BaseException as exc:
             row["error"] = type(exc).__name__
+            from ..observability.memory_trace import execution_failure
+            row['failure']=execution_failure(exc,context.get().get('stage','runtime'))
             # Backend errors retain the HTTP code but are not typed HTTP exceptions.
             message = str(exc).lower()
             if any(value in message for value in ("http 402", "insufficient balance", "insufficient_balance")):

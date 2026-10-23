@@ -159,7 +159,9 @@ def test_raw_source_packet_is_stable_across_query_selected_cards(env):
     d['observation_refs']=[{'revision_id':'lease-preserved'}]
     stable,dep=source_packet_unit(e,d)
     assert stable==c['data'] and dep['observation_refs']==d['observation_refs']
-    assert dep['sha']==d['sha'] and stable['content']==text
+    assert dep['sha']==d['sha'] and stable['content']=='I adopted a cat yesterday.'
+    assert stable['start']==units[0]['body_start'] and stable['end']==units[0]['end']
+    assert 'speaker' not in stable['content'] and stable['provenance']['source_unit']['speaker']=='Alice'
     dep.pop('observation_refs')
     assert merge_candidates([c],[{**c,'data':stable,'dependency':dep}])==[c]
     assert e['provenance']['knowledge_cards']  # no mutation of the captured trace

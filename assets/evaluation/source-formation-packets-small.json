@@ -1,0 +1,391 @@
+{
+  "schema": "memoria-formation-packets-development-v1",
+  "date": "2026-10-23",
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "protocol": "kernel-vs-context-llm-judge-v10-formation-packets-small",
+  "run_id": "20261023T042223Z-3631db57",
+  "qa_status": "failed",
+  "model": "deepseek-flash",
+  "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
+  "manifest_sha256": "8a5ff408dd375b8eb7eb69458536b83b057b53ed8567ad74d844ace1ad4ae104",
+  "elapsed_seconds": 356.429369,
+  "sample": {
+    "histories": 2,
+    "questions_per_arm": 36,
+    "ordinary": 28,
+    "adversarial": 8,
+    "used_for_development": true
+  },
+  "arms": {
+    "memoria": {
+      "items": 36,
+      "scored": 23,
+      "errors": 13,
+      "correct": 17,
+      "primary": {
+        "items": 28,
+        "correct": 9,
+        "scored": 15,
+        "accuracy": 0.32142857142857145,
+        "scope": "LoCoMo categories 1-4; category 5 separately"
+      },
+      "by_group": {
+        "1": {
+          "items": 8,
+          "correct": 0,
+          "scored": 0,
+          "accuracy": 0.0,
+          "unknown": 8
+        },
+        "2": {
+          "items": 8,
+          "correct": 3,
+          "scored": 3,
+          "accuracy": 0.375,
+          "unknown": 5
+        },
+        "3": {
+          "items": 4,
+          "correct": 1,
+          "scored": 4,
+          "accuracy": 0.25,
+          "unknown": 0
+        },
+        "4": {
+          "items": 8,
+          "correct": 5,
+          "scored": 8,
+          "accuracy": 0.625,
+          "unknown": 0
+        },
+        "5": {
+          "items": 8,
+          "correct": 8,
+          "scored": 8,
+          "accuracy": 1.0,
+          "unknown": 0
+        }
+      },
+      "latency_ms": 6156.960486114258,
+      "accounting": {
+        "calls": 175,
+        "prompt_tokens": 867509,
+        "completion_tokens": 70616,
+        "unknown_usage_calls": 13,
+        "known_cost_usd": {
+          "off_peak": 0.164236461,
+          "peak": 0.328472922
+        },
+        "unknown_without_reservation_calls": 0,
+        "unknown_request_reserved_upper_usd": 0.10038029999999999
+      }
+    },
+    "raw_context": {
+      "items": 36,
+      "scored": 36,
+      "errors": 0,
+      "correct": 31,
+      "primary": {
+        "items": 28,
+        "correct": 23,
+        "scored": 28,
+        "accuracy": 0.8214285714285714,
+        "scope": "LoCoMo categories 1-4; category 5 separately"
+      },
+      "by_group": {
+        "1": {
+          "items": 8,
+          "correct": 6,
+          "scored": 8,
+          "accuracy": 0.75,
+          "unknown": 0
+        },
+        "2": {
+          "items": 8,
+          "correct": 7,
+          "scored": 8,
+          "accuracy": 0.875,
+          "unknown": 0
+        },
+        "3": {
+          "items": 4,
+          "correct": 3,
+          "scored": 4,
+          "accuracy": 0.75,
+          "unknown": 0
+        },
+        "4": {
+          "items": 8,
+          "correct": 7,
+          "scored": 8,
+          "accuracy": 0.875,
+          "unknown": 0
+        },
+        "5": {
+          "items": 8,
+          "correct": 8,
+          "scored": 8,
+          "accuracy": 1.0,
+          "unknown": 0
+        }
+      },
+      "latency_ms": 1393.4448527709012,
+      "accounting": {
+        "calls": 72,
+        "prompt_tokens": 978693,
+        "completion_tokens": 4963,
+        "unknown_usage_calls": 0,
+        "known_cost_usd": {
+          "off_peak": 0.008135931,
+          "peak": 0.016271862
+        },
+        "unknown_without_reservation_calls": 0,
+        "unknown_request_reserved_upper_usd": 0
+      }
+    }
+  },
+  "formation": {
+    "status_counts": {
+      "approved": 363,
+      "needs_assistance": 11
+    },
+    "stored_approved_heads": 2,
+    "consolidation_ids_observed_in_candidates": 1,
+    "consolidation_read_counts": {
+      "candidate_questions": 15,
+      "reader_selected_questions": 0,
+      "published_citation_questions": 0
+    },
+    "topic_links": {
+      "not_proposed": 374
+    }
+  },
+  "reader_validation_reasons": {
+    "adaptive_budget_or_contract_failure": 13,
+    "accepted": 10,
+    "required_evidence_not_established": 12,
+    "answer_support_not_established": 1
+  },
+  "structured_failure_codes": {
+    "coverage:provider_failed": 13,
+    "selection:required_evidence_not_established": 12,
+    "support:answer_support_not_established": 1
+  },
+  "compaction": {},
+  "qa_runtime_core_sha256": "407a2cee68eeaead66f84809a8b09281b61b3836640bf869c0e755becaa2fc7a",
+  "final_core_sha256": "258a3e7c2883a038ff36639d682edececab732bbbb81b2041ad05c94c965c861",
+  "post_qa_changes": [
+    "Explicit topic_group_id in observation JSON example and topic-link receipt counters",
+    "Safe transport cause-chain classification and evaluation failure metadata; no additional QA rerun",
+    "Full original source context checked inside the existing support call when Reader uses excerpts, all input counted in shared budget"
+  ],
+  "functional_attempts": [
+    {
+      "cases": 38,
+      "questions": 49,
+      "question_outcomes": {
+        "passed": 48,
+        "capability_gap": 1
+      },
+      "model_calls": 133,
+      "known_tokens": 203548,
+      "unknown_usage_calls": 1,
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "elapsed_seconds": 309.038,
+      "core_sha256": "407a2cee68eeaead66f84809a8b09281b61b3836640bf869c0e755becaa2fc7a",
+      "core_unchanged": true,
+      "acceptance_passed": false,
+      "run_id": "20261023T122223-caa6189b",
+      "accounting": {
+        "calls": 133,
+        "prompt_tokens": 190381,
+        "completion_tokens": 13167,
+        "unknown_usage_calls": 1,
+        "known_cost_usd": {
+          "off_peak": 0.02403879,
+          "peak": 0.04807758
+        },
+        "unknown_without_reservation_calls": 1,
+        "unknown_request_reserved_upper_usd": 0
+      }
+    },
+    {
+      "cases": 38,
+      "questions": 49,
+      "question_outcomes": {
+        "passed": 49
+      },
+      "model_calls": 133,
+      "known_tokens": 206041,
+      "unknown_usage_calls": 0,
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "elapsed_seconds": 232.573,
+      "core_sha256": "4dd2ee77c2414f8134e08eb28c6f6e2b464846a5b0b1051a069b866333374845",
+      "core_unchanged": true,
+      "acceptance_passed": true,
+      "run_id": "20261023T133455-71abe4e4",
+      "accounting": {
+        "calls": 133,
+        "prompt_tokens": 192598,
+        "completion_tokens": 13443,
+        "unknown_usage_calls": 0,
+        "known_cost_usd": {
+          "off_peak": 0.024442859999999997,
+          "peak": 0.048885719999999994
+        },
+        "unknown_without_reservation_calls": 0,
+        "unknown_request_reserved_upper_usd": 0
+      }
+    },
+    {
+      "cases": 38,
+      "questions": 49,
+      "question_outcomes": {
+        "passed": 49
+      },
+      "model_calls": 133,
+      "known_tokens": 206476,
+      "unknown_usage_calls": 0,
+      "blocked_calls": 0,
+      "case_execution_errors": 0,
+      "elapsed_seconds": 226.239,
+      "core_sha256": "258a3e7c2883a038ff36639d682edececab732bbbb81b2041ad05c94c965c861",
+      "core_unchanged": true,
+      "acceptance_passed": true,
+      "run_id": "20261023T134713-051b30eb",
+      "accounting": {
+        "calls": 133,
+        "prompt_tokens": 193082,
+        "completion_tokens": 13394,
+        "unknown_usage_calls": 0,
+        "known_cost_usd": {
+          "off_peak": 0.024034476,
+          "peak": 0.048068952
+        },
+        "unknown_without_reservation_calls": 0,
+        "unknown_request_reserved_upper_usd": 0
+      }
+    }
+  ],
+  "final_real_formation_probe": {
+    "data_kind": "synthetic_functional",
+    "core_sha256": "4dd2ee77c2414f8134e08eb28c6f6e2b464846a5b0b1051a069b866333374845",
+    "formation": [
+      {
+        "statuses": [
+          "approved"
+        ],
+        "topic_links": {
+          "offered": 0,
+          "status_counts": {
+            "not_proposed": 1
+          }
+        },
+        "consolidation": "insufficient_sources"
+      },
+      {
+        "statuses": [
+          "approved"
+        ],
+        "topic_links": {
+          "offered": 1,
+          "status_counts": {
+            "verified": 1
+          }
+        },
+        "consolidation": "insufficient_sources"
+      },
+      {
+        "statuses": [
+          "approved"
+        ],
+        "topic_links": {
+          "offered": 1,
+          "status_counts": {
+            "authority_mismatch": 1
+          }
+        },
+        "consolidation": "insufficient_sources"
+      }
+    ],
+    "production_writes": 0,
+    "readable_consolidations": 0,
+    "transport_replay": {
+      "status": "returned",
+      "finish_reason": "stop",
+      "scored": false
+    },
+    "accounting": {
+      "calls": 7,
+      "prompt_tokens": 11662,
+      "completion_tokens": 772,
+      "unknown_usage_calls": 0,
+      "known_cost_usd": {
+        "off_peak": 0.001873812,
+        "peak": 0.003747624
+      },
+      "unknown_without_reservation_calls": 0,
+      "unknown_request_reserved_upper_usd": 0
+    }
+  },
+  "development_accounting": {
+    "calls": 653,
+    "prompt_tokens": 2433925,
+    "completion_tokens": 116355,
+    "unknown_usage_calls": 14,
+    "known_cost_usd": {
+      "off_peak": 0.24676232999999997,
+      "peak": 0.49352465999999995
+    },
+    "unknown_without_reservation_calls": 1,
+    "unknown_request_reserved_upper_usd": 0.10038029999999999
+  },
+  "isolation": {
+    "production_databases": 2,
+    "checks": [
+      {
+        "quick_check": "ok",
+        "foreign_key_violations": 0,
+        "experimental_ids_found": 0
+      },
+      {
+        "quick_check": "ok",
+        "foreign_key_violations": 0,
+        "experimental_ids_found": 0
+      }
+    ],
+    "experimental_message_ids": 108,
+    "experimental_source_ids": 92
+  },
+  "limits": [
+    "Failed API calls retain planned denominators and unknown usage, not zero cost; v10 main result is a conservative lower bound with 13 unscored cases, not proof of quality regression or gain.",
+    "The 36-question run predates the explicit topic JSON example fix; it is not a final-revision quality measurement.",
+    "Three synthetic source probes validate one live topic association and reject an incompatible condition; no readable consolidation arose in this probe.",
+    "One previously failed request returned during an unscored operational probe; its original failure remains and its cause cannot be retrospectively recovered.",
+    "Complete synthetic functionality is not LoCoMo accuracy, extraction F1 or real longitudinal benefit.",
+    "All raw inputs/prompts/responses/calls/databases remain private; no new full evaluation."
+  ],
+  "engineering": {
+    "tests": 1609,
+    "errors": 0,
+    "failures": 0,
+    "skipped": 0,
+    "junit_seconds": 728.977,
+    "core_sha256": "258a3e7c2883a038ff36639d682edececab732bbbb81b2041ad05c94c965c861",
+    "junit_sha256": "326be89166de313df17adbc15411f930fa4144a33726eaeed8df2ab882590773",
+    "personal_bge": {
+      "passed": 4,
+      "dense_available": true,
+      "fallback": false,
+      "api_calls": 0
+    },
+    "source_bge": {
+      "passed": 4,
+      "dense_available": true,
+      "fallback": false,
+      "api_calls": 0
+    }
+  }
+}

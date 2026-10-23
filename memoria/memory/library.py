@@ -380,6 +380,21 @@ class EvidenceLibrary:
                 return self.dependency_valid(dependency)
             except (LibraryError,KeyError,TypeError):return False
 
+    def validate_quote_windows(self, dependency, windows, *, session_id=None):
+        """Validate original offsets again at publication, including working scope."""
+        with self.store.lock:
+            if not self.dependency_valid_for_session(dependency, session_id=session_id):return False
+            try:
+                text=self._revision(dependency['revision_id'])['content']
+                previous=-1
+                for window in windows:
+                    start,end=window['start'],window['end']
+                    if (type(start) is not int or type(end) is not int or not 0<=start<end<=len(text)
+                        or start<previous or text[start:end]!=window['text']):return False
+                    previous=end
+                return bool(windows)
+            except (LibraryError,KeyError,TypeError):return False
+
     def dependency_valid(self, dependency):
         with self.store.lock:
             try:

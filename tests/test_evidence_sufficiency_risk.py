@@ -266,7 +266,8 @@ def test_inconsistent_negative_gate_gets_one_repair_without_promotion(state):
     async def call(stage,system,packet):
         if len(outputs)==1: assert 'must not be promoted' in system
         return ChatResult(content=json.dumps(outputs.pop(0)))
-    with pytest.raises(ValueError,match='cannot promote'):
+    from memoria.memory.read_diagnostics import VerificationFailure
+    with pytest.raises(VerificationFailure,match='negative_gate_repair_promotion'):
         asyncio.run(verify(call,'sufficiency','Assess',{},
             lambda value:EvidenceSufficiency().validate(value,evidence()),errors))
     assert len(errors)==2
