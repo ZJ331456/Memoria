@@ -50,6 +50,7 @@ class FallbackModel:
         self.calls, self.gates, self.derivations, self.fallbacks = [], 0, 0, 0
         self.undated = False
         self.reader_abstain = False
+        self.best_effort_abstain = False
         self.gate_sufficient = False
 
     async def chat(self, messages, **kwargs):
@@ -105,7 +106,10 @@ class FallbackModel:
             section = next(s for s in sections if s.name in {'Structured State', 'Source Evidence'})
             packet = json.loads(section.content.rsplit('\n', 1)[-1])
             ids = packet.get('allowed_evidence_ids') or [e['citation'] for e in packet['evidence']]
-            if self.reader_abstain:
+            best_effort = 'FINAL' in messages[0]['content'] and 'best-effort attempt' in messages[0]['content']
+            if self.best_effort_abstain and best_effort:
+                value = {'status': 'abstain', 'answer': 'cannot determine', 'evidence_ids': []}
+            elif self.reader_abstain:
                 value = {'status': 'abstain', 'answer': 'cannot determine', 'evidence_ids': []}
             else:
                 value = {'status': 'answer', 'answer': 'April 2023', 'evidence_ids': ids[:1]}
@@ -145,16 +149,31 @@ def test_reader_abstain_on_inference_question_uses_fallback(tmp_path):
         assert result['access']['adaptive']['knowledge_fallback']['exit'] == 'reader_abstained'
 
 
-def test_rejected_derivation_keeps_the_evidence_refusal(tmp_path):
+def test_rejected_derivation_falls_back_to_best_effort_reader(tmp_path):
+    """Derivation rejected, but the pool evidence answers the question: publish."""
     for kernel, model, session_id in library_core(tmp_path):
         model.derive = 'missing'
         result = asyncio.run(kernel.answer(KnowledgeAnswer(query=QUESTION, limit=4,
             session_id=session_id, budget_chars=16000, use_adaptive_retrieval=True)))
-        assert result['status'] == 'abstain'
-        assert result['validation']['reason'] == 'required_evidence_not_established'
+        assert result['status'] == 'answer', result
         trace = result['access']['adaptive']
         assert trace['derivation_review']['accepted'] is False
+        assert trace['best_effort_reader']['accepted'] is True
+        assert result['validation']['best_effort'] is True
         assert 'knowledge_fallback' not in trace  # factual when-question never falls back
+
+
+def test_best_effort_reader_abstain_keeps_the_refusal(tmp_path):
+    """When even the best-effort Reader finds nothing usable, the refusal stands."""
+    for kernel, model, session_id in library_core(tmp_path):
+        model.derive = 'missing'
+        model.best_effort_abstain = True
+        result = asyncio.run(kernel.answer(KnowledgeAnswer(query=QUESTION, limit=4,
+            session_id=session_id, budget_chars=16000, use_adaptive_retrieval=True)))
+        assert result['status'] == 'abstain'
+        trace = result['access']['adaptive']
+        assert trace['best_effort_reader']['reason'] == 'reader_abstained'
+        assert result['validation']['reason'] == 'required_evidence_not_established'
 
 
 def test_knowledge_fallback_only_for_inference_flavored_questions(tmp_path):

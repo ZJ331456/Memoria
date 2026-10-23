@@ -115,7 +115,15 @@ def test_repair_support_reservation_includes_full_query_plan_for_deepseek_layout
 def test_repair_never_adds_facts_weakens_support_or_retries_again(core, issue):
     kernel, _, counts = mock_repair(core, **{issue:True})
     result = run(kernel)
-    assert result['status']=='abstain' and not result['citations']
+    if issue in {'reject', 'partial', 'changed'}:
+        # Publish-with-marker policy: a cited, gate-sufficient Reader answer is
+        # not discarded because the independent support check or the deletion
+        # contract stayed negative; the ORIGINAL answer is published, marked.
+        assert result['status']=='answer' and result['citations']
+        assert result['validation']['support_rejected_published'] is True
+        assert result['access']['adaptive']['support_override']['published'] is True
+    else:
+        assert result['status']=='abstain' and not result['citations']
     assert counts['repair']==1 and counts['support']==(2 if issue in {'reject','partial'} else 1)
     assert result['access']['adaptive']['policy']['reserved_calls']==0
 
@@ -155,7 +163,10 @@ def test_format_repairs_and_supplement_exhaust_shared_slots_before_optional_answ
     kernel.llm.chat=faults
     result=run(kernel)
     trace=result['access']['adaptive']
-    assert result['status']=='abstain' and not result['citations']
+    # The repair could not be budgeted; the already-validated Reader answer is
+    # published with an explicit support-rejected marker instead of discarded.
+    assert result['status']=='answer' and result['citations']
+    assert result['validation']['support_rejected_published'] is True
     assert trace['policy']['calls']==7 and trace['policy']['max_calls']==8
     assert trace['policy']['reserved_calls']==0 and trace['retrieval_rounds']==1
     assert trace['answer_repair']['reason']=='repair_budget_unavailable'

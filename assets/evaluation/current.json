@@ -1,14 +1,14 @@
 {
   "schema": "memoria-public-eval-2",
-  "run_id": "20261022T180422Z-2bca6b8b",
+  "run_id": "20261023T224535Z-787bf2e9",
   "status": "failed",
-  "started_at_utc": "2026-10-22T18:04:22.361075+00:00",
-  "finished_at_utc": "2026-10-22T18:53:50.610973+00:00",
-  "elapsed_ms": 2968253.666,
-  "protocol": "kernel-vs-context-llm-judge-v3-ordered-histories",
+  "started_at_utc": "2026-10-23T22:45:35.129345+00:00",
+  "finished_at_utc": "2026-10-23T23:21:46.842624+00:00",
+  "elapsed_ms": 2171717.99,
+  "protocol": "kernel-vs-context-llm-judge-v4-session-corpus-best-effort",
   "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
-  "code_commit": "dded78d9aee2bfe9feb5d74ab34aee7b4f3cd2a7",
-  "dirty_diff_sha256": "5514972b8ed87f92914cfbd1dade84aa2599ee5d4a2099fa0e1635c69180852c",
+  "code_commit": "a12b4e257c0b5ab9368278a3261fcdf84dab4a6d",
+  "dirty_diff_sha256": "e450a0683882558252af316b5eb55f037d867d2d0d286a41d62a8be3f88476e3",
   "model": "deepseek-flash",
   "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
   "category_counts": {
@@ -22,51 +22,51 @@
     {
       "arm": "memoria",
       "items": 1986,
-      "scored": 1602,
-      "errors": 384,
-      "correct": 962,
+      "scored": 1199,
+      "errors": 787,
+      "correct": 954,
       "by_group": {
         "1": {
           "items": 282,
-          "correct": 87,
-          "scored": 249,
-          "accuracy": 0.30851063829787234,
-          "unknown": 33
+          "correct": 173,
+          "scored": 220,
+          "accuracy": 0.6134751773049646,
+          "unknown": 62
         },
         "2": {
           "items": 321,
-          "correct": 4,
-          "scored": 165,
-          "accuracy": 0.012461059190031152,
-          "unknown": 156
+          "correct": 180,
+          "scored": 265,
+          "accuracy": 0.5607476635514018,
+          "unknown": 56
         },
         "3": {
           "items": 96,
-          "correct": 3,
-          "scored": 89,
-          "accuracy": 0.03125,
-          "unknown": 7
+          "correct": 41,
+          "scored": 80,
+          "accuracy": 0.4270833333333333,
+          "unknown": 16
         },
         "4": {
           "items": 841,
-          "correct": 454,
-          "scored": 671,
-          "accuracy": 0.539833531510107,
-          "unknown": 170
+          "correct": 485,
+          "scored": 552,
+          "accuracy": 0.5766944114149821,
+          "unknown": 289
         },
         "5": {
           "items": 446,
-          "correct": 414,
-          "scored": 428,
-          "accuracy": 0.9282511210762332,
-          "unknown": 18
+          "correct": 75,
+          "scored": 82,
+          "accuracy": 0.1681614349775785,
+          "unknown": 364
         }
       },
       "primary": {
         "items": 1540,
-        "correct": 548,
-        "scored": 1174,
-        "accuracy": 0.35584415584415585,
+        "correct": 879,
+        "scored": 1117,
+        "accuracy": 0.5707792207792208,
         "scope": "LoCoMo categories 1-4; category 5 separately"
       },
       "cost": {
@@ -84,61 +84,166 @@
         },
         "estimate": {
           "off_peak": {
-            "known_input_usd": 2.8792117499999996,
-            "known_input_output_usd": 3.6009853499999998,
-            "effective_input_usd_per_million": 0.11806750906293194,
-            "input_without_cache_usd": 3.6579222
+            "known_input_usd": 3.752999385,
+            "known_input_output_usd": 4.6585505849999995,
+            "effective_input_usd_per_million": 0.015148813075769776,
+            "input_without_cache_usd": 37.16132115
           },
           "peak": {
-            "known_input_usd": 5.758423499999999,
-            "known_input_output_usd": 7.2019706999999995,
-            "effective_input_usd_per_million": 0.23613501812586388,
-            "input_without_cache_usd": 7.3158444
+            "known_input_usd": 7.50599877,
+            "known_input_output_usd": 9.317101169999999,
+            "effective_input_usd_per_million": 0.030297626151539553,
+            "input_without_cache_usd": 74.3226423
           }
         },
         "invoice": false,
-        "complete_usage": true,
+        "complete_usage": false,
         "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
       },
-      "latency_ms": 3580.2159233629613,
-      "checkpointed": 1986,
-      "not_run": 0,
-      "execution_errors": {
-        "kernel_execution_failure:adaptive_budget_or_contract_failure": 379,
-        "kernel_execution_failure:necessary_group_over_budget": 5
+      "latency_ms": 8673.512001024734,
+      "diagnostics": {
+        "ordinary": {
+          "planned": 1540,
+          "scored": 1117,
+          "errors_or_unknown": 423,
+          "answer_actions": 952,
+          "refusal_actions": 165,
+          "clarify_actions": 0,
+          "wrong_answers": 73,
+          "wrong_refusals": 165,
+          "wrong_clarifications": 0
+        },
+        "adversarial": {
+          "planned": 446,
+          "scored": 82,
+          "errors_or_unknown": 364,
+          "answer_actions": 11,
+          "refusal_actions": 70,
+          "clarify_actions": 1,
+          "wrong_answers": 7,
+          "wrong_refusals": 0,
+          "wrong_clarifications": 0,
+          "overanswer_actions": 11,
+          "wrong_overanswers": 7
+        },
+        "gate_bindings": {
+          "observed_cases": 0,
+          "sufficient_cases": 0,
+          "cases_with_unassessed_candidates": 0,
+          "semantic_sufficiency_verified": false
+        },
+        "answer_repairs": {
+          "attempted": 0,
+          "accepted": 0,
+          "accepted_with_all_question_requirements": 0
+        },
+        "technical_errors": {
+          "kernel_execution_failure:adaptive_budget_or_contract_failure": 50,
+          "kernel_execution_failure:necessary_group_over_budget": 4,
+          "judge_unknown": 5,
+          "not_run:repeated_insufficient_balance": 520,
+          "kernel_execution_failure:no_bounded_live_candidates": 4,
+          "LibraryError: 上游模型暂不可用，原资料已保留；本次未发布知识或经验": 1,
+          "RuntimeError: formation_failed:LibraryError": 203
+        },
+        "pipeline_stages": {
+          "initial_candidates": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "final_candidates": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "gate_bound_evidence": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "reader_evidence": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "published_citations": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          }
+        },
+        "gold_undefined_cases": 1986,
+        "unavailable_gold_cases": 0,
+        "interpretation": "Judge-based error labels; actions exclude execution/judge failures. Hint/summary visibility and gold IDs do not establish semantic use."
       },
-      "status": "complete",
-      "calls": 7027,
+      "checkpointed": 1986,
+      "not_run": 520,
+      "execution_errors": {
+        "kernel_execution_failure:adaptive_budget_or_contract_failure": 50,
+        "kernel_execution_failure:necessary_group_over_budget": 4,
+        "judge_unknown": 5,
+        "kernel_execution_failure:no_bounded_live_candidates": 4,
+        "LibraryError: 上游模型暂不可用，原资料已保留；本次未发布知识或经验": 1,
+        "RuntimeError: formation_failed:LibraryError": 203
+      },
+      "status": "stopped",
+      "calls": 6167,
       "usage": {
-        "calls": 7027,
-        "known_cache_calls": 7027,
-        "unknown_cache_calls": 0,
+        "calls": 6167,
+        "known_cache_calls": 6137,
+        "unknown_cache_calls": 30,
         "invalid_cache_calls": 0,
-        "prompt_cache_hit_tokens": 5297350,
-        "prompt_cache_miss_tokens": 19088798,
-        "known_prompt_tokens": 24386148,
-        "completion_tokens_known": 1202956,
+        "prompt_cache_hit_tokens": 227267495,
+        "prompt_cache_miss_tokens": 20474646,
+        "known_prompt_tokens": 247742141,
+        "completion_tokens_known": 1509252,
         "unknown_completion_calls": 0,
-        "token_weighted_hit_rate": 0.21722782950386424,
-        "complete": true,
+        "token_weighted_hit_rate": 0.9173550130900016,
+        "complete": false,
         "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
       },
       "stages": [
         {
           "stage": "answer_and_support",
-          "calls": 4881,
+          "calls": 4434,
           "usage": {
-            "calls": 4881,
-            "known_cache_calls": 4881,
-            "unknown_cache_calls": 0,
+            "calls": 4434,
+            "known_cache_calls": 4409,
+            "unknown_cache_calls": 25,
             "invalid_cache_calls": 0,
-            "prompt_cache_hit_tokens": 4579835,
-            "prompt_cache_miss_tokens": 16682977,
-            "known_prompt_tokens": 21262812,
-            "completion_tokens_known": 775774,
+            "prompt_cache_hit_tokens": 226499832,
+            "prompt_cache_miss_tokens": 16061857,
+            "known_prompt_tokens": 242561689,
+            "completion_tokens_known": 1060853,
             "unknown_completion_calls": 0,
-            "token_weighted_hit_rate": 0.21539178355148886,
-            "complete": true,
+            "token_weighted_hit_rate": 0.9337823830868855,
+            "complete": false,
             "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
           },
           "cost": {
@@ -156,39 +261,39 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 2.516186055,
-                "known_input_output_usd": 2.981650455,
-                "effective_input_usd_per_million": 0.11833740781793112,
-                "input_without_cache_usd": 3.1894218
+                "known_input_usd": 3.0887780460000003,
+                "known_input_output_usd": 3.7252898460000003,
+                "effective_input_usd_per_million": 0.01273398968622782,
+                "input_without_cache_usd": 36.38425335
               },
               "peak": {
-                "known_input_usd": 5.03237211,
-                "known_input_output_usd": 5.96330091,
-                "effective_input_usd_per_million": 0.23667481563586223,
-                "input_without_cache_usd": 6.3788436
+                "known_input_usd": 6.1775560920000006,
+                "known_input_output_usd": 7.450579692000001,
+                "effective_input_usd_per_million": 0.02546797937245564,
+                "input_without_cache_usd": 72.7685067
               }
             },
             "invoice": false,
-            "complete_usage": true,
+            "complete_usage": false,
             "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
           },
-          "summed_call_ms": 7010615.786599286
+          "summed_call_ms": 11099471.613197472
         },
         {
           "stage": "formation",
-          "calls": 544,
+          "calls": 530,
           "usage": {
-            "calls": 544,
-            "known_cache_calls": 544,
-            "unknown_cache_calls": 0,
+            "calls": 530,
+            "known_cache_calls": 529,
+            "unknown_cache_calls": 1,
             "invalid_cache_calls": 0,
-            "prompt_cache_hit_tokens": 238080,
-            "prompt_cache_miss_tokens": 2057093,
-            "known_prompt_tokens": 2295173,
-            "completion_tokens_known": 364794,
+            "prompt_cache_hit_tokens": 349824,
+            "prompt_cache_miss_tokens": 4193343,
+            "known_prompt_tokens": 4543167,
+            "completion_tokens_known": 403425,
             "unknown_completion_calls": 0,
-            "token_weighted_hit_rate": 0.10373074273703986,
-            "complete": true,
+            "token_weighted_hit_rate": 0.07700003103561899,
+            "complete": false,
             "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
           },
           "cost": {
@@ -206,39 +311,39 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.30927819,
-                "known_input_output_usd": 0.52815459,
-                "effective_input_usd_per_million": 0.13475158081765515,
-                "input_without_cache_usd": 0.34427595
+                "known_input_usd": 0.6300509219999999,
+                "known_input_output_usd": 0.8721059219999999,
+                "effective_input_usd_per_million": 0.138680995437764,
+                "input_without_cache_usd": 0.68147505
               },
               "peak": {
-                "known_input_usd": 0.61855638,
-                "known_input_output_usd": 1.05630918,
-                "effective_input_usd_per_million": 0.2695031616353103,
-                "input_without_cache_usd": 0.6885519
+                "known_input_usd": 1.2601018439999998,
+                "known_input_output_usd": 1.7442118439999998,
+                "effective_input_usd_per_million": 0.277361990875528,
+                "input_without_cache_usd": 1.3629501
               }
             },
             "invoice": false,
-            "complete_usage": true,
+            "complete_usage": false,
             "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
           },
-          "summed_call_ms": 1814357.1066010045
+          "summed_call_ms": 1992114.4879002823
         },
         {
           "stage": "independent_judge",
-          "calls": 1602,
+          "calls": 1203,
           "usage": {
-            "calls": 1602,
-            "known_cache_calls": 1602,
-            "unknown_cache_calls": 0,
+            "calls": 1203,
+            "known_cache_calls": 1199,
+            "unknown_cache_calls": 4,
             "invalid_cache_calls": 0,
-            "prompt_cache_hit_tokens": 479435,
-            "prompt_cache_miss_tokens": 348728,
-            "known_prompt_tokens": 828163,
-            "completion_tokens_known": 62388,
+            "prompt_cache_hit_tokens": 417839,
+            "prompt_cache_miss_tokens": 219446,
+            "known_prompt_tokens": 637285,
+            "completion_tokens_known": 44974,
             "unknown_completion_calls": 0,
-            "token_weighted_hit_rate": 0.5789138128605118,
-            "complete": true,
+            "token_weighted_hit_rate": 0.6556548483017802,
+            "complete": false,
             "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
           },
           "cost": {
@@ -256,74 +361,74 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.053747504999999994,
-                "known_input_output_usd": 0.09118030499999999,
-                "effective_input_usd_per_million": 0.06489966950950476,
-                "input_without_cache_usd": 0.12422445
+                "known_input_usd": 0.034170417,
+                "known_input_output_usd": 0.061154817,
+                "effective_input_usd_per_million": 0.053618737299638314,
+                "input_without_cache_usd": 0.09559275
               },
               "peak": {
-                "known_input_usd": 0.10749500999999999,
-                "known_input_output_usd": 0.18236060999999998,
-                "effective_input_usd_per_million": 0.12979933901900953,
-                "input_without_cache_usd": 0.2484489
+                "known_input_usd": 0.068340834,
+                "known_input_output_usd": 0.122309634,
+                "effective_input_usd_per_million": 0.10723747459927663,
+                "input_without_cache_usd": 0.1911855
               }
             },
             "invoice": false,
-            "complete_usage": true,
+            "complete_usage": false,
             "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
           },
-          "summed_call_ms": 1418971.7932002968
+          "summed_call_ms": 1628189.0677991323
         }
       ]
     },
     {
       "arm": "raw_context",
       "items": 1986,
-      "scored": 1973,
-      "errors": 13,
-      "correct": 1753,
+      "scored": 0,
+      "errors": 1986,
+      "correct": 0,
       "by_group": {
         "1": {
           "items": 282,
-          "correct": 254,
-          "scored": 277,
-          "accuracy": 0.900709219858156,
-          "unknown": 5
+          "correct": 0,
+          "scored": 0,
+          "accuracy": 0.0,
+          "unknown": 282
         },
         "2": {
           "items": 321,
-          "correct": 263,
-          "scored": 320,
-          "accuracy": 0.8193146417445483,
-          "unknown": 1
+          "correct": 0,
+          "scored": 0,
+          "accuracy": 0.0,
+          "unknown": 321
         },
         "3": {
           "items": 96,
-          "correct": 44,
-          "scored": 96,
-          "accuracy": 0.4583333333333333,
-          "unknown": 0
+          "correct": 0,
+          "scored": 0,
+          "accuracy": 0.0,
+          "unknown": 96
         },
         "4": {
           "items": 841,
-          "correct": 784,
-          "scored": 835,
-          "accuracy": 0.9322235434007135,
-          "unknown": 6
+          "correct": 0,
+          "scored": 0,
+          "accuracy": 0.0,
+          "unknown": 841
         },
         "5": {
           "items": 446,
-          "correct": 408,
-          "scored": 445,
-          "accuracy": 0.9147982062780269,
-          "unknown": 1
+          "correct": 0,
+          "scored": 0,
+          "accuracy": 0.0,
+          "unknown": 446
         }
       },
       "primary": {
         "items": 1540,
-        "correct": 1345,
-        "scored": 1528,
-        "accuracy": 0.8733766233766234,
+        "correct": 0,
+        "scored": 0,
+        "accuracy": 0.0,
         "scope": "LoCoMo categories 1-4; category 5 separately"
       },
       "cost": {
@@ -341,172 +446,165 @@
         },
         "estimate": {
           "off_peak": {
-            "known_input_usd": 0.402883716,
-            "known_input_output_usd": 0.554653716,
-            "effective_input_usd_per_million": 0.0051035334067694215,
-            "input_without_cache_usd": 11.8413171
+            "known_input_usd": 0.0,
+            "known_input_output_usd": 0.0,
+            "effective_input_usd_per_million": null,
+            "input_without_cache_usd": 0.0
           },
           "peak": {
-            "known_input_usd": 0.805767432,
-            "known_input_output_usd": 1.109307432,
-            "effective_input_usd_per_million": 0.010207066813538843,
-            "input_without_cache_usd": 23.6826342
+            "known_input_usd": 0.0,
+            "known_input_output_usd": 0.0,
+            "effective_input_usd_per_million": null,
+            "input_without_cache_usd": 0.0
           }
         },
         "invoice": false,
         "complete_usage": true,
         "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
       },
-      "latency_ms": 1428.5687390230523,
-      "checkpointed": 1986,
-      "not_run": 0,
-      "execution_errors": {
-        "invalid_answer_contract": 13
+      "latency_ms": null,
+      "diagnostics": {
+        "ordinary": {
+          "planned": 1540,
+          "scored": 0,
+          "errors_or_unknown": 1540,
+          "answer_actions": 0,
+          "refusal_actions": 0,
+          "clarify_actions": 0,
+          "wrong_answers": 0,
+          "wrong_refusals": 0,
+          "wrong_clarifications": 0
+        },
+        "adversarial": {
+          "planned": 446,
+          "scored": 0,
+          "errors_or_unknown": 446,
+          "answer_actions": 0,
+          "refusal_actions": 0,
+          "clarify_actions": 0,
+          "wrong_answers": 0,
+          "wrong_refusals": 0,
+          "wrong_clarifications": 0,
+          "overanswer_actions": 0,
+          "wrong_overanswers": 0
+        },
+        "gate_bindings": {
+          "observed_cases": 0,
+          "sufficient_cases": 0,
+          "cases_with_unassessed_candidates": 0,
+          "semantic_sufficiency_verified": false
+        },
+        "answer_repairs": {
+          "attempted": 0,
+          "accepted": 0,
+          "accepted_with_all_question_requirements": 0
+        },
+        "technical_errors": {
+          "not_run:repeated_insufficient_balance": 1986
+        },
+        "pipeline_stages": {
+          "initial_candidates": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "final_candidates": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "gate_bound_evidence": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "reader_evidence": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          },
+          "published_citations": {
+            "observed_cases": 0,
+            "cases_with_consolidated_summaries": 0,
+            "cases_with_observation_hints": 0,
+            "cases_with_visible_observation_summaries": 0,
+            "all_gold_visible_eligible_cases": 0,
+            "all_gold_visible_observed_cases": 0,
+            "all_gold_visible_unknown_stage_cases": 0,
+            "all_gold_ids_present_cases": 0
+          }
+        },
+        "gold_undefined_cases": 1986,
+        "unavailable_gold_cases": 0,
+        "interpretation": "Judge-based error labels; actions exclude execution/judge failures. Hint/summary visibility and gold IDs do not establish semantic use."
       },
-      "status": "complete",
-      "calls": 3959,
+      "checkpointed": 1986,
+      "not_run": 1986,
+      "execution_errors": {},
+      "status": "stopped",
+      "calls": 0,
       "usage": {
-        "calls": 3959,
-        "known_cache_calls": 3959,
+        "calls": 0,
+        "known_cache_calls": 0,
         "unknown_cache_calls": 0,
         "invalid_cache_calls": 0,
-        "prompt_cache_hit_tokens": 77812472,
-        "prompt_cache_miss_tokens": 1129642,
-        "known_prompt_tokens": 78942114,
-        "completion_tokens_known": 252950,
+        "prompt_cache_hit_tokens": 0,
+        "prompt_cache_miss_tokens": 0,
+        "known_prompt_tokens": 0,
+        "completion_tokens_known": 0,
         "unknown_completion_calls": 0,
-        "token_weighted_hit_rate": 0.9856902489335414,
+        "token_weighted_hit_rate": null,
         "complete": true,
         "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
       },
-      "stages": [
-        {
-          "stage": "answer_and_support",
-          "calls": 1986,
-          "usage": {
-            "calls": 1986,
-            "known_cache_calls": 1986,
-            "unknown_cache_calls": 0,
-            "invalid_cache_calls": 0,
-            "prompt_cache_hit_tokens": 77072768,
-            "prompt_cache_miss_tokens": 769986,
-            "known_prompt_tokens": 77842754,
-            "completion_tokens_known": 174533,
-            "unknown_completion_calls": 0,
-            "token_weighted_hit_rate": 0.9901084434910923,
-            "complete": true,
-            "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
-          },
-          "cost": {
-            "rates": {
-              "off_peak": {
-                "hit": 0.003,
-                "miss": 0.15,
-                "output": 0.6
-              },
-              "peak": {
-                "hit": 0.006,
-                "miss": 0.3,
-                "output": 1.2
-              }
-            },
-            "estimate": {
-              "off_peak": {
-                "known_input_usd": 0.34671620400000003,
-                "known_input_output_usd": 0.45143600400000006,
-                "effective_input_usd_per_million": 0.00445405880680943,
-                "input_without_cache_usd": 11.6764131
-              },
-              "peak": {
-                "known_input_usd": 0.6934324080000001,
-                "known_input_output_usd": 0.9028720080000001,
-                "effective_input_usd_per_million": 0.00890811761361886,
-                "input_without_cache_usd": 23.3528262
-              }
-            },
-            "invoice": false,
-            "complete_usage": true,
-            "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
-          },
-          "summed_call_ms": 2814671.6071984265
-        },
-        {
-          "stage": "independent_judge",
-          "calls": 1973,
-          "usage": {
-            "calls": 1973,
-            "known_cache_calls": 1973,
-            "unknown_cache_calls": 0,
-            "invalid_cache_calls": 0,
-            "prompt_cache_hit_tokens": 739704,
-            "prompt_cache_miss_tokens": 359656,
-            "known_prompt_tokens": 1099360,
-            "completion_tokens_known": 78417,
-            "unknown_completion_calls": 0,
-            "token_weighted_hit_rate": 0.6728496579828264,
-            "complete": true,
-            "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
-          },
-          "cost": {
-            "rates": {
-              "off_peak": {
-                "hit": 0.003,
-                "miss": 0.15,
-                "output": 0.6
-              },
-              "peak": {
-                "hit": 0.006,
-                "miss": 0.3,
-                "output": 1.2
-              }
-            },
-            "estimate": {
-              "off_peak": {
-                "known_input_usd": 0.056167512,
-                "known_input_output_usd": 0.103217712,
-                "effective_input_usd_per_million": 0.051091100276524526,
-                "input_without_cache_usd": 0.164904
-              },
-              "peak": {
-                "known_input_usd": 0.112335024,
-                "known_input_output_usd": 0.206435424,
-                "effective_input_usd_per_million": 0.10218220055304905,
-                "input_without_cache_usd": 0.329808
-              }
-            },
-            "invoice": false,
-            "complete_usage": true,
-            "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
-          },
-          "summed_call_ms": 1794002.490300918
-        }
-      ]
+      "stages": []
     }
   ],
   "formation_table_counts": {
-    "library_sources": 272,
-    "library_observations": 2424,
-    "library_consolidations": 15,
+    "library_sources": 255,
+    "library_observations": 2439,
+    "library_consolidations": 2252,
     "memories": 0
   },
   "baseline_visibility": {
-    "completed": 1986,
+    "completed": 0,
     "truncated_questions": 0,
     "max_dropped_turns": 0
   },
   "formation_admission": {
     "observation_statuses": {
-      "approved": 15,
-      "needs_assistance": 2409
+      "approved": 2385,
+      "needs_assistance": 54
     },
     "admission_reasons_overlapping": {
-      "subject_binding_missing": 2407,
-      "model_support_or_scope_not_verified": 40,
-      "unknown_subject_topic_or_epistemic": 6,
-      "sensitive_observation": 9
+      "subject_binding_missing": 10,
+      "model_support_or_scope_not_verified": 35,
+      "unknown_subject_topic_or_epistemic": 4,
+      "sensitive_observation": 8
     },
     "consolidation_head_statuses": {
-      "no_head": 15
+      "no_head": 2243,
+      "approved": 9
     }
   },
   "limits": [
@@ -515,61 +613,5 @@
     "Failures and unscored cases retained in planned denominator; partial accuracy is a lower bound.",
     "Latency is answer-stage; formation and judge calls/cost are separate.",
     "Estimated frozen-price cost, not provider invoice. Private raw data are excluded."
-  ],
-  "runtime_source_manifest": "source-code.manifest.json",
-  "runtime_source_tree_sha256": "f166ee543e054a560c302d7add4af96c6877a0a7054749a7806908185bf96e42",
-  "preflight_accounting": {
-    "run_id": "20261022T175122Z-76906604",
-    "quality_excluded": true,
-    "returned_calls": 471,
-    "reserved_requests": 472,
-    "unfinished_reservations": 1,
-    "unfinished_reserved_upper_usd": 0.008544600000000001,
-    "usage": {
-      "calls": 471,
-      "known_cache_calls": 471,
-      "unknown_cache_calls": 0,
-      "invalid_cache_calls": 0,
-      "prompt_cache_hit_tokens": 210560,
-      "prompt_cache_miss_tokens": 1413780,
-      "known_prompt_tokens": 1624340,
-      "completion_tokens_known": 86905,
-      "unknown_completion_calls": 0,
-      "token_weighted_hit_rate": 0.12962803353977614,
-      "complete": true,
-      "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
-    },
-    "cost": {
-      "rates": {
-        "off_peak": {
-          "hit": 0.003,
-          "miss": 0.15,
-          "output": 0.6
-        },
-        "peak": {
-          "hit": 0.006,
-          "miss": 0.3,
-          "output": 1.2
-        }
-      },
-      "estimate": {
-        "off_peak": {
-          "known_input_usd": 0.21269868,
-          "known_input_output_usd": 0.26484168,
-          "effective_input_usd_per_million": 0.1309446790696529,
-          "input_without_cache_usd": 0.243651
-        },
-        "peak": {
-          "known_input_usd": 0.42539736,
-          "known_input_output_usd": 0.52968336,
-          "effective_input_usd_per_million": 0.2618893581393058,
-          "input_without_cache_usd": 0.487302
-        }
-      },
-      "invoice": false,
-      "complete_usage": true,
-      "scope": "known valid usage only; pricing snapshot, not historical billing; no inferred holiday/period"
-    },
-    "note": "Unknown in-flight usage remains unknown; not a zero-cost retry."
-  }
+  ]
 }

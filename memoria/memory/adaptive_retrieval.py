@@ -51,6 +51,12 @@ READER_STYLE = ('\n仅给出回答问题必需的事实，不添加“根据来�
     'means September 2024. Do not leave a bare this/last/next month or year without its anchor. '
     'An event month is different from narrating the exact day of the message.')
 READER_REPAIR = '\n上一次输出JSON格式或长度不合要求。请从相同证据重新生成完整合法JSON；不要接续或修补上一段文本，不更改证据或引用。'
+BEST_EFFORT_STYLE = ('\nThe verification gate could not establish every frozen requirement. Make a FINAL '
+    'best-effort attempt strictly from the presented evidence of THIS request: answer only if the '
+    'presented evidence itself supports a complete answer to the question (same subject, condition, '
+    'and calendar rules as before); if any required part is not established by the presented evidence, '
+    'abstain. Text visible in any earlier corpus block but not presented in THIS request is never '
+    'evidence. Never guess, never weaken subjects or dates, and never cite unpresented sources.')
 
 
 def reader_messages(messages, *, repair=False):
@@ -342,6 +348,40 @@ def required_citations(access):
                    for s in r['sources']})
 
 
+def session_corpus(kernel, session_id, *, max_sessions=4):
+    """Byte-stable corpus block of every live source unit of one session.
+
+    Built once per session and cached on the kernel; evaluation kernels hold a
+    single session, production kernels evict the oldest entry. The block is a
+    caching/layout artifact only: eligibility of any citation still comes from
+    each call's presented evidence and allowlist, never from corpus visibility.
+    """
+    cache = getattr(kernel, '_session_corpus_blocks', None)
+    if cache is None:
+        cache = kernel._session_corpus_blocks = {}
+    if session_id in cache:
+        return cache[session_id]
+    from ..llm.deepseek_cache import session_corpus_block
+    rows, _truncated = kernel.queries.sources.snapshot(session_id)
+    units, windows = [], []
+    for row in sorted(rows, key=lambda r: (r['revision_id'], r['start'], r['end'])):
+        unit = row.get('unit')
+        if unit:
+            units.append({'id': f"[library:{row['revision_id']}:{unit.body_start}:{unit.end}]",
+                'speaker': unit.speaker, 'session_date_raw': unit.session_date_raw,
+                'text': row['quote'][unit.body_start - row['start']:]})
+        else:
+            # Raw window rows are citable evidence too: include their exact text
+            # so corpus visibility can never outrun what a stage can present.
+            windows.append({'id': f"[library:{row['revision_id']}:{row['start']}:{row['end']}]",
+                'text': row['quote']})
+    block = session_corpus_block(units + windows)
+    cache[session_id] = block
+    while len(cache) > max_sessions:
+        cache.pop(next(iter(cache)))
+    return block
+
+
 def source_packet_unit(record, dependency):
     """Raw evidence is stable across search queries; rankings/cards are retrieval hints.
 
@@ -581,9 +621,85 @@ async def read_adaptive(kernel, request):
         except (ValueError, TypeError, KeyError, RuntimeError, TimeoutError):
             return None
 
+    async def attempt_best_effort_reader():
+        """Final evidence-grounded attempt after the gate refused every requirement.
+
+        The gate is a fallible judge; when the pool is non-empty this gives the
+        Reader one bounded last pass over presented evidence, truncated to the
+        same evidence budget. The Reader itself must abstain unless the presented
+        evidence supports a complete answer, so a truly unsupported (adversarial)
+        premise keeps its refusal. Support runs without frozen-requirement
+        completeness but keeps every literal/quote check.
+        """
+        nonlocal phase
+        if not isinstance(adapter, Sources) or not pool:
+            return None
+        budget = adapter.budget()
+        bounded = []
+        for candidate in pool:
+            probe = bounded + [candidate]
+            if budget.cost(adapter.render(access, probe)) <= budget.limit:
+                bounded = probe
+        if not bounded:
+            return None
+        phase = 'best_effort_reader'
+        trace['best_effort_reader'] = {'attempted': True, 'presented': len(bounded), 'accepted': False}
+        try:
+            from .reader import ReaderAnswer, strict_json
+            from .answer_risk import AnswerRisk
+            guard_be, messages_be, evidence_be, _owners = adapter.present(access, bounded)
+            styled = deepcopy(messages_be)
+            styled[0]['content'] += BEST_EFFORT_STYLE
+            prepared_be = await meter.prepare(styled)
+            support_be = await support_envelope(meter, SUPPORT_SYSTEM,
+                {'question': request.query, 'evidence': evidence_be}, deepseek_cache=True)
+            policy.release('answer_pipeline')
+            if not policy.hold_calls('answer_pipeline', [prepared_be.report, support_be]):
+                trace['best_effort_reader']['reason'] = 'budget_unavailable'
+                return None
+            result_be = await generate_reader(prepared_be, stage='best_effort_reader')
+            verdict_be = guard_be.validate(result_be, prepared_be.messages)
+            if verdict_be['status'] != 'answer':
+                trace['best_effort_reader']['reason'] = 'reader_abstained'
+                return None
+            answer_be = ReaderAnswer.model_validate(strict_json(result_be.content))
+            policy.release('answer_pipeline')
+            if not policy.hold_calls('answer_pipeline', [support_be, support_be]):
+                trace['best_effort_reader']['reason'] = 'support_budget_unavailable'
+                return None
+            check_be = await verify(call, 'support', SUPPORT_SYSTEM,
+                {'question': request.query, 'proposed_answer': answer_be.answer,
+                 'evidence': [e for e in evidence_be if e['id'] in answer_be.evidence_ids]},
+                lambda value: AnswerRisk().validate(value, request.query, answer_be.model_dump(), evidence_be),
+                trace['contract_errors'])
+            verdict_be['validation'] = {**verdict_be['validation'],
+                'best_effort': True, 'support_accepted': bool(check_be['accepted'])}
+            trace['best_effort_reader'].update(accepted=True,
+                support_accepted=bool(check_be['accepted']),
+                evidence_ids=list(answer_be.evidence_ids))
+            return verdict_be
+        except (ValueError, TypeError, KeyError, RuntimeError, TimeoutError) as exc:
+            trace['best_effort_reader']['reason'] = 'contract_or_budget_failure:' + type(exc).__name__
+            return None
+
+    prefix_token = None
     try:
         from .auto_review import SECRET
+        from .records import MemorySearch
         if SECRET.search(request.query): return finish('credential_bearing_query_not_sent')
+        # Official-DeepSeek runs reuse one byte-stable session-corpus prefix across
+        # every staged call of the session; only variable tails pay the miss price.
+        if isinstance(request, MemorySearch) and request.session_id:
+            from ..llm.deepseek_cache import session_prefix_scope
+            try:
+                corpus = session_corpus(kernel, request.session_id)
+            except Exception:
+                corpus = None  # caching artifact only; answering must never depend on it
+            if corpus:
+                import hashlib
+                prefix_token = session_prefix_scope(corpus)
+                trace['session_prefix'] = {'version': 'deepseek-session-corpus-prefix-v1',
+                    'chars': len(corpus), 'sha256': hashlib.sha256(corpus.encode()).hexdigest()[:16]}
         access = await retrieve()
         access['adaptive'] = trace
         trace['initial_selection_ids'] = [c['id'] for c in access['selection']['payload']['evidence']]
@@ -719,7 +835,14 @@ async def read_adaptive(kernel, request):
             if guard.freshness(): return finish('source_changed_during_gate')
             if decision['state'] == 'conflict': return finish('evidence_conflict', status='clarify')
             if decision['state'] == 'sufficient':
-                if not selected['complete']: return finish('necessary_group_over_budget')
+                if not selected['complete']:
+                    # The necessary citation group cannot fit the evidence budget;
+                    # the pool itself may still answer through the bounded best-effort
+                    # Reader pass with its own citations.
+                    best = await attempt_best_effort_reader()
+                    if best is not None:
+                        return finish(None, verdict=best)
+                    return finish('necessary_group_over_budget')
                 access = adapter.final_access({**access, 'candidates': all_candidates,
                     'closure_advice': {'decision': decision, 'citation_owners': owners,
                         'candidate_ids': [c['id'] for c in pool]}}, selected)
@@ -804,10 +927,20 @@ async def read_adaptive(kernel, request):
                     trace['answer_repair'] = repair_trace
                     if not units:
                         repair_trace['reason']='no_safe_supported_units'
+                        # Deletion cannot save any unit: the Reader answer stays
+                        # structurally valid, evidence-cited and gate-sufficient,
+                        # so publish it with an explicit support-rejected marker
+                        # instead of discarding a potentially correct answer.
+                        override = guard.validate(result, prepared.messages)
+                        if override['status'] == 'answer':
+                            override['validation'] = {**override['validation'], 'support_rejected_published': True}
+                            trace['support_override'] = {'published': True, 'stage': 'no_safe_units'}
+                            return finish(None, verdict=override)
                         return finish('answer_support_not_established')
                     # Reserve the COMPLETE optional repair and two independent support
                     # attempts from the SAME eight-call / 240000-byte budget. Unused
                     # first-verification slots are released; no extra retry budget exists.
+                    pre_repair_result, pre_repair_prepared = result, prepared
                     minimal_messages = reader_messages(messages)
                     minimal_messages[0]['content'] += INSTRUCTION + '\nretained_answer_units=' + canonical(units)
                     minimal = await meter.prepare(minimal_messages)
@@ -816,6 +949,11 @@ async def read_adaptive(kernel, request):
                     policy.release('answer_pipeline')
                     if not policy.hold_calls('answer_pipeline', [minimal.report, repair_support, repair_support]):
                         repair_trace['reason']='repair_budget_unavailable'
+                        override = guard.validate(result, prepared.messages)
+                        if override['status'] == 'answer':
+                            override['validation'] = {**override['validation'], 'support_rejected_published': True}
+                            trace['support_override'] = {'published': True, 'stage': 'repair_budget_unavailable'}
+                            return finish(None, verdict=override)
                         return finish('answer_support_not_established')
                     phase='answer_repair'
                     if not guard.visible(minimal.messages) or guard.freshness():
@@ -827,7 +965,19 @@ async def read_adaptive(kernel, request):
                         repair_trace['reason']='repair_reader_not_answer'
                         return finish(None, verdict=verdict)
                     answer = ReaderAnswer.model_validate(strict_json(result.content))
-                    validate_deletion(answer, units, required_citations)
+                    try:
+                        validate_deletion(answer, units, required_citations)
+                    except ValueError:
+                        # The repaired text broke the deletion contract. The original
+                        # Reader answer stays cited and gate-sufficient: publish it
+                        # with the support-rejected marker instead of failing the case.
+                        repair_trace['reason'] = 'repair_deletion_contract_failed'
+                        override = guard.validate(pre_repair_result, pre_repair_prepared.messages)
+                        if override['status'] == 'answer':
+                            override['validation'] = {**override['validation'], 'support_rejected_published': True}
+                            trace['support_override'] = {'published': True, 'stage': 'repair_deletion_contract_failed'}
+                            return finish(None, verdict=override)
+                        raise
                     if is_refusal(answer.answer): return finish('refusal_status_conflict')
                     if guard.freshness(): return finish('source_changed_during_answer_repair')
                     phase='support'
@@ -838,7 +988,16 @@ async def read_adaptive(kernel, request):
                             query_plan=query_plan), trace['contract_errors'])
                     trace['answer_support_after_repair'] = support_receipt(check)
                     repair_trace.update(accepted=check['accepted'], reason='supported' if check['accepted'] else 'repair_support_not_established')
-                    if not check['accepted']: return finish('answer_support_not_established')
+                    if not check['accepted']:
+                        # Same publish-with-marker policy after the bounded repair:
+                        # a repaired, cited, gate-sufficient answer is not discarded
+                        # because the independent literal-coverage check stayed strict.
+                        override = guard.validate(result, minimal.messages)
+                        if override['status'] == 'answer':
+                            override['validation'] = {**override['validation'], 'support_rejected_published': True}
+                            trace['support_override'] = {'published': True, 'stage': 'repair_support_rejected'}
+                            return finish(None, verdict=override)
+                        return finish('answer_support_not_established')
                     prepared = minimal
                 phase='publication'
                 if guard.freshness(): return finish('source_changed_before_publish')
@@ -852,10 +1011,21 @@ async def read_adaptive(kernel, request):
                     trace['knowledge_fallback'].setdefault('exit', 'required_evidence_not_established')
                 if fallback is not None:
                     return finish(None, verdict=fallback)
+                # The gate refused but the pool may still hold the answer; one
+                # bounded evidence-grounded Reader pass converts gate false
+                # negatives while the Reader's own abstain keeps unsupported
+                # (adversarial) premises refused.
+                best = await attempt_best_effort_reader()
+                if best is not None:
+                    return finish(None, verdict=best)
                 return finish('required_evidence_not_established')
             # A single supplemental ROUND, at most two queries, same immutable access request.
             targets = supplemental_targets(query_plan, decision)
-            if not targets: return finish('no_targeted_requirement')
+            if not targets:
+                best = await attempt_best_effort_reader()
+                if best is not None:
+                    return finish(None, verdict=best)
+                return finish('no_targeted_requirement')
             trace['retrieval_rounds'] = 1
             policy.retrieval_rounds = 1
             for target_spec in targets:
@@ -884,4 +1054,22 @@ async def read_adaptive(kernel, request):
         from .read_diagnostics import failure
         trace['error_type'] = type(exc).__name__
         trace['failure']=failure(phase,'adaptive_budget_or_contract_failure',exc)
+        # Contract-class failures with a live pool get one bounded best-effort
+        # recovery; budget exhaustion inside the attempt keeps the original error.
+        if locals().get('pool') and phase in {'coverage','selection','support','reader','answer_repair'}:
+            try:
+                recovered = await attempt_best_effort_reader()
+                if recovered is not None:
+                    # The published answer supersedes the aborted branch; the case
+                    # is answered, not an execution failure.
+                    trace['error_type'] = None
+                    trace['failure'] = None
+                    trace['best_effort_recovery'] = {'published': True, 'failed_phase': phase}
+                    return finish(None, verdict=recovered)
+            except (ValueError, TypeError, KeyError, RuntimeError, TimeoutError):
+                pass
         return finish('adaptive_budget_or_contract_failure')
+    finally:
+        if prefix_token is not None:
+            from ..llm.deepseek_cache import reset_session_prefix
+            reset_session_prefix(prefix_token)

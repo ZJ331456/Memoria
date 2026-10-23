@@ -1,0 +1,63 @@
+{
+  "protocol": "kernel-vs-context-llm-judge-v4-session-corpus-best-effort",
+  "date": "2026-10-24",
+  "status": "registered before the authorized full rerun: byte-stable session-corpus cache prefix for every staged Memoria call (official DeepSeek only), best-effort Reader pass, publish-with-marker support overrides and contract-failure recovery; same frozen dataset, judge, budgets and order",
+  "dataset": "data/benchmarks/locomo/raw/locomo10.json",
+  "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "questions_per_arm": 1986,
+  "primary_categories": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "primary_questions": 1540,
+  "supplementary_category": 5,
+  "supplementary_questions": 446,
+  "arms": [
+    "raw_context",
+    "memoria"
+  ],
+  "backbone": "deepseek-flash",
+  "endpoint": "https://api.deepseek.com/v1",
+  "thinking": "disabled",
+  "temperature": 0,
+  "top_p": 1,
+  "reader_max_tokens": 1024,
+  "request_timeout_seconds": 120,
+  "max_retries": 0,
+  "concurrency": 1,
+  "concurrency_scope": "Memoria full arm first then raw_context; up to 8 independent history kernels per arm; serial questions in each history",
+  "input_request_byte_cap": 240000,
+  "baseline": "Full visible conversation before question; drop oldest whole turns only if byte/window budget exceeded. Record every truncation.",
+  "memoria": "Public session windows -> external working sources -> native formation/review/consolidation -> Kernel.answer(KnowledgeAnswer) with adaptive retrieval, as-of time derivation, citation augmentation, dense second probe (limit 16), inference-marked knowledge fallback, a bounded best-effort Reader pass after gate refusal or contract failure, and publish-with-marker support overrides. A byte-stable session-corpus prefix is prepended to every staged call for provider cache reuse; citation eligibility still comes only from each call presented evidence and allowlists. No personal user injection.",
+  "kernel_evidence_chars": 8000,
+  "kernel_local_embedding": "model/bge-small-en-v1.5",
+  "judge": "Independent binary LLM with frozen adapted permissive rubric; no arm label or evidence override. Gold used only after answering.",
+  "failure_policy": "Planned IDs stay in denominator; unknown judge coverage and answer errors are separate. No filtered-accuracy promotion.",
+  "accounting": "Every formation, consolidation, Reader, support, repair and grading call. Shared ingestion once per visible-history hash. Missing usage stays unknown; retained upper reservation is not an invoice.",
+  "execution_gate": [
+    "--execute",
+    "--allow-remote",
+    "positive --max-calls",
+    "positive --max-cost-usd"
+  ],
+  "resume": "Not implemented. Keep checkpoints, isolated databases and append-only calls. New execution is a new charged run.",
+  "interpretation_limits": [
+    "All LoCoMo questions have been used for development; this is not unseen generalization.",
+    "External sources do not automatically activate personal Claim/View; report actual route coverage.",
+    "Full-framework comparison has different internal prompts/policies and is not a single-mechanism causal ablation.",
+    "First current-version run; all prior LoCoMo scores retired from current presentation."
+  ],
+  "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
+  "arm_order": [
+    "memoria",
+    "raw_context"
+  ],
+  "billing_policy": "Two consecutive insufficient-balance responses open a global circuit; retain every planned ID as not_run. No automatic top-up or retry.",
+  "max_calls": 30000,
+  "max_cost_usd": 25,
+  "authorization": "2026-10-24 user explicitly authorized the full-dataset rerun after the cache hit-rate fix (measured 84.57% overall / 90.84% answer+support on the frozen 36) and the refusal/execution-failure fixes; both arms, Memoria first; intermediate results are not pushed to the remote.",
+  "budget_note": "USD25 client ceiling for this run (cache reuse cut the estimated cost far below the v3 USD85 ceiling); not a provider invoice limit.",
+  "history_concurrency": 8
+}

@@ -38,8 +38,9 @@ def aggregate(run):
         raise ValueError('Expected an account-private run under data/users')
     manifest = json.loads((run/'manifest.json').read_text(encoding='utf-8'))
     protocol = manifest['protocol']
-    if protocol.get('protocol') != 'kernel-vs-context-llm-judge-v3-ordered-histories':
-        raise ValueError('Only the registered current sequential protocol may be published')
+    if protocol.get('protocol') not in {'kernel-vs-context-llm-judge-v3-ordered-histories',
+                                        'kernel-vs-context-llm-judge-v4-session-corpus-best-effort'}:
+        raise ValueError('Only a registered sequential protocol may be published')
     source = ROOT/'data/benchmarks/locomo/raw/locomo10.json'
     if hashlib.sha256(source.read_bytes()).hexdigest() != protocol['dataset_sha256']:
         raise ValueError('Dataset fingerprint differs')

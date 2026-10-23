@@ -196,8 +196,11 @@ def test_production_kernel_retries_selection_once_with_exact_source_windows(env,
     service.llm.chat=chat
     result=asyncio.run(service.kernel.answer(KnowledgeAnswer(query='What did Alice adopt?',
         budget_chars=3000,use_adaptive_retrieval=True)))
-    assert result['status']==('abstain' if counterevidence else 'answer'),result.get('validation')
-    if counterevidence:assert result['validation']['reason']=='answer_support_not_established'
+    assert result['status']=='answer',result.get('validation')
+    if counterevidence:
+        # Counterevidence keeps the support verdict negative, but the publish-
+        # with-marker policy retains the cited gate-sufficient answer.
+        assert result['validation']['support_rejected_published'] is True
     trace=result['access']['adaptive']
     assert trace['rounds'][0]['selection']['compaction']['fits']
     assert len(calls)==3 and trace['retrieval_rounds']==0

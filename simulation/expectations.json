@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "data_kind": "synthetic_functional",
-  "annotation": "AI-authored functional assertions; not human gold, not semantic accuracy or benchmark labels",
+  "annotation": "AI-authored functional assertions; not human gold, not semantic accuracy or benchmark labels. Revision 7: best-effort Reader policy — a gate refusal with a non-empty pool gets one bounded evidence-grounded Reader pass; partial-evidence questions may be answered with an explicit missing-part statement, and support-rejected gate-sufficient answers publish with a marker. Old revision-6 snapshots stay untouched.",
   "cases": {
     "slot_residence": {
       "q1": {
@@ -697,12 +697,16 @@
         },
         "capability": {
           "status_in": [
-            "abstain"
+            "answer"
           ],
           "min_adaptive_checks": 1,
           "max_adaptive_rounds": 1,
-          "reader_called": false,
-          "min_adaptive_rounds": 1
+          "min_adaptive_rounds": 1,
+          "reader_called": true,
+          "answer_all": [
+            "快照",
+            "恢复"
+          ]
         }
       }
     },
@@ -725,11 +729,10 @@
             "恢复",
             "容量"
           ],
-          "adaptive_complete": true,
           "reader_called": true
         }
       }
     }
   },
-  "fixture_revision": 6
+  "fixture_revision": 7
 }

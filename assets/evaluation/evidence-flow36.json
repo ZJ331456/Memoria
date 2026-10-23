@@ -3,35 +3,35 @@
   "date": "2026-10-24",
   "protocol": "kernel-memory-llm-judge-v19-derivation-fallback-36",
   "registration_sha256": "a4490b46c5dd432d28046501ac574afa5372bcab8b9bc6c1e4333bc090b164a7",
-  "run_id": "20261023T203237Z-16d816eb",
+  "run_id": "20261023T222315Z-ec0b1376",
   "status": "failed",
-  "manifest_sha256": "e5b3e31c6cc6563d245e8d45786915fd6fef0b7865e40bdc9c2c37d8c4c871cb",
-  "elapsed_ms": 315713.246,
+  "manifest_sha256": "3283736e9f0ef370766383d404165d2b1acae3c5bd927394b1d503a95308fe3d",
+  "elapsed_ms": 359599.755,
   "source_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
   "model": "deepseek-flash",
   "judge_prompt_sha256": "87b36b24b38fc1f27e6a85ee1eaf64ff0718db288bbcad68737e16fb466e8ab9",
-  "code_commit": "37ef2d2e7fbd6d78bfa314dbab72f9ac36bc0342",
-  "dirty_diff_sha256": "bdae0d6cc21b4884f6976ed9cc6a83e323bc85c5a2f2e56f047a7a1c2c727b09",
+  "code_commit": "a12b4e257c0b5ab9368278a3261fcdf84dab4a6d",
+  "dirty_diff_sha256": "19519cf781bd1c290415aeb104425b31c86ce0469d854526c455f709c7a438cd",
   "arms": {
     "memoria": {
       "items": 36,
-      "scored": 35,
-      "errors": 1,
-      "correct": 25,
+      "scored": 33,
+      "errors": 3,
+      "correct": 24,
       "by_group": {
         "1": {
           "items": 8,
           "correct": 2,
-          "scored": 7,
+          "scored": 8,
           "accuracy": 0.25,
-          "unknown": 1
+          "unknown": 0
         },
         "2": {
           "items": 8,
           "correct": 5,
-          "scored": 8,
+          "scored": 6,
           "accuracy": 0.625,
-          "unknown": 0
+          "unknown": 2
         },
         "3": {
           "items": 4,
@@ -49,45 +49,45 @@
         },
         "5": {
           "items": 8,
-          "correct": 8,
-          "scored": 8,
-          "accuracy": 1.0,
-          "unknown": 0
+          "correct": 7,
+          "scored": 7,
+          "accuracy": 0.875,
+          "unknown": 1
         }
       },
       "primary": {
         "items": 28,
         "correct": 17,
-        "scored": 27,
+        "scored": 26,
         "accuracy": 0.6071428571428571,
         "scope": "LoCoMo categories 1-4; category 5 separately"
       },
-      "latency_ms": 6207.946600004409,
+      "latency_ms": 8368.673772218042,
       "outcomes": {
-        "ordinary_answered": 20,
-        "ordinary_wrong_answers": 3,
-        "ordinary_incorrect_refusals": 7,
+        "ordinary_answered": 21,
+        "ordinary_wrong_answers": 4,
+        "ordinary_incorrect_refusals": 5,
         "adversarial_overanswers": 0,
-        "unscored_or_failed": 1
+        "unscored_or_failed": 3
       },
       "diagnostics": {
         "ordinary": {
           "planned": 28,
-          "scored": 27,
-          "errors_or_unknown": 1,
-          "answer_actions": 20,
-          "refusal_actions": 7,
+          "scored": 26,
+          "errors_or_unknown": 2,
+          "answer_actions": 21,
+          "refusal_actions": 5,
           "clarify_actions": 0,
-          "wrong_answers": 3,
-          "wrong_refusals": 7,
+          "wrong_answers": 4,
+          "wrong_refusals": 5,
           "wrong_clarifications": 0
         },
         "adversarial": {
           "planned": 8,
-          "scored": 8,
-          "errors_or_unknown": 0,
+          "scored": 7,
+          "errors_or_unknown": 1,
           "answer_actions": 0,
-          "refusal_actions": 8,
+          "refusal_actions": 7,
           "clarify_actions": 0,
           "wrong_answers": 0,
           "wrong_refusals": 0,
@@ -98,7 +98,7 @@
         "pipeline_stages": {
           "initial_candidates": {
             "observed_cases": 36,
-            "cases_with_consolidated_summaries": 21,
+            "cases_with_consolidated_summaries": 30,
             "cases_with_observation_hints": 36,
             "cases_with_visible_observation_summaries": 36,
             "all_gold_visible_eligible_cases": 34,
@@ -108,29 +108,29 @@
           },
           "final_candidates": {
             "observed_cases": 36,
-            "cases_with_consolidated_summaries": 21,
+            "cases_with_consolidated_summaries": 30,
             "cases_with_observation_hints": 36,
             "cases_with_visible_observation_summaries": 36,
             "all_gold_visible_eligible_cases": 34,
             "all_gold_visible_observed_cases": 34,
             "all_gold_visible_unknown_stage_cases": 0,
-            "all_gold_ids_present_cases": 22
+            "all_gold_ids_present_cases": 24
           },
           "gate_bound_evidence": {
             "observed_cases": 36,
             "cases_with_consolidated_summaries": 0,
-            "cases_with_observation_hints": 20,
-            "cases_with_visible_observation_summaries": 20,
+            "cases_with_observation_hints": 17,
+            "cases_with_visible_observation_summaries": 17,
             "all_gold_visible_eligible_cases": 34,
             "all_gold_visible_observed_cases": 34,
             "all_gold_visible_unknown_stage_cases": 0,
-            "all_gold_ids_present_cases": 11
+            "all_gold_ids_present_cases": 10
           },
           "reader_evidence": {
             "observed_cases": 36,
             "cases_with_consolidated_summaries": 0,
-            "cases_with_observation_hints": 19,
-            "cases_with_visible_observation_summaries": 0,
+            "cases_with_observation_hints": 33,
+            "cases_with_visible_observation_summaries": 17,
             "all_gold_visible_eligible_cases": 34,
             "all_gold_visible_observed_cases": 34,
             "all_gold_visible_unknown_stage_cases": 0,
@@ -139,41 +139,41 @@
           "published_citations": {
             "observed_cases": 36,
             "cases_with_consolidated_summaries": 0,
-            "cases_with_observation_hints": 16,
+            "cases_with_observation_hints": 20,
             "cases_with_visible_observation_summaries": 0,
             "all_gold_visible_eligible_cases": 34,
             "all_gold_visible_observed_cases": 34,
             "all_gold_visible_unknown_stage_cases": 0,
-            "all_gold_ids_present_cases": 10
+            "all_gold_ids_present_cases": 12
           }
         },
         "gate_bindings": {
           "observed_cases": 36,
-          "sufficient_cases": 21,
-          "cases_with_unassessed_candidates": 17,
+          "sufficient_cases": 17,
+          "cases_with_unassessed_candidates": 20,
           "semantic_sufficiency_verified": false
         },
         "answer_repairs": {
-          "attempted": 4,
-          "accepted": 1,
-          "accepted_with_all_question_requirements": 1
+          "attempted": 5,
+          "accepted": 5,
+          "accepted_with_all_question_requirements": 5
         },
         "gold_undefined_cases": 2,
         "unavailable_gold_cases": 0
       },
       "accounting": {
-        "calls": 234,
+        "calls": 259,
         "usage": {
-          "calls": 234,
-          "known_cache_calls": 234,
+          "calls": 259,
+          "known_cache_calls": 259,
           "unknown_cache_calls": 0,
           "invalid_cache_calls": 0,
-          "prompt_cache_hit_tokens": 246134,
-          "prompt_cache_miss_tokens": 1008781,
-          "known_prompt_tokens": 1254915,
-          "completion_tokens_known": 94235,
+          "prompt_cache_hit_tokens": 6593523,
+          "prompt_cache_miss_tokens": 1202772,
+          "known_prompt_tokens": 7796295,
+          "completion_tokens_known": 102882,
           "unknown_completion_calls": 0,
-          "token_weighted_hit_rate": 0.1961359932744449,
+          "token_weighted_hit_rate": 0.8457251809994363,
           "complete": true,
           "scope": "reported flat DeepSeek cache tokens only; missing/invalid usage excluded, not zero"
         },
@@ -192,16 +192,16 @@
           },
           "estimate": {
             "off_peak": {
-              "known_input_usd": 0.15205555199999998,
-              "known_input_output_usd": 0.208596552,
-              "effective_input_usd_per_million": 0.1211680089886566,
-              "input_without_cache_usd": 0.18823725
+              "known_input_usd": 0.20019636899999999,
+              "known_input_output_usd": 0.26192556899999997,
+              "effective_input_usd_per_million": 0.025678398393082866,
+              "input_without_cache_usd": 1.16944425
             },
             "peak": {
-              "known_input_usd": 0.30411110399999997,
-              "known_input_output_usd": 0.417193104,
-              "effective_input_usd_per_million": 0.2423360179773132,
-              "input_without_cache_usd": 0.3764745
+              "known_input_usd": 0.40039273799999997,
+              "known_input_output_usd": 0.5238511379999999,
+              "effective_input_usd_per_million": 0.05135679678616573,
+              "input_without_cache_usd": 2.3388885
             }
           },
           "invoice": false,
@@ -212,7 +212,7 @@
       },
       "stages": {
         "formation": {
-          "calls": 92,
+          "calls": 94,
           "cost": {
             "rates": {
               "off_peak": {
@@ -228,16 +228,16 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.086229984,
-                "known_input_output_usd": 0.126096384,
-                "effective_input_usd_per_million": 0.11027303419065741,
-                "input_without_cache_usd": 0.1172952
+                "known_input_usd": 0.086778168,
+                "known_input_output_usd": 0.126985968,
+                "effective_input_usd_per_million": 0.11044020220223279,
+                "input_without_cache_usd": 0.1178622
               },
               "peak": {
-                "known_input_usd": 0.172459968,
-                "known_input_output_usd": 0.252192768,
-                "effective_input_usd_per_million": 0.22054606838131482,
-                "input_without_cache_usd": 0.2345904
+                "known_input_usd": 0.173556336,
+                "known_input_output_usd": 0.253971936,
+                "effective_input_usd_per_million": 0.22088040440446557,
+                "input_without_cache_usd": 0.2357244
               }
             },
             "invoice": false,
@@ -246,7 +246,7 @@
           }
         },
         "answer_and_support": {
-          "calls": 107,
+          "calls": 132,
           "cost": {
             "rates": {
               "off_peak": {
@@ -262,16 +262,16 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.064774788,
-                "known_input_output_usd": 0.080635188,
-                "effective_input_usd_per_million": 0.14246800480356836,
-                "input_without_cache_usd": 0.0681993
+                "known_input_usd": 0.11246434799999999,
+                "known_input_output_usd": 0.133200348,
+                "effective_input_usd_per_million": 0.016082045289384114,
+                "input_without_cache_usd": 1.0489743
               },
               "peak": {
-                "known_input_usd": 0.129549576,
-                "known_input_output_usd": 0.161270376,
-                "effective_input_usd_per_million": 0.2849360096071367,
-                "input_without_cache_usd": 0.1363986
+                "known_input_usd": 0.22492869599999998,
+                "known_input_output_usd": 0.266400696,
+                "effective_input_usd_per_million": 0.03216409057876823,
+                "input_without_cache_usd": 2.0979486
               }
             },
             "invoice": false,
@@ -280,7 +280,7 @@
           }
         },
         "independent_judge": {
-          "calls": 35,
+          "calls": 33,
           "cost": {
             "rates": {
               "off_peak": {
@@ -296,16 +296,16 @@
             },
             "estimate": {
               "off_peak": {
-                "known_input_usd": 0.00105078,
-                "known_input_output_usd": 0.00186498,
-                "effective_input_usd_per_million": 0.05746677604593929,
-                "input_without_cache_usd": 0.00274275
+                "known_input_usd": 0.0009538530000000001,
+                "known_input_output_usd": 0.001739253,
+                "effective_input_usd_per_million": 0.05486643658326144,
+                "input_without_cache_usd": 0.00260775
               },
               "peak": {
-                "known_input_usd": 0.00210156,
-                "known_input_output_usd": 0.00372996,
-                "effective_input_usd_per_million": 0.11493355209187858,
-                "input_without_cache_usd": 0.0054855
+                "known_input_usd": 0.0019077060000000001,
+                "known_input_output_usd": 0.003478506,
+                "effective_input_usd_per_million": 0.10973287316652287,
+                "input_without_cache_usd": 0.0052155
               }
             },
             "invoice": false,
@@ -318,11 +318,11 @@
   },
   "paired_ordinary": {
     "historical_memoria_to_current": {
-      "both_correct": 13,
-      "both_incorrect": 9,
-      "improved": 3,
-      "regressed": 1,
-      "unknown": 2
+      "both_correct": 16,
+      "both_incorrect": 8,
+      "improved": 1,
+      "regressed": 0,
+      "unknown": 3
     }
   },
   "input_policy": {
@@ -336,7 +336,7 @@
   },
   "publication_scope": "Memoria only; other arms are private mechanism diagnostics",
   "entire_diagnostic_accounting": {
-    "calls": 234,
+    "calls": 259,
     "cost": {
       "rates": {
         "off_peak": {
@@ -352,16 +352,16 @@
       },
       "estimate": {
         "off_peak": {
-          "known_input_usd": 0.15205555199999998,
-          "known_input_output_usd": 0.208596552,
-          "effective_input_usd_per_million": 0.1211680089886566,
-          "input_without_cache_usd": 0.18823725
+          "known_input_usd": 0.20019636899999999,
+          "known_input_output_usd": 0.26192556899999997,
+          "effective_input_usd_per_million": 0.025678398393082866,
+          "input_without_cache_usd": 1.16944425
         },
         "peak": {
-          "known_input_usd": 0.30411110399999997,
-          "known_input_output_usd": 0.417193104,
-          "effective_input_usd_per_million": 0.2423360179773132,
-          "input_without_cache_usd": 0.3764745
+          "known_input_usd": 0.40039273799999997,
+          "known_input_output_usd": 0.5238511379999999,
+          "effective_input_usd_per_million": 0.05135679678616573,
+          "input_without_cache_usd": 2.3388885
         }
       },
       "invoice": false,

@@ -65,12 +65,13 @@ class LLMClient:
                 "本地推荐 http://127.0.0.1:8080/v1（OpenAI 兼容服务）或 local://cuda"
             )
         backend = self.backend_for(selected)
-        generation = {k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if v is not None}
+        generation = {k: v for k, v in {"temperature": temperature, "top_p": top_p}.items() if k is not None}
         output=max_tokens if max_tokens is not None else self.settings.max_tokens
         budget=await self.reader_budget.check(selected,messages,tools,output,False,**generation)
+        from .deepseek_cache import with_session_prefix
         result=await backend.chat(
             selected,
-            messages,
+            with_session_prefix(selected, messages),
             max_tokens=output,
             tools=tools,
             stream=False,

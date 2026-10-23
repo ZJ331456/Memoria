@@ -133,10 +133,17 @@ def test_actual_kernel_gate_supplement_reader_support_and_hard_stop(core, kind, 
     trace = result['access']['adaptive']
     assert trace['retrieval_rounds'] == int(missing > 0)
     assert model.gates == (2 if missing else 1)
-    assert len(model.calls) <= 7 and trace['policy']['reserved_calls'] == 0
+    assert len(model.calls) <= 8 and trace['policy']['reserved_calls'] == 0
     assert trace['policy']['input_bytes'] <= trace['policy']['max_input_bytes']
     assert not trace['llm_rerank_enabled'] and not trace['full_history_reader_allowed']
-    assert result['status'] == ('abstain' if missing > 1 else 'answer'), result
+    if missing > 1 and kind == 'library':
+        # The gate refuses everything, but the source evidence does answer the
+        # question: the bounded best-effort Reader pass publishes it, marked.
+        assert result['status'] == 'answer', result
+        assert trace['best_effort_reader']['accepted'] is True
+        assert result['validation']['best_effort'] is True
+    else:
+        assert result['status'] == ('abstain' if missing > 1 else 'answer'), result
     if result['status'] == 'answer':
         assert result['reader_called'] and result['validation']['valid'] and result['citations']
         assert len(trace['rounds'][-1]['decision']['requirements']) == 4
