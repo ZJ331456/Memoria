@@ -8,9 +8,7 @@
 
 [English](README.en.md) · [快速开始](#快速开始) · [系统架构](#系统架构) · [评估状态](#locomo-全量评测) · [文档](docs/README.md)
 
-Memoria将原始来源、Observation、Pattern、普通记忆与结构化Claim连接起来，管理形成、审核、条件、时间、版本与撤回。Chat、机器人、文档和任务应用是内核的接入方，记忆不局限于对话。
-
-当前使用DeepSeek与本地BGE，也支持本地/兼容OpenAI格式的模型配置。当前是本机研究原型；真实连续人物的长期效果、抽取F1、因果机制收益及商业发布仍待验证。
+Memoria将原始来源、Observation、Pattern、普通记忆与结构化Claim连接起来，管理形成、审核、条件、时间、版本与撤回；Chat、机器人、文档和任务应用是内核的接入方。当前使用DeepSeek与本地BGE，也支持本地/兼容OpenAI格式的模型配置。当前是本机研究原型；真实连续人物的长期效果、抽取F1、因果机制收益及商业发布仍待验证。
 
 ![Memoria记忆形成与持续演化](assets/images/memoria-overview.png)
 
@@ -94,24 +92,6 @@ Studio按日常管理与高级诊断分组。“记忆处理与服务”解释�
 
 MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均为可选接入；飞书需正式账号绑定，MCP 文档授权与机器人消息接收分别配置。
 
-## 原36题：最终完整Memoria单组
-
-按用户要求只展示完整框架一组。[v18登记](eval/protocols/kernel-memory-judge-v18-distinct-locators-36.json)沿用v15原36个ID、两段历史、788段对话与188独立机器Caption、DeepSeek Flash、同一Judge及8000字符完整证据预算。形成审核每轮重执行，重复开发题不能证明未见泛化或组件因果收益。
-
-| 最终方法 | 单跳8 | 多跳8 | 开放域4 | 时序8 | 普通28 | 对抗8 | 未评分36 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 完整Memoria v18 | 7（7已判） | 3 | 1 | 4 | **15（53.57%，27已判）** | **8** | **1** |
-
-普通题与v15的15/28持平，对抗由6/8恢复到8/8。普通已知配对2改对/2退步/13都对/9都错/2未知；旧未评分项与新未评分项不同，不据此改写历史成绩。唯一新未评分为支持核验两次仍漏覆盖字面答案单元，保留28题分母，run仍failed。按原Judge对抗改善，但存在原文与不可回答标签解释空间，不能把得分当作独立语义真值。
-
-在26道来源可见普通题上，完整官方ID覆盖：初始14→13、补检15→14、Gate9→9、Reader8→9、引用8→8。**候选召回尚未提高，普通回答质量也未提高。** 相对时间的具体误拒已修，重复补检建议的独立编号可以被使用；短查询诊断仍有退步，所问属性与实体的可靠匹配继续待验证。[完整结果、失败与限制](docs/implemented/目标复核与同输入36题优化.md)
-
-正式QA230调用，已知冻结单价估价$0.205338–0.410675；回答平均8.429秒，比前轮6.200秒更慢。本轮三个开发/最终QA与三次完整模型模拟共1079调用，已知$0.688166–1.376332，4次未知usage另保留请求上界$0.0337599，不当零费用。工程、模拟、实际BGE与生产隔离回执见[验收记录](assets/evaluation/evidence-flow-acceptance.json)，功能通过不代表研究质量提高。
-
-最终同指纹功能验收：**1779工程测试、完整模拟49/49、两套实际BGE各4/4通过**，两生产库只读完整性正常且实验ID无泄漏。全部失败和旧核心回执分别保留。
-
-[唯一正式组](assets/evaluation/evidence-flow36.json) · [源码指纹](assets/evaluation/evidence-flow-code.manifest.json) · [v15历史](https://github.com/ZJ331456/Memoria/tree/955b0c6d2bf9fa33dd4fb1c874c2448ff9f2bf8b/assets/evaluation)。原文、gold、逐题答案、prompt及SQLite仅留本机。
-
 ## LoCoMo 全量评测
 
 同一冻结数据（10段历史、5,882原话、每组1,986题）、同一骨干（DeepSeek Flash，非思考）与同一独立LLM二分类Judge（适配Mem0规则，非Token F1）；Overall为普通四类1,540题，对抗446题单列。Baseline臂按用户决定永久不再跑（下表为2026-10-23冻结成绩）。
@@ -130,7 +110,7 @@ MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均�
 | --- | ---: | ---: | ---: |
 | v4+v6+v6b+v6d | 约12,700 | ≈$21.6 | 6–9s |
 
-[当前聚合](assets/evaluation/current.json) · [首轮对照](docs/implemented/双组内核评估与费用估算.md) · [v2收官记录](docs/implemented/会话语料缓存前缀与尽力作答闭环.md) · [36题冻结诊断](docs/implemented/目标复核与同输入36题优化.md)
+[当前聚合](assets/evaluation/current.json) · [首轮对照](docs/implemented/双组内核评估与费用估算.md) · [v2收官记录](docs/implemented/会话语料缓存前缀与尽力作答闭环.md) · [36题开发诊断](docs/implemented/目标复核与同输入36题优化.md) · [36题公开聚合](assets/evaluation/evidence-flow36.json)
 
 ![LoCoMo分类与完整分母](assets/evaluation/current.png)
 
