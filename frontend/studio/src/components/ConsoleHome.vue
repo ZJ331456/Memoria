@@ -22,6 +22,6 @@ const stats=computed(()=>[
 </template>
 
 <style scoped>
-.memory-guide>p{font-size:12px;line-height:1.9;color:#7d8e76}.quick-links p{line-height:1.8!important}.memory-guide .actions{flex-wrap:wrap}
+.memory-guide>p{font-size:12px;line-height:1.9;color:var(--ink-muted)}.quick-links p{line-height:1.8!important}.memory-guide .actions{flex-wrap:wrap}
 .stat-skeleton{cursor:default}.stat-skeleton-box{background:#e7ece4!important;animation:skeleton-pulse 1.2s ease-in-out infinite alternate}.stat-skeleton-line{display:inline-block;width:52px;height:26px;border-radius:6px;background:#e7ece4;animation:skeleton-pulse 1.2s ease-in-out infinite alternate}.stat-skeleton-line-short{width:120px;height:10px;margin-top:8px}.table-skeleton{padding:10px 4px}.table-skeleton-row{display:flex;gap:18px;padding:14px 6px;border-bottom:1px solid #e7ece4}.skeleton-line{display:inline-block;height:13px;width:min(320px,42vw);border-radius:5px;background:#edf0ea;animation:skeleton-pulse 1.2s ease-in-out infinite alternate}.skeleton-line-short{width:64px}.skeleton-note{font-size:11px;color:#8b9b8a;margin:12px 6px 4px}.table-skeleton-row,.stat-skeleton-line,.skeleton-line,.stat-skeleton-box{animation:skeleton-pulse 1.2s ease-in-out infinite alternate}@keyframes skeleton-pulse{to{opacity:.45}}@media(prefers-reduced-motion:reduce){.stat-skeleton-box,.stat-skeleton-line,.skeleton-line,.table-skeleton-row{animation:none}}
 </style>

@@ -14,6 +14,18 @@ const draft=ref(''),sending=ref(false),pendingUser=ref(''),answer=ref(''),phase=
 const feed=ref<HTMLElement|null>(null),composer=ref<HTMLTextAreaElement|null>(null),searchInput=ref<HTMLInputElement|null>(null)
 const rawMessages=ref(new Set<string>()),copied=ref(''),followTail=ref(true)
 const account=useAccount({ready:loadConversations,clear:clearData})
+const setup=ref<any>(null),setupKey=ref(''),savingKey=ref(false),keyTest=ref('')
+async function loadSetup(){if(!user.value)return;try{const s=await api.request('/setup/status',undefined,'GET','chat-setup');if(alive)setup.value=s}catch{/* 状态读取失败不阻塞聊天 */}}
+async function saveKey(){
+  const value=setupKey.value.trim();if(!value||savingKey.value)return
+  savingKey.value=true;keyTest.value=''
+  try{
+    await api.request('/settings/models',{main:{api_key:value},fast:{api_key:value}},'PUT')
+    const result=await api.request('/settings/models/test',{slot:'main'},'POST')
+    keyTest.value=result.ok?'ok':'fail'
+    if(result.ok){setupKey.value='';await loadSetup()}
+  }catch(e){fail(e);keyTest.value='fail'}finally{if(alive)savingKey.value=false}
+}
 const {api,user,busy,error,logout}=account
 let alive=true,timer:ReturnType<typeof setTimeout>,copyTimer:ReturnType<typeof setTimeout>,identity=0
 let statusTimer:ReturnType<typeof setTimeout>,statusVersion=0
@@ -29,10 +41,11 @@ async function refreshStatuses(){
   }catch(e){if(alive&&at===identity&&version===statusVersion&&!isCancelled(e))error.value='记忆状态读取失败，可刷新消息重试'}
   finally{if(alive&&at===identity&&version===statusVersion&&selected.value===id)statusTimer=setTimeout(()=>void refreshStatuses(),5000)}
 }
+watch(user,value=>{if(value)void loadSetup()},{immediate:true})
 watch(selected,stopStatuses)
 const selectedConversation=computed(()=>conversations.value.find(item=>item.id===selected.value))
 
-function clearData(){stopStatuses();identity++;conversations.value=[];messages.value=[];messageTotal.value=0;total.value=0;selected.value='';title.value='新的对话';draft.value='';pendingUser.value='';answer.value='';phase.value='';sending.value=false;reading.value=false;loading.value=false;search.value='';listPage.value=1;oldestPage.value=1;mobileOpen.value=false;rawMessages.value.clear();copied.value='';followTail.value=true;clearTimeout(copyTimer)}
+function clearData(){stopStatuses();identity++;setup.value=null;setupKey.value='';keyTest.value='';savingKey.value=false;conversations.value=[];messages.value=[];messageTotal.value=0;total.value=0;selected.value='';title.value='新的对话';draft.value='';pendingUser.value='';answer.value='';phase.value='';sending.value=false;reading.value=false;loading.value=false;search.value='';listPage.value=1;oldestPage.value=1;mobileOpen.value=false;rawMessages.value.clear();copied.value='';followTail.value=true;clearTimeout(copyTimer)}
 function fail(e:unknown){if(alive&&!isCancelled(e))error.value=(e as Error).message}
 async function scrollBottom(force=false){if(!force&&!followTail.value)return;if(force)followTail.value=true;await nextTick();feed.value?.scrollTo({top:feed.value.scrollHeight,behavior:sending.value?'auto':'smooth'})}
 function trackScroll(){const el=feed.value;if(el)followTail.value=el.scrollHeight-el.scrollTop-el.clientHeight<100}
@@ -163,6 +176,10 @@ onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(cop
     <main class="chat-main">
       <header class="chat-header"><div><button class="mobile-menu" aria-label="打开会话列表" @click="mobileOpen=!mobileOpen">☰</button><span>Memoria <span class="header-slash">/</span> {{ selected?'对话':'Chat' }}</span><span class="chat-status"><i/> {{ sending?phase:'在这里，慢慢聊' }}</span></div><div><a href="/studio/">Studio ↗</a></div></header>
       <div v-if="error" class="chat-error" role="alert">{{ error }}<button aria-label="关闭提示" @click="error=''">×</button></div>
+        <div v-if="user&&setup&&!setup.main?.configured" class="setup-banner" role="status">
+          <div class="setup-copy"><strong>配置你的模型 Key 后即可对话</strong><p>当前服务器默认使用 DeepSeek；新账号需填入自己的 API Key，仅保存在你的账号下，不会展示给他人。</p></div>
+          <form class="setup-form" @submit.prevent="saveKey"><input v-model="setupKey" type="password" maxlength="200" aria-label="模型 API Key" placeholder="sk-…" :disabled="savingKey" /><button type="submit" :disabled="!setupKey.trim()||savingKey">{{ savingKey?'保存中…':'保存并测试' }}</button><span v-if="keyTest==='ok'" class="setup-result ok">✓ 连通，可以开始对话</span><span v-else-if="keyTest==='fail'" class="setup-result fail">保存了但连通失败，请核对 Key</span></form>
+        </div>
       <div v-if="!user" class="chat-login"><div class="login-heading"><span class="welcome-symbol">✳</span><h1>让每次对话，都有延续。</h1><p>与 Memoria 聊聊今天，也聊聊更长远的事。</p></div><AuthPanel :account="account" /></div>
       <template v-else>
         <div ref="feed" class="chat-feed" :class="{welcome:!selected&&!pendingUser}" aria-label="对话消息" aria-live="polite" @scroll="trackScroll">

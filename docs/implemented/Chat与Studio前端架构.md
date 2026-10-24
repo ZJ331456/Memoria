@@ -90,3 +90,10 @@ Studio主导航保留总览、历史、长期记忆、候选审核、新增“�
 共享设计token层（frontend/shared/tokens.css）统一品牌绿/墨色/表面/边线/危险色与共享字阶间距，chat与studio入口在自身样式前引入，高频硬编码色已接入变量；值与原调色一致，视觉零变化。Chat补键盘能力：Ctrl/Cmd+K聚焦会话搜索、Alt+N新对话（替换无绑定的装饰kbd）、移动抽屉Esc关闭并自动聚焦。输入接近上限（≥18000/20000）时显示字符计数（aria-live）。ConsoleHome加载期显示aria-busy骨架屏，尊重prefers-reduced-motion。移除欢迎页tracked-out全大写kicker（AI生成tell）。
 
 前端工程验收：`npm run build`（vue-tsc含内）通过、node tests 22/22、全量pytest 1801通过0失败。交互断言以工程测试为准，无生产数据改动。
+
+
+## 新账号引导与暗色模式（2026-10-25续）
+
+新注册账号登录Chat后，前端读取`/api/setup/status`（既有端点，`main.configured=false`时）在消息区上方显示配置横幅：输入自己的API Key→`PUT /api/settings/models`热更新（main/fast同时写入，密钥不回显）→`POST /api/settings/models/test`实测连通，成功即横幅消失可对话。Key只进本人账号加密配置，不写全局默认；读取失败不阻塞聊天。
+
+暗色模式：`shared/tokens.css`新增`prefers-color-scheme: dark`映射（正文对比度按WCAG AA选值），chat与studio共63处硬编码浅色值接入语义token，装饰性阴影移除；跟随系统切换，无手动开关。验收：`npm run build`通过、node tests 22/22、全量pytest 1801通过0失败。

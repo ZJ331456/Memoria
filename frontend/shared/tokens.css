@@ -57,3 +57,33 @@
   --danger-bg: var(--c-danger-bg);
   --danger-line: var(--c-danger-line);
 }
+
+/* Dark scheme: semantic aliases flip; primitives stay for reference.
+ * Values chosen for WCAG AA on their surfaces (body text >= 4.5:1).
+ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-brand-deep: #0f2b21;
+    --c-brand-strong: #4f9e7c;
+    --c-brand: #9dc7ad;
+    --c-brand-mid: #5d8f6d;
+    --c-brand-soft: #6fbf95;
+    --c-brand-tint: #24382e;
+    --c-brand-wash: #1a231e;
+
+    --c-ink-1: #e6ede7;
+    --c-ink-2: #dde7de;
+    --c-ink-3: #c3d2c6;
+    --c-ink-muted: #9db2a2;
+    --c-ink-faint: #7e947f;
+    --c-paper: #131a15;
+    --c-surface: #1a231e;
+    --c-surface-2: #202b24;
+    --c-surface-3: #2a3830;
+    --c-line: #31423a;
+    --c-line-soft: #2b3a32;
+    --c-danger-ink: #e2a184;
+    --c-danger-bg: #33241d;
+    --c-danger-line: #4a352a;
+  }
+}

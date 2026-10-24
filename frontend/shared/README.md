@@ -2,7 +2,7 @@
 
 [目录与构建](../README.md) · [账号隔离](../../docs/implemented/用户登录与数据隔离.md)
 
-- `tokens.css`：Chat/Studio共享设计token（品牌绿/墨色/表面/边线/危险色与共享字阶间距），两入口在自身样式前引入；改主题只动这一份。
+- `tokens.css`：Chat/Studio共享设计token（品牌绿/墨色/表面/边线/危险色与共享字阶间距），含`prefers-color-scheme: dark`暗色映射（对比度按WCAG AA），两入口在自身样式前引入；改主题只动这一份。
 - `auth.ts`：Chat/Studio共用账号生命周期、登录/注册/退出、跨标签变化信号和重新激活校验。
 - `AuthPanel.vue`：共享账号表单，不保存密码或令牌。
 - `ChannelPanel.vue`：飞书/QQ/Telegram分平台连接状态、本账号独立绑定码和明确解绑；不公开应用凭据，不持久化绑定码。
