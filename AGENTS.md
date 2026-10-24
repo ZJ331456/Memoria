@@ -48,9 +48,6 @@
 
 当前状态的最终回答通过Kernel.answer/access及pending revision检查，不能用底层已批准Claim快照绕过仍有效的冲突提案。提案需要实际目标版本、来源/候选SHA；不自动批准修订。新LLM批准按实际revision记录来源，旧元数据不冒充独立真人。
 
-
-用户要求提交/更新远程时，在完成验证、审查 diff 和确认无凭据后执行提交与普通推送；只读分析或尚未授权的发布不得因本文件自动触发推送。发现远程更新先 fetch 并判断分歧，不能用 reset/force 覆盖其他工作。提交格式与最终核验步骤以提交规范为准。
-
 入口与存储边界遵循docs/implemented/统一内核入口与存储边界.md及docs/implemented/协议计量隐私与边界审查.md：生产Runtime/工具必须注入租户Kernel，个人记忆Reader统一走Kernel.answer；不得另造备用Reader。schema_only仅生成契约，所有业务请求503。API、Runtime、渠道、Observability与公开账号模块不直接.db执行SQL；领域保留SQLite事务，统一使用公开Store.memory_transaction()，禁止拆散expected-revision与完整来源支持。Kernel不得调用领域私有方法。须覆盖旧68条及完整141个operation契约、认证/RequestGate/缺依赖HTTP验证；核心指纹包含tests/fixtures和eval/protocols冻结输入，仍按同指纹三重门槛验收。新生产trace只存单份调用摘要/哈希/成本，失败usage未知不能记作零；隔离实验保留完整原始记录。新LoCoMo风险全量须显式v3诊断登记和并发，旧v2不混跑、不改分数。
 
 2026-10-24效果评估主入口为eval-benchmark，默认只做0调用费用估算；只跑memoria臂，Baseline（完整历史raw_context）按用户2026-10-24决定永久不再跑，任何补跑/重跑/新协议都不得包含Baseline臂。主分为1540题LLM二分类，对抗446题单列，失败/未知留计划分母，不以仅有评分项计算准确率，不把技术错误算正确拒答。全部形成/审核/巩固/Reader/支持/修复/评分经同一私有调用账本计费；执行需显式execute、allow-remote和请求/美元上限，核对输入及登记（当前生效登记为v3-ordered-histories与v6d收尾，历史登记经固定提交38648d3追溯）。当前公开口径为1986题合并全覆盖86.56%（v4保留954答对+v6/v6b/v6d重跑，每题取最优run，逐题来源可追溯）。连续两次欠费后全局停止，后续题标not_run，保留完整分母和本机中间账本；v4/v6等的既定授权已消费完毕，新全量、补跑或重跑必须再次获得用户显式授权。旧公开成绩退出当前展示，原始失败/gold/费用不改写。说明见docs/implemented/双组内核评估与费用估算.md与docs/implemented/会话语料缓存前缀与尽力作答闭环.md。
