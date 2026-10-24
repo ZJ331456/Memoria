@@ -1,0 +1,59 @@
+/* Shared design tokens for chat + studio.
+ * Values mirror the current hard-coded palette so adopting them is a
+ * visual no-op; future changes happen here, not per-app.
+ * Raw primitives (--c-*) are sampled from the two apps; semantic
+ * aliases (--ink-*, --surface-*, --line, --brand*) are what CSS should use.
+ */
+:root {
+  /* primitives — brand greens */
+  --c-brand-deep: #153a2e;
+  --c-brand-strong: #276d54;
+  --c-brand: #315c47;
+  --c-brand-mid: #46734f;
+  --c-brand-soft: #40916c;
+  --c-brand-tint: #e2eade;
+  --c-brand-wash: #f3f5f0;
+
+  /* primitives — neutrals sampled from both apps */
+  --c-ink-1: #21352e;
+  --c-ink-2: #273b32;
+  --c-ink-3: #3b503e;
+  --c-ink-muted: #6a7e72;
+  --c-ink-faint: #8a948c;
+  --c-paper: #fcfdfb;
+  --c-surface: #ffffff;
+  --c-surface-2: #f3f5f0;
+  --c-surface-3: #e9ede5;
+  --c-line: #e1e7dc;
+  --c-line-soft: #e5e9e1;
+  --c-danger-ink: #985332;
+  --c-danger-bg: #fff6ed;
+  --c-danger-line: #eddbcf;
+
+  /* shared type scale + spacing scale (0.25rem steps) */
+  --font-ui: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-display: Georgia, serif;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+  /* semantic aliases — both apps agree on these names */
+  --ink-1: var(--c-ink-1);
+  --ink-2: var(--c-ink-2);
+  --ink-3: var(--c-ink-3);
+  --ink-muted: var(--c-ink-muted);
+  --ink-faint: var(--c-ink-faint);
+  --surface: var(--c-surface);
+  --surface-2: var(--c-surface-2);
+  --surface-3: var(--c-surface-3);
+  --paper: var(--c-paper);
+  --line: var(--c-line);
+  --line-soft: var(--c-line-soft);
+  --brand: var(--c-brand);
+  --brand-strong: var(--c-brand-strong);
+  --brand-deep: var(--c-brand-deep);
+  --brand-mid: var(--c-brand-mid);
+  --focus-ring: var(--c-brand-soft);
+  --danger-ink: var(--c-danger-ink);
+  --danger-bg: var(--c-danger-bg);
+  --danger-line: var(--c-danger-line);
+}

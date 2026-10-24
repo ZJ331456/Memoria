@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import AuthPanel from '../../shared/AuthPanel.vue'
 import AccountMenu from '../../shared/AccountMenu.vue'
 import MarkdownContent from '../../shared/MarkdownContent.vue'
@@ -11,7 +11,7 @@ import { channelLabel } from '../../shared/memoryStatus'
 const conversations=ref<any[]>([]),total=ref(0),listPage=ref(1),search=ref(''),loading=ref(false)
 const selected=ref(''),title=ref('新的对话'),messages=ref<any[]>([]),messageTotal=ref(0),oldestPage=ref(1),reading=ref(false)
 const draft=ref(''),sending=ref(false),pendingUser=ref(''),answer=ref(''),phase=ref(''),mobileOpen=ref(false)
-const feed=ref<HTMLElement|null>(null),composer=ref<HTMLTextAreaElement|null>(null)
+const feed=ref<HTMLElement|null>(null),composer=ref<HTMLTextAreaElement|null>(null),searchInput=ref<HTMLInputElement|null>(null)
 const rawMessages=ref(new Set<string>()),copied=ref(''),followTail=ref(true)
 const account=useAccount({ready:loadConversations,clear:clearData})
 const {api,user,busy,error,logout}=account
@@ -100,9 +100,16 @@ async function send(){
 }
 async function cancel(){try{await api.request('/sessions/'+encodeURIComponent(selected.value)+'/cancel',{});phase.value='正在停止'}catch(e){fail(e)}}
 function keydown(event:KeyboardEvent){if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();void send()}}
+function globalKeys(event:KeyboardEvent){
+  if(event.key==='Escape'&&mobileOpen.value){mobileOpen.value=false;return}
+  if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='k'){event.preventDefault();if(user.value&&!sending.value){mobileOpen.value=true;void nextTick(()=>searchInput.value?.focus())}}
+  if(event.altKey&&event.key.toLowerCase()==='n'&&!event.ctrlKey&&!event.metaKey){event.preventDefault();newChat()}
+}
+watch(mobileOpen,open=>{if(open)void nextTick(()=>searchInput.value?.focus())})
 watch(search,()=>{clearTimeout(timer);timer=setTimeout(()=>{listPage.value=1;void loadConversations()},250)})
 watch(draft,async()=>{await nextTick();const el=composer.value;if(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,180)+'px'}})
-onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(copyTimer)})
+onMounted(()=>{window.addEventListener('keydown',globalKeys)})
+onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(copyTimer);window.removeEventListener('keydown',globalKeys)})
 </script>
 
 <template>
@@ -110,9 +117,9 @@ onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(cop
     <div v-if="mobileOpen" class="sidebar-scrim" @click="mobileOpen=false" />
     <aside class="chat-sidebar" :class="{open:mobileOpen}">
       <a class="chat-brand" href="/"><span class="memoria-symbol">m</span><span>memoria<small>A LITTLE MORE FAMILIAR</small></span></a>
-      <button class="new-chat" :disabled="!user||sending" @click="newChat"><span>＋</span> 开始新对话 <kbd>↗</kbd></button>
+      <button class="new-chat" :disabled="!user||sending" @click="newChat"><span>＋</span> 开始新对话 <kbd>Alt N</kbd></button>
       <template v-if="user">
-        <label class="chat-search"><span>⌕</span><input v-model="search" maxlength="200" aria-label="搜索我的对话" placeholder="搜索我的对话" :disabled="sending" /></label>
+        <label class="chat-search"><span>⌕</span><input ref="searchInput" v-model="search" maxlength="200" aria-label="搜索我的对话（Ctrl+K）" placeholder="搜索我的对话" :disabled="sending" /></label>
         <div class="conversation-label">我的对话 <span>{{ loading?'…':total }}</span><button aria-label="刷新对话列表" :disabled="loading||sending" @click="loadConversations">↻</button></div>
         <p class="chat-empty-list">此处显示日常聊天。<a href="/studio/#conversations">导入资料请到 Studio 的历史对话查看 →</a></p>
         <nav class="chat-list" aria-label="我的聊天记录" :aria-busy="loading">
