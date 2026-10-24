@@ -25,7 +25,7 @@ Dense/RRF补足了compact词面基线的召回缺口；窗口也覆盖全部已�
 
 ## 固定协议与自动接线
 
-运行代码为clean `040427c386d989d20e1afdea380a83276e707c9c`；注册SHA `bda2637f13386ed16c06760aa01db0dc38653af65670c08ad63acdc8cf0def29`。固定文件：[协议](../../eval/protocols/research-retrieval-eval-20261012.json)。每轮数据/代码/模型/参数/产物SHA、所有case顺序和成本已核验。
+运行代码为clean `040427c386d989d20e1afdea380a83276e707c9c`；注册SHA `bda2637f13386ed16c06760aa01db0dc38653af65670c08ad63acdc8cf0def29`。固定文件：[协议](https://github.com/ZJ331456/Memoria/blob/38648d3/eval/protocols/research-retrieval-eval-20261012.json)。每轮数据/代码/模型/参数/产物SHA、所有case顺序和成本已核验。
 
 BGE中文small v1.5原话完整tokenizer分块，父消息最佳块余弦；query使用生产中文instruction。RRF融合Dense top8与compact FTS/BM25 top8，k=60、父消息去重，原顺序解同分；最终至多8条完整原话、12000序列化字符。无根据gold调出的阈值。namespace/ID/原文SHA绑定向量缓存，候选始终限制于每题可见前缀，其他题缓存中的未来消息不能召回。
 

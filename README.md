@@ -106,6 +106,8 @@ MCP 工具和[飞书私聊](docs/implemented/飞书机器人对话接入.md)均�
 
 [当前聚合](assets/evaluation/current.json) · [首轮对照](docs/implemented/双组内核评估与费用估算.md) · [v2收官记录](docs/implemented/会话语料缓存前缀与尽力作答闭环.md) · [36题开发诊断](docs/implemented/目标复核与同输入36题优化.md) · [36题公开聚合](assets/evaluation/evidence-flow36.json)
 
+冻结协议登记只保留评估对照两份（Baseline首轮、Memoria v2收尾）及运行时/测试冻结输入（v1默认、v3诊断链、probe-v2）；被替代的历史登记经[固定提交](https://github.com/ZJ331456/Memoria/tree/38648d3/eval/protocols)追溯。
+
 ![LoCoMo分类与完整分母](assets/evaluation/current.png)
 
 两组（Baseline/Memoria）使用同一骨干；公开对话人物保留外部身份，通过生产Kernel资料域读写，不冒充账号本人。个人Claim/View与个人Dense/RRF不因统一Kernel而自动参与。全部题已用于开发，属于同题开发复测；框架整体差异不能证明单一机制因果收益或真实长期陪伴效果。

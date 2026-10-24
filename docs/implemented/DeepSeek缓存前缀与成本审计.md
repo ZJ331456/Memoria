@@ -7,7 +7,7 @@
 
 ## 0. 第二轮（2026-10-23）：子集复用、修复追加与命中上限
 
-登记：[locomo-deepseek-cache-20261023.json](../../eval/protocols/locomo-deepseek-cache-20261023.json)，布局`deepseek-reader-input-prefix-v2`。
+登记：[locomo-deepseek-cache-20261023.json](https://github.com/ZJ331456/Memoria/blob/38648d3/eval/protocols/locomo-deepseek-cache-20261023.json)，布局`deepseek-reader-input-prefix-v2`。
 
 1. **引用子集改为复用Reader前缀**：旧策略对只引用子集的支持核验退回独立短请求，等于整段证据冷付。DeepSeek命中价是未命中的1/50，复用长前缀通常比发短冷请求更便宜；新策略用`task_evidence_ids`把可引用证据限定回原子集，引用校验不放宽。`subset="legacy"`保留旧行为用于A/B。
 2. **修复轮并入共享前缀**：修复指令从消息0移到任务System位（证据之后），修复请求成为已持久化单元的扩展，不再是冷请求。契约校验、调用上限与预算不变。
@@ -44,7 +44,7 @@ DeepSeek默认复用已经持久化的相同输入前缀，以完整单元保存
 
 显式LoCoMo `--deepseek-cache`使用另一个`deepseek-reader-input-prefix-v1`布局：Reader两条原始消息字节不变；核验仅在问题和完整证据列表相同时复用Reader**输入**，尾部追加独立任务，不带Reader输出或Gate判断。支持核验只需实际引用子集时保留原短请求，避免上下文和成本膨胀；未知/重复/伪造来源ID拒绝。
 
-**生产独立核验布局与隔离实验布局不同。以下两题结果不是生产缓存收益、Claim/View收益或新LoCoMo全量成绩。** 新布局必须用[单独登记](../../eval/protocols/locomo-deepseek-cache-20261022.json)，原v3登记不能默许启用。只有同登记允许的布局是计划处理差异，其他输入SHA/模型/预算/并发要求仍核对，不混合续跑。
+**生产独立核验布局与隔离实验布局不同。以下两题结果不是生产缓存收益、Claim/View收益或新LoCoMo全量成绩。** 新布局必须用[单独登记](https://github.com/ZJ331456/Memoria/blob/38648d3/eval/protocols/locomo-deepseek-cache-20261022.json)，原v3登记不能默许启用。只有同登记允许的布局是计划处理差异，其他输入SHA/模型/预算/并发要求仍核对，不混合续跑。
 
 三轮均固定官方首段前两道原题、前48条按原序原话、相同模型与生成配置、thinking关闭；gold仅后验评分。交错执行次序仍不能隔离旧缓存、预热、服务模型变化及生成波动。每轮最多16请求，所有修复和失败入账。
 

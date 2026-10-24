@@ -17,7 +17,7 @@
 2026-10-16用户已授权日常记忆采用LLM主审、人工辅助。默认低风险候选经独立审核调用和来源/风险检查自动入库；不能再恢复成全部候选必经手工批准。敏感、主体/条件/时间不明及单值状态冲突保留辅助审核，公开资料不能成为本人事实。模型判断留审计，不当作现实核验或长期效果证明；历史重提取须为用户明确发起的有限请求。
 
 - Python 使用项目 `.venv`；MCP 使用项目 `.mcp` 内的独立环境，禁止修改 conda base 或全局 npm。
-- 本机模型在 `model/`；运行配置统一为根config目录的system.toml、models.toml、bot.toml、mcp.toml，实际文件Git忽略，仅提交同名example。禁止恢复根配置、configs/local或按账号散落覆盖文件。模型统一文件管理API/本地LLM与Embedding，账号专属槽位和MCP启用仍按UUID隔离；加密凭据/OAuth留data/secrets或账号secrets，不把个人Key合成全局默认。冻结研究配置放eval/protocols，原字节和历史成绩不改。配置字段及后端以docs/implemented/配置目录与模型后端.md为准。
+- 本机模型在 `model/`；运行配置统一为根config目录的system.toml、models.toml、bot.toml、mcp.toml，实际文件Git忽略，仅提交同名example。禁止恢复根配置、configs/local或按账号散落覆盖文件。模型统一文件管理API/本地LLM与Embedding，账号专属槽位和MCP启用仍按UUID隔离；加密凭据/OAuth留data/secrets或账号secrets，不把个人Key合成全局默认。冻结研究配置放eval/protocols，原字节和历史成绩不改；协议登记只保留评估对照两份（v3-ordered-histories与v6d收尾）及运行时/测试冻结输入（v1默认、v3诊断链、probe-v2），被替代的历史登记经固定提交（38648d3）追溯，删除或迁移冻结输入前必须核对生产代码与测试的实际读取路径，并同步把文档链接指向固定提交。配置字段及后端以docs/implemented/配置目录与模型后端.md为准。
 - 只接入具有真实来源的数据，不编造用户、对话、无原文证据的事实标签或评分来充当实验数据。用户授权时可基于原话填写开发标注，必须声明 AI 辅助来源，不冒充独立真人审核；时间、身份和长期价值缺失时仍保留未知。单元测试的临时输入和故障替身只用于工程验证，不导入产品或报告为研究成绩。
 - 2026-10-20用户另行明确授权创建模拟数据做功能验收。固定输入与断言放simulation，执行库/原始调用放被忽略的simulation/runs，必须标注synthetic_functional；不写真实账号生产库、不混入真实资料/LoCoMo成绩。此授权仅用于隔离功能与故障测试，不将模拟人物当真人或虚构研究结论。
 - 公开对话放入独立语料库，不能当作项目使用者的个人事实；缺失人物、日期或标签时保留未知。

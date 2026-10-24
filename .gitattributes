@@ -9,3 +9,6 @@ scripts/render_project_diagrams.py text eol=lf
 requirements.txt text eol=lf
 scripts/cmd/*.cmd text eol=crlf
 scripts/sh/*.sh text eol=lf
+# Frozen evaluation registrations are byte-fingerprinted; keep EOL stable.
+eval/protocols/*.json text eol=lf
+eval/protocols/*.toml text eol=lf
