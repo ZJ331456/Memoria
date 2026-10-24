@@ -4,7 +4,7 @@
 
 [前端目录/构建](../README.md) · [行为与验证](../../docs/implemented/MemoryStudio与统一记忆访问.md) · [API](../../memoria/api/README.md)
 
-Vue 3 + TypeScript + Element Plus，入口 `/studio/`。保留数据总览、完整历史全文搜索/来源/分页/命中定位、普通记忆库、候选审核、结构化Claim审核、双时间、检索实验室、只读评测运行及超管账号元数据。页面不提供聊天发送/新建；需要交流时通过“返回Chat”到根地址。
+Vue 3 + TypeScript + Element Plus，入口 `/studio/`。保留数据总览、完整历史全文搜索/来源/分页/命中定位、普通记忆库、候选审核、结构化Claim审核、双时间、检索实验室、只读评测运行及超管账号元数据。历史对话列表对本人的（native）会话提供重命名与删除（二次确认）；导入语料保持只读。数据总览在加载期显示骨架屏。页面不提供聊天发送/新建；需要交流时通过“返回Chat”到根地址。
 
 依赖、锁文件、Vite配置和测试统一在上级frontend；不要在本目录npm install。构建/开发命令见[上级说明](../README.md)，两个入口共用Cookie、账号生命周期和请求归属保护。
 

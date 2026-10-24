@@ -8,7 +8,8 @@
 frontend/
 ├─ chat/                 # 聊天页面与专用样式
 ├─ studio/               # 数据后台与管理组件
-├─ shared/               # Cookie登录、账号生命周期、API、SSE与原文工具
+├─ shared/               # Cookie登录、账号生命周期、API、SSE与原文工具、设计token(tokens.css)
+├─ ../.zcode/skills/     # 三个前端skill（taste/frontend-design/frontend-ui-engineering），指导前端实现
 ├─ tests/                # 跨账号竞态、文本与流式解析工程测试
 ├─ package.json          # 两端统一依赖
 ├─ package-lock.json

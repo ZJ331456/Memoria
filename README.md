@@ -127,6 +127,7 @@ Memoria/
 ├─ scripts/          # Python/PowerShell工具、模型准备与图表复现
 │  ├─ cmd/          # Windows构建、启动、停止入口
 │  └─ sh/           # Linux入口预留，尚未实现
+├─ skills/           # 服务器侧技能（drift-digest、memory-review等）
 ├─ tests/            # 工程回归
 ├─ data/             # 本机账号、原文、配置和实验账本；Git忽略
 └─ model/            # 本地模型权重；Git忽略
