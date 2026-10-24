@@ -484,10 +484,32 @@ class EvidenceLibrary:
         # No silently clipped evidence: failure is explicit before any charged request.
         if prepared.messages != messages:raise LibraryError(422,'模型输入预算不足，请缩短资料后再提炼')
         started=time.monotonic();result=None;status='provider_failed'
+        def _transport_fault(exc):
+            # One retry for connection-level faults only; each attempt is a separate
+            # accounted call. Provider rejections (auth/quota/contract) are never retried.
+            cause = exc.__cause__ or exc.__context__
+            seen = 0
+            while cause is not None and seen < 6:
+                if type(cause).__name__ in {'ConnectError', 'ReadError', 'WriteError',
+                                            'RemoteProtocolError', 'ConnectTimeout'}:
+                    return True
+                cause = cause.__cause__ or cause.__context__
+                seen += 1
+            return False
         try:
             try:
-                result=await self.llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens,temperature=0)
-            except asyncio.CancelledError:raise
+                # Up to three retries with backoff for connection-level faults only:
+                # local network/proxy bursts often outlast one short wait, and a
+                # single failed window would otherwise fail a whole history. Every
+                # attempt is a separate accounted call, never a hidden retry.
+                for attempt in range(4):
+                    try:
+                        result=await self.llm.chat(prepared.messages,model=prepared.model,max_tokens=prepared.max_tokens,temperature=0)
+                        break
+                    except asyncio.CancelledError:raise
+                    except Exception as exc:
+                        if attempt == 3 or not _transport_fault(exc):raise
+                        await asyncio.sleep((attempt + 1) * 2)
             except Exception as exc:raise LibraryError(502,'上游模型暂不可用，原资料已保留；本次未发布知识或经验') from exc
             status='returned'
             if result.finish_reason in {'length','content_filter','tool_calls'} or result.tool_calls:

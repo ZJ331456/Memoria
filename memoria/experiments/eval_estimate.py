@@ -14,10 +14,19 @@ from .eval_systems import source_batches
 PROTOCOL = "kernel-vs-context-llm-judge-v1"
 
 
-def estimate(items, dataset, *, model, context_bytes=240000, arms=None):
-    """Estimate all lifecycle phases, stating the unmeasured quantities explicitly."""
-    if model not in {"deepseek-flash", "deepseek-v4-pro"}:
-        raise ValueError("Only explicitly priced DeepSeek models are supported")
+def estimate(items, dataset, *, model, context_bytes=240000, arms=None, rates=None):
+    """Estimate all lifecycle phases, stating the unmeasured quantities explicitly.
+
+    ``rates`` optionally supplies an explicitly declared tariff assumption for a
+    non-DeepSeek model; it is an assumption recorded beside the estimate, never a
+    supplier quote.
+    """
+    if rates is not None:
+        table = {model: rates}
+    elif model in {"deepseek-flash", "deepseek-v4-pro"}:
+        table = PRICING
+    else:
+        raise ValueError("Only explicitly priced models are supported")
     arms = list(arms) if arms is not None else ["memoria", "raw_context"]
     histories = {}
     for item in items:
@@ -65,13 +74,13 @@ def estimate(items, dataset, *, model, context_bytes=240000, arms=None):
             phase["assumed_cache_hit_rate"] = hit
             phase["usd"] = {period: round((phase["input_tokens"]*(hit*r["hit"]+(1-hit)*r["miss"])
                                    + phase["output_tokens"]*r["output"])/1e6, 4)
-                            for period, r in PRICING[model].items()}
+                            for period, r in table[model].items()}
         scenarios.append({"scenario": name, "assumptions": {"chars_per_token": chars_per_token,
             "cache_hit_rate": hit, "kernel_calls_per_question": kernel_calls,
             "formation_calls_per_window": formation_calls}, "phases": phases,
             "requests": sum(p["calls"] for p in phases.values()),
             "total_usd": {period: round(sum(p["usd"][period] for p in phases.values()), 4)
-                          for period in PRICING[model]}})
+                          for period in table[model]}})
     return {"protocol": PROTOCOL, "mode": "estimate_only", "model_calls": 0,
         "model": model, "dataset_sha256": hashlib.sha256(Path(dataset).read_bytes()).hexdigest(),
         "arms": arms,
@@ -86,7 +95,7 @@ def estimate(items, dataset, *, model, context_bytes=240000, arms=None):
                 for h in histories.values() for s in h)},
         "formation_windows": b, "context_byte_limit": context_bytes,
         "baseline_untruncated_serialized_chars_sum": histories_chars,
-        "scenarios": scenarios, "pricing_snapshot": PRICING,
+        "scenarios": scenarios, "pricing_snapshot": table,
         "judge_prompt_sha256": hashlib.sha256((JUDGE_SYSTEM_PROMPT+JUDGE_PROMPT).encode()).hexdigest(),
         "limits": ["Planning assumptions, not measured DeepSeek tokens or a provider quote.",
                    "Baseline estimate uses untruncated histories; every requested arm includes judge calls.",

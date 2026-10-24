@@ -55,7 +55,9 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         raise ValueError("Evaluation requires unique known arms")
     if write_mode != "library" or not judge:
         raise ValueError("Public benchmark requires external sources and independent binary judging")
-    if concurrency not in {1, 2} or not 1 <= history_concurrency <= 8 or not 1 <= max_tokens <= 2048 or context_chars < 4096:
+    # 8192: reasoning deployments spend completion tokens on hidden reasoning
+    # before the visible JSON; the cap stays explicit and registration-frozen.
+    if concurrency not in {1, 2} or not 1 <= history_concurrency <= 8 or not 1 <= max_tokens <= 8192 or context_chars < 4096:
         raise ValueError("Invalid explicit evaluation bounds")
     if include_captions and benchmark != "locomo":
         raise ValueError("Dataset-provided caption sources are supported only by the LoCoMo adapter")
@@ -74,7 +76,19 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
         raise ValueError("No benchmark items")
     if len({item.id for item in items}) != len(items):
         raise ValueError("Duplicate benchmark item IDs; rejected before model calls")
-    plan = estimate(items, dataset, model=settings.main.model, context_bytes=context_chars, arms=arms)
+    registration = json.loads(Path(registration or settings.root / "eval/protocols/kernel-vs-context-judge-v1.json").read_text(encoding="utf-8"))
+    declared_provider = registration.get("provider", "deepseek")
+    pricing_assumption = None
+    if declared_provider != "deepseek":
+        # A non-DeepSeek provider must be declared by the registration with an
+        # explicit tariff assumption; runtime model and endpoint must match it.
+        pricing_assumption = registration.get("pricing_assumption")
+        if not isinstance(pricing_assumption, dict) or settings.main.model not in pricing_assumption:
+            raise ValueError("Non-DeepSeek execution requires a declared pricing assumption for the model")
+        if registration.get("endpoint", "").rstrip("/") != settings.main.base_url.rstrip("/"):
+            raise ValueError("Runtime endpoint differs from the registered non-DeepSeek provider")
+    plan = estimate(items, dataset, model=settings.main.model, context_bytes=context_chars, arms=arms,
+                    rates=pricing_assumption.get(settings.main.model) if pricing_assumption else None)
     plan["include_captions"] = include_captions
     plan["source_input_policy"] = ("locomo-dialogue-and-blip-caption-v2" if include_captions
         else "locomo-dialogue-text-v1" if benchmark == "locomo" else "benchmark-text-v1")
@@ -85,9 +99,9 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
             target.mkdir(parents=True, exist_ok=True)
             (target / "estimate.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2)+"\n", encoding="utf-8")
         return plan
-    if not allow_remote or not official(settings.main) or not max_calls or max_calls <= 0 or not max_cost_usd or max_cost_usd <= 0:
+    provider_allowed = official(settings.main) or declared_provider != "deepseek"
+    if not allow_remote or not provider_allowed or not max_calls or max_calls <= 0 or not max_cost_usd or max_cost_usd <= 0:
         raise ValueError("Execution requires --allow-remote and positive --max-calls/--max-cost-usd")
-    registration = json.loads(Path(registration or settings.root / "eval/protocols/kernel-vs-context-judge-v1.json").read_text(encoding="utf-8"))
     if bool(registration.get("include_captions", False)) != include_captions:
         raise ValueError("Caption input policy differs from frozen registration")
     if registration.get("source_input_policy", "locomo-dialogue-text-v1") != plan["source_input_policy"]:
@@ -113,7 +127,10 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
     private_root = workspace.path("experiments").resolve()
     if output and not Path(output).resolve().is_relative_to(private_root):
         raise ValueError("Paid raw ledgers/databases must remain inside this account's private experiments directory")
-    settings.main.thinking = "disabled"
+    if declared_provider == "deepseek":
+        # Frozen protocol thinking switch; Qwen-style reasoning deployments keep
+        # their configured value (some servers reject enable_thinking=false).
+        settings.main.thinking = "disabled"
     settings.fast = copy.deepcopy(settings.main)
     settings.max_tokens = max_tokens
     settings.max_retries = 0
@@ -147,7 +164,8 @@ async def run(workspace, settings, *, benchmark, dataset, arms=None, conversatio
             role: {"model": settings.main.model, "endpoint": safe_endpoint(settings.main.base_url)}
             for role in ("reader", "formation", "judge")},
         protocol=frozen, seed=None, model_paths={"embedding": embedding})
-    client = EvaluationClient(settings, recorder, max_calls=max_calls, max_cost_usd=max_cost_usd)
+    client = EvaluationClient(settings, recorder, max_calls=max_calls, max_cost_usd=max_cost_usd,
+                              pricing_assumption=pricing_assumption)
 
     def factory(database):
         from ..memory.kernel import MemoryKernel
@@ -224,6 +242,8 @@ def main(argv=None):
     parser.add_argument("--allow-remote", action="store_true")
     parser.add_argument("--max-calls", type=int)
     parser.add_argument("--max-cost-usd", type=float)
+    parser.add_argument("--max-tokens", type=int, default=1024,
+        help="Reader output cap; must equal the registration reader_max_tokens")
     parser.add_argument("--registration")
     parser.add_argument("--history-concurrency", type=int, default=1)
     parser.add_argument("--item-ids-file", help="Exact registered diagnostic item IDs; never selected by gold or success")

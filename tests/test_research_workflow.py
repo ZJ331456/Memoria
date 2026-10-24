@@ -534,9 +534,26 @@ def test_deepseek_thinking_is_explicit_and_not_sent_to_other_hosts(setup, stream
     client = LLMClient(settings, httpx.MockTransport(handler))
     call = client.chat_stream if stream else client.chat
     asyncio.run(call([{"role": "user", "content": "engineering-only"}]))
-    settings.main.base_url = "https://other.example.test/v1"
+    # Qwen-compatible hosts get the explicit enable_thinking=false mapping, never
+    # the DeepSeek-specific thinking body; enabled reasoning still fails loudly.
+    captured = {}
+
+    def qwen_handler(request):
+        captured["payload"] = json.loads(request.content)
+        if stream:
+            return response({"answer": "engineering", "evidence_ids": []})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "engineering"}, "finish_reason": "stop"}]})
+
+    settings.main = ModelConfig("qwen-fixture", "private-fixture-key",
+                                "https://qwen.example.test/compatible-mode/v1", "disabled")
+    qwen_client = LLMClient(settings, httpx.MockTransport(qwen_handler))
+    qwen_call = qwen_client.chat_stream if stream else qwen_client.chat
+    asyncio.run(qwen_call([{"role": "user", "content": "engineering-only"}]))
+    assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "thinking" not in captured["payload"]
+    settings.main.thinking = "enabled"
     with pytest.raises(ValueError, match="official DeepSeek"):
-        asyncio.run(call([{"role": "user", "content": "engineering-only"}]))
+        asyncio.run(qwen_call([{"role": "user", "content": "engineering-only"}]))
 
 
 def test_encrypted_profile_binding_rejects_other_account_and_endpoint(setup, monkeypatch):

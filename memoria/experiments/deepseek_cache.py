@@ -30,8 +30,8 @@ PRICING = {
 }
 
 
-def cost_bounds(summary, model):
-    rates = PRICING.get(model)
+def cost_bounds(summary, model, table=None):
+    rates = (table or PRICING).get(model)
     if not rates:
         return None
     result = {}

@@ -168,9 +168,11 @@ def render_chat_prompt(tokenizer, messages, tools=None):
 class LocalCausalLM:
     """One serial GPU/CPU worker per model+device; shared across LLMClient calls."""
 
-    def __init__(self, path: Path, device: str, max_context_tokens: int = 8192):
+    def __init__(self, path: Path, device: str, max_context_tokens: int | None = None):
         self.path = path
         self.device = device
+        # None means: trust the model's own declared window; an explicit value is a
+        # deliberate caller-side cap and still bounds the request.
         self.max_context_tokens = max_context_tokens
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="memoria-llm")
         self._pending = BoundedSemaphore(4)
@@ -230,8 +232,14 @@ class LocalCausalLM:
         encoded = self._tokenizer(prompt, return_tensors="pt")
         encoded = {key: value.to(self._actual_device) for key, value in encoded.items()}
         prompt_len = int(encoded["input_ids"].shape[-1])
-        model_limit = getattr(self._model.config, "max_position_embeddings", self.max_context_tokens)
-        context_limit = min(self.max_context_tokens, model_limit)
+        # Multimodal wrappers declare their text window on text_config, not top level.
+        declared = getattr(self._model.config, "max_position_embeddings", None)
+        if not isinstance(declared, int) or declared < 2:
+            declared = getattr(getattr(self._model.config, "text_config", None),
+                               "max_position_embeddings", None)
+        if not isinstance(declared, int) or declared < 2:
+            declared = 8192  # undeclared model: keep the conservative default
+        context_limit = min(self.max_context_tokens, declared) if self.max_context_tokens else declared
         if prompt_len + max_tokens > context_limit:
             raise ContextLengthError(f"模型上下文超过限制：输入 {prompt_len} + 输出预算 {max_tokens} > {context_limit}")
         pad_id = self._tokenizer.pad_token_id
@@ -361,5 +369,5 @@ class LocalCausalLM:
 
 
 @lru_cache(maxsize=2)
-def get_local_llm(path: str, device: str, max_context_tokens: int = 8192) -> LocalCausalLM:
+def get_local_llm(path: str, device: str, max_context_tokens: int | None = None) -> LocalCausalLM:
     return LocalCausalLM(Path(path), device, max_context_tokens)

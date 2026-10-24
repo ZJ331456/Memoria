@@ -52,11 +52,13 @@ READER_STYLE = ('\n仅给出回答问题必需的事实，不添加“根据来�
     'An event month is different from narrating the exact day of the message.')
 READER_REPAIR = '\n上一次输出JSON格式或长度不合要求。请从相同证据重新生成完整合法JSON；不要接续或修补上一段文本，不更改证据或引用。'
 BEST_EFFORT_STYLE = ('\nThe verification gate could not establish every frozen requirement. Make a FINAL '
-    'best-effort attempt strictly from the presented evidence of THIS request: answer only if the '
-    'presented evidence itself supports a complete answer to the question (same subject, condition, '
-    'and calendar rules as before); if any required part is not established by the presented evidence, '
-    'abstain. Text visible in any earlier corpus block but not presented in THIS request is never '
-    'evidence. Never guess, never weaken subjects or dates, and never cite unpresented sources.')
+    'best-effort attempt from the presented evidence of THIS request: give the most complete, '
+    'evidence-grounded answer the presented excerpts support, explicitly hedging or stating which '
+    'part the excerpts do not settle. Prefer answering over abstaining: abstain ONLY when nothing '
+    'in the presented evidence relates to the question at all. Same subject, condition and calendar '
+    'rules as before; text visible in any earlier corpus block but not presented in THIS request is '
+    'never evidence. Never fabricate names, dates, quotes or events absent from the evidence, and '
+    'never cite unpresented sources.')
 
 
 def reader_messages(messages, *, repair=False):

@@ -30,11 +30,13 @@ def local_assets(path):
     return tokenizer,maximum,digest.hexdigest()
 
 
-def count_local_path(path,messages,tools,context_cap=8192):
+def count_local_path(path,messages,tools,context_cap=None):
     from ..llm.backends.process_engine import render_chat_prompt
     tokenizer,limit,fingerprint=local_assets(str(path))
     text=render_chat_prompt(tokenizer,messages,tools)
-    return len(tokenizer(text)['input_ids']),min(context_cap,limit),fingerprint
+    # No hidden 8K default: a local model is bounded by its own config unless the
+    # caller (HTTP counter endpoint) passes an explicit cap.
+    return len(tokenizer(text)['input_ids']),(min(context_cap,limit) if context_cap is not None else limit),fingerprint
 
 
 def local_count(selected,messages,tools):

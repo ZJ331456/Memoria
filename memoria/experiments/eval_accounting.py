@@ -33,12 +33,25 @@ class EvaluationClient(LLMClient):
 
     The USD cap is a conservative client-side bound at the frozen peak tariff, not a
     provider billing limit. Unreturned usage retains its full byte/output reservation.
+    ``pricing_assumption`` optionally declares an explicit tariff assumption for a
+    non-DeepSeek model; it is an assumption recorded in the registration, never a
+    supplier quote.
     """
-    def __init__(self, settings, recorder, *, max_calls, max_cost_usd, transport=None):
+    def __init__(self, settings, recorder, *, max_calls, max_cost_usd, transport=None,
+                 pricing_assumption=None):
         super().__init__(settings, transport=transport)
         if type(max_calls) is not int or max_calls < 1 or not math.isfinite(max_cost_usd) or max_cost_usd <= 0:
             raise ValueError("Positive request and cost caps are required")
-        if settings.main.model not in {"deepseek-flash", "deepseek-v4-pro"}:
+        if pricing_assumption is not None:
+            if settings.main.model not in pricing_assumption:
+                raise ValueError("Pricing assumption does not cover the evaluation model")
+            period = pricing_assumption[settings.main.model].get("peak")
+            if not isinstance(period, dict) or not {"hit", "miss", "output"} <= set(period):
+                raise ValueError("Pricing assumption needs peak hit/miss/output rates")
+            self.price_table = {**PRICING, **pricing_assumption}
+        elif settings.main.model in {"deepseek-flash", "deepseek-v4-pro"}:
+            self.price_table = PRICING
+        else:
             raise ValueError("Unpriced evaluation model")
         self.recorder, self.max_calls, self.max_cost_usd = recorder, max_calls, max_cost_usd
         self.rows, self.reserved_usd = [], 0.0
@@ -54,7 +67,7 @@ class EvaluationClient(LLMClient):
                    "max_tokens": output}
         # UTF-8 byte upper bound plus framing allowance; never discounted for predicted cache.
         upper_tokens = len(canonical(payload).encode("utf-8")) + 1024
-        rate = PRICING[selected.model]["peak"]
+        rate = self.price_table[selected.model]["peak"]
         reserved = (upper_tokens*rate["miss"] + output*rate["output"]) / 1e6
         if len(self.rows) >= self.max_calls or self.reserved_usd + reserved > self.max_cost_usd:
             self.halt_reason = "request_or_cost_cap"
@@ -82,7 +95,7 @@ class EvaluationClient(LLMClient):
                        request_budget=getattr(result, "budget", None),
                        finish_reason=result.finish_reason, retries=getattr(result, "retries", None))
             usage = cache_summary([row])
-            priced = cost_bounds(usage, selected.model)
+            priced = cost_bounds(usage, selected.model, table=self.price_table)
             if priced["complete_usage"]:
                 actual = priced["estimate"]["peak"]["known_input_output_usd"]
                 self.reserved_usd += actual - reserved
@@ -123,6 +136,6 @@ class EvaluationClient(LLMClient):
                 "halt_reason": self.halt_reason,
                 "cap_usd": self.max_cost_usd, "cap_calls": self.max_calls,
                 "groups": [{"arm": arm, "stage": stage, "usage": cache_summary(rows),
-                            "cost": cost_bounds(cache_summary(rows), self.settings.main.model)}
+                            "cost": cost_bounds(cache_summary(rows), self.settings.main.model, table=self.price_table)}
                            for (arm, stage), rows in sorted(groups.items())],
-                "note": "Frozen price estimate, not invoice. Formation is shared once per visible history; judge cost is separate from inference."}
+                "note": "Frozen price estimate, not invoice; non-DeepSeek rates are the registration pricing assumption, not a supplier quote. Formation is shared once per visible history; judge cost is separate from inference."}

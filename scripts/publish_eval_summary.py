@@ -39,7 +39,9 @@ def aggregate(run):
     manifest = json.loads((run/'manifest.json').read_text(encoding='utf-8'))
     protocol = manifest['protocol']
     if protocol.get('protocol') not in {'kernel-vs-context-llm-judge-v3-ordered-histories',
-                                        'kernel-vs-context-llm-judge-v4-session-corpus-best-effort'}:
+                                        'kernel-vs-context-llm-judge-v4-session-corpus-best-effort',
+                                        'kernel-vs-context-llm-judge-v6-deepseek-answer-everything-1032',
+                                        'kernel-vs-context-llm-judge-v6b-deepseek-transport-retry-remainder-557'}:
         raise ValueError('Only a registered sequential protocol may be published')
     source = ROOT/'data/benchmarks/locomo/raw/locomo10.json'
     if hashlib.sha256(source.read_bytes()).hexdigest() != protocol['dataset_sha256']:

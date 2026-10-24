@@ -65,9 +65,14 @@ class OpenAICompatBackend:
         if selected.thinking is None:
             return {}
         url = urlparse(selected.base_url)
-        if url.scheme != "https" or url.hostname != "api.deepseek.com":
-            raise ValueError("Explicit thinking switch is supported only for the official DeepSeek API")
-        return {"thinking": {"type": selected.thinking}}
+        if url.scheme == "https" and url.hostname == "api.deepseek.com":
+            return {"thinking": {"type": selected.thinking}}
+        # Qwen-compatible OpenAI endpoints (Bailian/DashScope style) disable their
+        # built-in reasoning through chat_template_kwargs. The field is sent only
+        # when explicitly configured; a provider that rejects it fails loudly.
+        if selected.thinking == "disabled":
+            return {"chat_template_kwargs": {"enable_thinking": False}}
+        raise ValueError("Explicit thinking=enabled is supported only for the official DeepSeek API")
 
     def __init__(
         self,

@@ -262,3 +262,36 @@ def test_local_generation_limit_eos_sampling_and_context(tmp_path):
             engine._generate([], None, 7)
     finally:
         engine._executor.shutdown(wait=True)
+
+
+def test_thinking_disabled_maps_to_chat_template_kwargs_off_deepseek():
+    """Qwen-compatible endpoints get chat_template_kwargs; DeepSeek keeps its own switch."""
+    from memoria.llm.backends.openai_http import OpenAICompatBackend
+    bailian = ModelConfig(model='qwen3.8-flash', api_key='k',
+        base_url='https://llm-17841439ch8g7u4e.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+        thinking='disabled')
+    assert OpenAICompatBackend.provider_options(bailian) == {'chat_template_kwargs': {'enable_thinking': False}}
+    deepseek = ModelConfig(model='deepseek-flash', api_key='k',
+        base_url='https://api.deepseek.com/v1', thinking='disabled')
+    assert OpenAICompatBackend.provider_options(deepseek) == {'thinking': {'type': 'disabled'}}
+    unset = ModelConfig(model='qwen3.8-2.4t-a95b', api_key='k',
+        base_url='https://llm-17841439ch8g7u4e.cn-beijing.maas.aliyuncs.com/compatible-mode/v1')
+    assert OpenAICompatBackend.provider_options(unset) == {}
+    enabled = ModelConfig(model='qwen3.8-max', api_key='k',
+        base_url='https://llm-17841439ch8g7u4e.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+        thinking='enabled')
+    with pytest.raises(ValueError):
+        OpenAICompatBackend.provider_options(enabled)
+
+
+def test_strict_json_strips_one_markdown_fence_without_relaxing_checks():
+    from memoria.memory.reader import strict_json
+    assert strict_json('```json\n{"ok": true}\n```') == {'ok': True}
+    assert strict_json('```\n{"ok": true}\n```') == {'ok': True}
+    assert strict_json('{"ok": true}') == {'ok': True}
+    with pytest.raises(ValueError):
+        strict_json('```json\n{"a": 1, "a": 2}\n```')  # duplicate keys still rejected
+    with pytest.raises(ValueError):
+        strict_json('```json\nbroken\n```')  # non-JSON fence content still fails
+    with pytest.raises(ValueError):
+        strict_json('{"broken"')

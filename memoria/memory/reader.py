@@ -46,7 +46,16 @@ def strict_json(value):
             if key in result: raise ValueError('duplicate JSON key')
             result[key]=item
         return result
-    return json.loads(value,object_pairs_hook=pairs)
+    text = value.strip()
+    # Some OpenAI-compatible providers wrap JSON in one markdown fence; the bytes
+    # inside are parsed with the exact same strictness (duplicate keys still fail).
+    if text.startswith('```'):
+        first = text.find('\n')
+        if first != -1 and text.endswith('```'):
+            inner = text[first + 1:-3].strip()
+            if inner.startswith('{') or inner.startswith('['):
+                text = inner
+    return json.loads(text,object_pairs_hook=pairs)
 
 
 class CitationGuard:
