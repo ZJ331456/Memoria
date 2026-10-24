@@ -82,6 +82,25 @@ async function jumpMatch(delta:number) {
 function changeFilters() {clearTimeout(listTimer);listTimer=setTimeout(()=>{listPage.value=1;void loadList(false)},300)}
 watch([query,origin,sort],changeFilters)
 watch(insideQuery,()=>{clearTimeout(messageTimer);messageTimer=setTimeout(()=>void loadMessages(),300)})
+const renaming=ref(''),renameDraft=ref(''),deleting=ref('')
+function startRename(s:any){renaming.value=s.id;renameDraft.value=s.title}
+async function submitRename(s:any){
+  const value=renameDraft.value.trim()
+  if(!value||value===s.title){renaming.value='';return}
+  try{
+    const updated=await props.api.request('/sessions/'+encodeURIComponent(s.id),{title:value.slice(0,60)},'PATCH')
+    s.title=updated.title??value
+    if(selected.value===s.id&&detail.value)detail.value={...detail.value,session:{...detail.value.session,title:s.title}}
+    renaming.value='';await loadList(false)
+  }catch(e){failure(e)}finally{renaming.value=''}
+}
+async function removeConversation(s:any){
+  try{
+    await props.api.request('/sessions/'+encodeURIComponent(s.id),undefined,'DELETE')
+    if(selected.value===s.id){selected.value='';detail.value=null;inspector.value=null;focused.value='';emit('changed')}
+    deleting.value='';await loadList(false)
+  }catch(e){failure(e)}finally{deleting.value=''}
+}
 onMounted(()=>void loadList())
 onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(listTimer);clearTimeout(messageTimer)})
 </script>
@@ -94,7 +113,16 @@ onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(listTimer);clearTimeout
       <section class="conversation-sidebar panel">
         <div class="conversation-filters"><el-input v-model="query" maxlength="200" clearable placeholder="搜索全部标题 / 对话正文" aria-label="搜索全部历史对话" /><div class="filter-pair"><el-select v-model="origin" aria-label="来源类型"><el-option value="all" label="全部来源"/><el-option value="imported" label="导入资料"/><el-option value="native" label="本人对话（全部渠道）"/><el-option v-for="item in [{key:'chat',label:'网页 Chat'},{key:'qq',label:'QQ'},{key:'telegram',label:'Telegram'},{key:'feishu',label:'飞书'},{key:'api',label:'HTTP API'},{key:'unknown',label:'渠道未记录'}]" :key="item.key" :value="item.key" :label="item.label"/></el-select><el-select v-model="sort" aria-label="对话排序"><el-option value="recent" label="最近更新"/><el-option value="oldest" label="最早记录"/><el-option value="messages" label="消息最多"/></el-select></div></div>
         <div class="conversation-list" :aria-busy="loading">
-          <button v-for="s in listing?.items??[]" :key="s.id" class="conversation-item" :class="{selected:s.id===selected}" @click="choose(s.id,query?s.preview_message_id:'')"><div class="conversation-item-top"><span class="origin-label">{{ channelLabel(s.origin) }}</span><time>{{ dateLabel(s.updated_at) }}</time></div><strong>{{ s.title }}</strong><p><template v-for="(part,index) in textParts(s.preview,query)" :key="index"><mark v-if="part.hit">{{ part.text }}</mark><span v-else>{{ part.text }}</span></template></p><div class="conversation-item-meta"><span>{{ s.message_count }} 条消息</span><span v-if="query&&s.matching_messages" class="search-hit">{{ s.matching_messages }} 条命中</span><span v-else>查看原文 →</span></div></button>
+          <div v-for="s in listing?.items??[]" :key="s.id" class="conversation-item" :class="{selected:s.id===selected}">
+            <form v-if="renaming===s.id" class="conversation-rename" @submit.prevent="submitRename(s)"><el-input v-model="renameDraft" maxlength="60" aria-label="重命名对话" size="small" @keydown.esc="renaming=''" @blur="submitRename(s)" /><el-button native-type="submit" size="small" aria-label="保存名称">✓</el-button><el-button size="small" aria-label="取消重命名" @click="renaming=''">×</el-button></form>
+            <template v-else>
+            <button class="conversation-item-main" @click="choose(s.id,query?s.preview_message_id:'')"><div class="conversation-item-top"><span class="origin-label">{{ channelLabel(s.origin) }}</span><time>{{ dateLabel(s.updated_at) }}</time></div><strong>{{ s.title }}</strong><p><template v-for="(part,index) in textParts(s.preview,query)" :key="index"><mark v-if="part.hit">{{ part.text }}</mark><span v-else>{{ part.text }}</span></template></p><div class="conversation-item-meta"><span>{{ s.message_count }} 条消息</span><span v-if="query&&s.matching_messages" class="search-hit">{{ s.matching_messages }} 条命中</span><span v-else>查看原文 →</span></div></button>
+            <span v-if="s.origin.kind==='native'" class="conversation-item-actions">
+              <el-button v-if="deleting!==s.id" link size="small" aria-label="重命名对话" title="重命名" @click.stop="startRename(s)">✎</el-button>
+              <el-button v-if="deleting!==s.id" link size="small" class="danger-link" aria-label="删除对话" title="删除" @click.stop="deleting=s.id">🗑</el-button>
+              <template v-else><span class="row-confirm">删除？</span><el-button link size="small" class="danger-link" aria-label="确认删除对话" @click.stop="removeConversation(s)">确认</el-button><el-button link size="small" aria-label="取消删除" @click.stop="deleting=''">取消</el-button></template>
+            </span></template>
+          </div>
           <div v-if="!loading&&!listing?.items.length" class="empty"><h3>{{ query?'没有匹配的对话':'还没有对话记录' }}</h3><p>{{ query?'尝试其他关键词；搜索包含消息全文。':'当前账号没有资料。可以前往Chat开始自己的对话。' }}</p></div>
         </div>
         <div v-if="listing?.total" class="list-pagination"><span>共 {{ listing.total }} 段</span><el-pagination small layout="prev, pager, next" :pager-count="5" :current-page="listing.page" :page-size="20" :total="listing.total" @current-change="(p:number)=>{listPage=p;loadList(false)}" /></div>

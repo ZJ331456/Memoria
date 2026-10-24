@@ -48,6 +48,26 @@ async function loadConversations(){
   }catch(e){fail(e)}finally{if(at===identity)loading.value=false}
 }
 function newChat(){if(sending.value)return;selected.value='';title.value='新的对话';messages.value=[];messageTotal.value=0;pendingUser.value='';answer.value='';reading.value=false;oldestPage.value=1;draft.value='';error.value='';mobileOpen.value=false;followTail.value=true;rawMessages.value.clear();void nextTick(()=>composer.value?.focus())}
+const renaming=ref(''),renameDraft=ref(''),deleting=ref('')
+function startRename(item:any){renaming.value=item.id;renameDraft.value=item.title}
+async function submitRename(item:any){
+  const value=renameDraft.value.trim(),at=identity
+  if(!value||value===item.title){renaming.value='';return}
+  try{
+    const updated=await api.request('/sessions/'+encodeURIComponent(item.id),{title:value.slice(0,60)},'PATCH')
+    if(!alive||at!==identity)return
+    item.title=updated.title??value;if(selected.value===item.id)title.value=item.title
+    await loadConversations()
+  }catch(e){fail(e)}finally{if(alive&&at===identity)renaming.value=''}
+}
+async function removeConversation(item:any){
+  const at=identity
+  try{
+    await api.request('/sessions/'+encodeURIComponent(item.id),undefined,'DELETE')
+    if(!alive||at!==identity)return
+    if(selected.value===item.id)newChat();else await loadConversations()
+  }catch(e){fail(e)}finally{if(alive&&at===identity)deleting.value=''}
+}
 async function choose(item:any){
   if(sending.value)return
   selected.value=item.id;title.value=item.title;messages.value=[];draft.value='';error.value='';mobileOpen.value=false
@@ -124,7 +144,15 @@ onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(cop
         <p class="chat-empty-list">此处显示日常聊天。<a href="/studio/#conversations">导入资料请到 Studio 的历史对话查看 →</a></p>
         <nav class="chat-list" aria-label="我的聊天记录" :aria-busy="loading">
           <p v-if="loading" class="chat-empty-list" role="status">正在读取聊天记录…</p>
-          <button v-for="item in conversations" :key="item.id" :class="{chosen:selected===item.id}" :disabled="sending" @click="choose(item)"><strong>{{ item.title }}</strong><small>{{ channelLabel(item.origin) }} · {{ dateLabel(item.updated_at) }}</small></button>
+          <div v-for="item in conversations" :key="item.id" class="chat-row" :class="{chosen:selected===item.id}">
+          <template v-if="renaming===item.id"><form class="chat-rename" @submit.prevent="submitRename(item)"><input v-model="renameDraft" maxlength="60" aria-label="重命名对话" :disabled="sending" @keydown.esc="renaming=''" @blur="submitRename(item)" /><button type="submit" aria-label="保存名称" :disabled="sending">✓</button><button type="button" aria-label="取消重命名" @click="renaming=''">×</button></form></template>
+          <template v-else><button class="chat-row-main" :disabled="sending" @click="choose(item)"><strong>{{ item.title }}</strong><small>{{ channelLabel(item.origin) }} · {{ dateLabel(item.updated_at) }}</small></button>
+          <span class="chat-row-actions">
+            <button v-if="deleting!==item.id" class="row-icon" aria-label="重命名对话" title="重命名" :disabled="sending" @click.stop="startRename(item)">✎</button>
+            <button v-if="deleting!==item.id" class="row-icon" aria-label="删除对话" title="删除" :disabled="sending" @click.stop="deleting=item.id">🗑</button>
+            <template v-else><span class="row-confirm">删除？</span><button class="row-icon danger" aria-label="确认删除对话" :disabled="sending" @click.stop="removeConversation(item)">确认</button><button class="row-icon" aria-label="取消删除" :disabled="sending" @click.stop="deleting=''">取消</button></template>
+          </span></template>
+        </div>
           <p v-if="!loading&&!conversations.length" class="chat-empty-list">{{ search?'没有匹配的对话':'还没有聊天记录，开始聊聊吧。' }}</p>
         </nav>
         <div v-if="total>20" class="chat-list-pager"><button :disabled="listPage===1||sending" @click="listPage--;loadConversations()">上一页</button><span>{{ listPage }} / {{ Math.ceil(total/20) }}</span><button :disabled="listPage*20>=total||sending" @click="listPage++;loadConversations()">下一页</button></div>
@@ -138,7 +166,7 @@ onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(cop
       <div v-if="!user" class="chat-login"><div class="login-heading"><span class="welcome-symbol">✳</span><h1>让每次对话，都有延续。</h1><p>与 Memoria 聊聊今天，也聊聊更长远的事。</p></div><AuthPanel :account="account" /></div>
       <template v-else>
         <div ref="feed" class="chat-feed" :class="{welcome:!selected&&!pendingUser}" aria-label="对话消息" aria-live="polite" @scroll="trackScroll">
-          <section v-if="!selected&&!pendingUser" class="chat-welcome"><span class="welcome-kicker">YOUR SPACE, YOUR PACE</span><span class="welcome-symbol">✳</span><h1>今天，想聊些什么？</h1><p>从此刻的一件小事开始。<br>你的对话会保存在自己的账号下。</p><div class="welcome-detail"><span>○ 一段新的对话</span><span>◇ 记忆由你管理</span></div></section>
+          <section v-if="!selected&&!pendingUser" class="chat-welcome"><span class="welcome-symbol">✳</span><h1>今天，想聊些什么？</h1><p>从此刻的一件小事开始。你的对话会保存在自己的账号下。</p><div class="welcome-detail"><span>○ 一段新的对话</span><span>◇ 记忆由你管理</span></div></section>
           <div v-else class="message-column">
             <button v-if="oldestPage>1" class="load-earlier" :disabled="reading||sending" @click="loadMessages(oldestPage-1,true)">{{ reading?'正在加载…':'加载更早的消息' }}</button>
             <div class="chat-conversation-title"><h1>{{ title }}</h1><span>仅当前账号可见</span></div>
@@ -148,7 +176,7 @@ onUnmounted(()=>{alive=false;stopStatuses();clearTimeout(timer);clearTimeout(cop
             <article v-if="sending" class="chat-message assistant"><span class="chat-message-avatar">✳</span><div class="chat-message-body"><div class="chat-message-meta"><strong>Memoria</strong><span>{{ phase }}</span></div><MarkdownContent v-if="answer" class="chat-message-text" :content="answer"/><div v-else class="thinking-dots" role="status" aria-label="正在等待回复"><i/><i/><i/></div></div></article>
           </div>
         </div>
-        <div class="composer-area"><button v-if="selected&&!followTail" class="jump-latest" @click="scrollBottom(true)">↓ 回到最新消息</button><form class="chat-composer" @submit.prevent="send"><textarea ref="composer" v-model="draft" aria-label="消息内容" rows="2" maxlength="20000" placeholder="给 Memoria 发消息…" :disabled="sending||busy||reading" @keydown="keydown"/><div class="composer-controls"><span>Enter 发送 · Shift + Enter 换行</span><button v-if="sending" type="button" class="stop-generation" @click="cancel">■ 停止</button><button v-else class="send-message" type="submit" aria-label="发送消息" :disabled="!draft.trim()||busy||reading">↑</button></div></form><div class="composer-note">回复由当前配置的模型生成，请核对重要信息。<a href="/studio/#conversations">导入资料与记忆管理 ↗</a></div></div>
+        <div class="composer-area"><button v-if="selected&&!followTail" class="jump-latest" @click="scrollBottom(true)">↓ 回到最新消息</button><form class="chat-composer" @submit.prevent="send"><textarea ref="composer" v-model="draft" aria-label="消息内容" rows="2" maxlength="20000" placeholder="给 Memoria 发消息…" :disabled="sending||busy||reading" @keydown="keydown"/><div class="composer-controls"><span>Enter 发送 · Shift + Enter 换行</span><span v-if="draft.length>=18000" class="char-count" aria-live="polite">{{ draft.length }}/20000</span><button v-if="sending" type="button" class="stop-generation" @click="cancel">■ 停止</button><button v-else class="send-message" type="submit" aria-label="发送消息" :disabled="!draft.trim()||busy||reading">↑</button></div></form><div class="composer-note">回复由当前配置的模型生成，请核对重要信息。<a href="/studio/#conversations">导入资料与记忆管理 ↗</a></div></div>
       </template>
     </main>
   </div>
