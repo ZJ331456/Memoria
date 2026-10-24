@@ -78,6 +78,56 @@ class MemoryKernel:
     def ingest_file(self, filename: str, data: bytes, **metadata):
         return self.library.files.ingest(filename, data, **metadata)
 
+    # --- Source-domain management facade: API adapters call these, never
+    # kernel.library internals. Domain logic and transactions stay in library. ---
+
+    def sources(self, limit: int = 50):
+        return self.library.list(limit)
+
+    def search_sources(self, query: str, *, session_id: str | None = None,
+                       limit: int = 5, budget: int = 4000, chunks_per_source: int = 1):
+        return self.library.search(query, session_id=session_id, limit=limit,
+                                   budget=budget, chunks_per_source=chunks_per_source)
+
+    def source_detail(self, sid: str):
+        return self.library.detail(sid)
+
+    def revise_source(self, sid: str, body):
+        return self.library.revise(sid, body)
+
+    def source_version(self, sid: str, rid: str):
+        return self.library.version(sid, rid)
+
+    def retract_source(self, sid: str):
+        return self.library.retract(sid)
+
+    def source_feedback(self, sid: str, body):
+        return self.library.feedback(sid, body)
+
+    async def distill_source(self, sid: str):
+        return await self.library.distill(sid)
+
+    async def form_source(self, sid: str, body):
+        return await self.library.formation.form(sid, body)
+
+    def source_observations(self, sid: str):
+        return self.library.formation.observations(sid)
+
+    async def consolidate_observation(self, oid: str):
+        return await self.library.formation.consolidate(oid)
+
+    def consolidations(self, session_id: str | None = None):
+        if session_id is not None and not self.store.session(session_id):
+            from .library import LibraryError
+            raise LibraryError(404, "会话不存在")
+        return self.library.formation.list(session_id=session_id)
+
+    def retire_consolidation(self, key: str, expected_revision_id: str, session_id: str | None = None):
+        return self.library.formation.retire(key, expected_revision_id, session_id=session_id)
+
+    def original_source_file(self, sid: str, revision_id: str):
+        return self.library.files.original(sid, revision_id)
+
     def record_message(
         self, session_id: str, role: str, content: str, *, source_time: str | None = None
     ):

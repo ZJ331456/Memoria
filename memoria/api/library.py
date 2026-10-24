@@ -17,7 +17,11 @@ class SearchInput(BaseModel):
 
 
 def library_router(kernel):
-    library = kernel.library if kernel is not None else None
+    """Source management routes; every operation goes through the Kernel facade.
+
+    The facade delegates into library/formation where domain transactions live,
+    so future kernel-level auditing cannot be bypassed by an API adapter.
+    """
     router = APIRouter(
         prefix="/api/library",
         tags=["non-conversation memory"],
@@ -26,7 +30,7 @@ def library_router(kernel):
 
     @router.get("/sources")
     def sources(limit: int = Query(default=50, ge=1, le=200)):
-        return library.list(limit)
+        return kernel.sources(limit)
 
     @router.post("/sources", status_code=201)
     def create(body: SourceInput):
@@ -34,55 +38,51 @@ def library_router(kernel):
 
     @router.post("/search")
     def search(body: SearchInput):
-        return library.search(**body.model_dump())
+        return kernel.search_sources(**body.model_dump())
 
     @router.get("/sources/{sid}")
     def detail(sid: str):
-        return library.detail(sid)
+        return kernel.source_detail(sid)
 
     @router.post("/sources/{sid}/revisions")
     def revise(sid: str, body: RevisionInput):
-        return library.revise(sid, body)
+        return kernel.revise_source(sid, body)
 
     @router.get("/sources/{sid}/revisions/{rid}")
     def version(sid: str, rid: str):
-        return library.version(sid, rid)
+        return kernel.source_version(sid, rid)
 
     @router.post("/sources/{sid}/retract")
     def retract(sid: str):
-        return library.retract(sid)
+        return kernel.retract_source(sid)
 
     @router.post("/sources/{sid}/feedback", status_code=201)
     def feedback(sid: str, body: FeedbackInput):
-        return library.feedback(sid, body)
+        return kernel.source_feedback(sid, body)
 
     @router.post("/sources/{sid}/distill")
     async def distill(sid: str):
-        return await library.distill(sid)
+        return await kernel.distill_source(sid)
 
     @router.post("/sources/{sid}/form")
     async def form(sid: str, body: FormRequest):
-        return await library.formation.form(sid, body)
+        return await kernel.form_source(sid, body)
 
     @router.get("/sources/{sid}/observations")
     def observations(sid: str):
-        return library.formation.observations(sid)
+        return kernel.source_observations(sid)
 
     @router.post("/observations/{oid}/consolidate")
     async def consolidate(oid: str):
-        return await library.formation.consolidate(oid)
+        return await kernel.consolidate_observation(oid)
 
     @router.get("/consolidations")
     def consolidations(session_id: str | None = Query(default=None, min_length=1, max_length=64)):
-        if session_id is not None and not library.store.session(session_id):
-            from ..memory.library import LibraryError
-
-            raise LibraryError(404, "会话不存在")
-        return library.formation.list(session_id=session_id)
+        return kernel.consolidations(session_id=session_id)
 
     @router.post("/consolidations/{key}/retire")
     def retire(key: str, body: Retirement):
-        return library.formation.retire(key, body.expected_revision_id, session_id=body.session_id)
+        return kernel.retire_consolidation(key, body.expected_revision_id, session_id=body.session_id)
 
     return router
 

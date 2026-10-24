@@ -80,7 +80,7 @@ def document_import_router(kernel):
     def original(
         sid: str, revision_id: str | None = Query(default=None, min_length=1, max_length=64)
     ):
-        filename, data = kernel.library.files.original(sid, revision_id)
+        filename, data = kernel.original_source_file(sid, revision_id)
         return Response(
             data,
             media_type="application/octet-stream",

@@ -35,6 +35,8 @@ Pop-Location
 
 ## 统一访问链路
 
+**资料搜索与记忆问答是两条语义，不要混用**：Studio资料库页面的“搜索”走 `/api/library/search`（`kernel.search_sources`），返回词面/RRF命中的来源片段列表，用于定位和浏览原始资料；它不经过冻结需求、支持核验和发布校验。问答式知识获取走 `/api/memory-kernel/knowledge-answer`（`Kernel.answer(KnowledgeAnswer)`），与聊天同一完整闭环（检索→Gate→Reader→支持核验→发布）。前者是“找到资料”，后者是“给出经核验的回答”。
+
 `POST /api/memory-query`：保守中文解析 → 已批准Claim/有效视图或时间线 → 缺项时普通记忆RRF来源补检 → 重新核对父版本/事实有效区间/来源角色/撤销/公开归属 → 去重及整组预算 → 路径/证据/解释。身份只来自服务器登录UUID，拒绝user_id等未知字段。
 
 请求字段query、subject_id、predicates、context、scope_mode、fact_as_of、recorded_as_of、mode、selector、budget_chars、top_k、candidate_limit。默认unified/coverage/6000字符/8证据组/32检索结果；最多64候选、32证据组、256–16000字符。调试候选不计入selection预算；完整调试响应不是reader上下文。
