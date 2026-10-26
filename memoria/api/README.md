@@ -13,6 +13,7 @@ memory-answer现复用Kernel.answer；新增memory-kernel/knowledge-answer（仅
 | [document_import.py](document_import.py) | 账号网关后的二进制文本文件上传、原件下载与OpenAPI binary体说明，不按HTTP请求读取服务器路径 |
 | [memory_kernel.py](memory_kernel.py) | `/api/memory-kernel`原生资料保存、按类型读出与有界检索，不要求先发起Chat |
 | [library.py](library.py) | `/api/library`修订/历史/反馈/提炼/撤回；创建与核心共用实现 |
+| [projects.py](projects.py) | `/api/projects`项目工作区：注册/归档、Git与文本/文件导入绑定、任务+反馈闭环、项目内召回与显式提炼；业务SQL在memoria/projects |
 | [gateway.py](gateway.py) | 注册/登录/退出、Cookie 或 Bearer 认证、按账号运行时、请求隐私边界、OpenAPI 和 `/studio/` 托管 |
 | [app.py](app.py) | 租户组件生命周期、中间件与路由组合；业务路由已拆分 |
 | [schemas.py](schemas.py)、[context.py](context.py) | 原HTTP请求/响应契约与明确租户依赖 |
@@ -40,6 +41,7 @@ memory-answer现复用Kernel.answer；新增memory-kernel/knowledge-answer（仅
 | `/api/memory-answer` | 当前账号记忆reader的缓冲回答、引用/来源新鲜度校验；可能调用远程收费模型，缺证据可直接澄清 |
 | `/api/memory-layers`、`/api/episodes` | 分层配置、活动情景及管理归档 |
 | `/api/shared/*`、`/api/governance/*` | 独立共享记忆治理；不能只凭 Agent key 绕过用户登录 |
+| `/api/library` 系列与 `/api/projects` 系列 | 非对话资料层与项目记忆工作区：导入/修订/反馈/提炼、项目任务循环与项目内召回；导入与检索不调用模型 |
 | `/api/research-runs` | 当前账号规范运行记录；不返回原始 prompt、gold 或密钥 |
 | `/api/tools`、`/api/mcp`、`/api/skills`、`/api/drift`、`/api/traces`、`/metrics` | 扩展状态与诊断；业务和指标需要登录 |
 

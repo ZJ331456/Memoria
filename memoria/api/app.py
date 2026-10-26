@@ -250,6 +250,15 @@ def _create_tenant_app(
 
     app.include_router(document_import_router(kernel))
 
+    from ..projects import ProjectError
+    from .projects import projects_router
+
+    app.include_router(projects_router(service.projects if service else None))
+
+    @app.exception_handler(ProjectError)
+    async def project_error(request: Request, exc: ProjectError):
+        return _error(request, exc.status, _error_code(exc.status), exc.detail)
+
     @app.get("/api/health", response_model=HealthResponse, tags=["system"], summary="存活检查")
     def health() -> HealthResponse:
         return HealthResponse(version=VERSION)

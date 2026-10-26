@@ -42,6 +42,11 @@ class AgentService:
         )
         from .tools.knowledge import register_knowledge_tools
         register_knowledge_tools(tools, self.kernel)
+        from .projects import ProjectWorkspaces
+        from .tools.projects import register_project_tools
+
+        self.projects = ProjectWorkspaces(store, self.kernel)
+        register_project_tools(tools, self.projects)
         self.tool_presentation = ToolPresentation(tools, enabled=settings.tool_search_enabled)
         from .mcp.config import configured_mcp_servers
         self.mcp = McpHost(tools, settings.mcp_config_file, enabled=settings.mcp_enabled,

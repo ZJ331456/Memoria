@@ -7,6 +7,7 @@ import AuthPanel from '../../shared/AuthPanel.vue'
 import AccountMenu from '../../shared/AccountMenu.vue'
 import MemoryPipeline from './components/MemoryPipeline.vue'
 import KnowledgeLibrary from './components/KnowledgeLibrary.vue'
+import ProjectMemory from './components/ProjectMemory.vue'
 import ConsoleHome from './components/ConsoleHome.vue'
 import HistoryBrowser from './components/HistoryBrowser.vue'
 import MemoryInventory from './components/MemoryInventory.vue'
@@ -14,15 +15,15 @@ import AccountsPanel from './components/AccountsPanel.vue'
 import PendingReviews from './components/PendingReviews.vue'
 const account=useAccount({ready:refresh,clear:clearData})
 const {api,user,busy,error,run,logout}=account
-const headings:Record<string,string>={overview:'数据总览',conversations:'历史对话',memories:'长期记忆库',reviews:'候选审核',explorer:'结构化记忆与审核',temporal:'双时间与变化',retrieval:'检索实验室',evaluation:'评测运行记录',pipeline:'记忆处理与服务',library:'资料与经验',accounts:'账号管理'}
+const headings:Record<string,string>={overview:'数据总览',conversations:'历史对话',memories:'长期记忆库',reviews:'候选审核',explorer:'结构化记忆与审核',temporal:'双时间与变化',retrieval:'检索实验室',evaluation:'评测运行记录',pipeline:'记忆处理与服务',library:'资料与经验',projects:'项目记忆',accounts:'账号管理'}
 const initialPage=window.location.hash.slice(1)
 const page=ref(headings[initialPage]?initialPage:'overview')
 const summary=ref<any>(null)
 const historySession=ref(''),historyAnchor=ref('')
-const primaryNavigation=computed(()=>[{id:'overview',label:'数据总览',icon:'▦'},{id:'conversations',label:'历史对话',icon:'▤',count:summary.value?.sessions},{id:'memories',label:'长期记忆库',icon:'◈',count:summary.value?.memories},{id:'reviews',label:'候选审核',icon:'◎',count:summary.value?.pending_reviews},{id:'library',label:'资料与经验',icon:'▧'},{id:'pipeline',label:'记忆处理与服务',icon:'↻'}])
+const primaryNavigation=computed(()=>[{id:'overview',label:'数据总览',icon:'▦'},{id:'conversations',label:'历史对话',icon:'▤',count:summary.value?.sessions},{id:'memories',label:'长期记忆库',icon:'◈',count:summary.value?.memories},{id:'reviews',label:'候选审核',icon:'◎',count:summary.value?.pending_reviews},{id:'library',label:'资料与经验',icon:'▧'},{id:'projects',label:'项目记忆',icon:'▨'},{id:'pipeline',label:'记忆处理与服务',icon:'↻'}])
 const advancedNavigation=[{id:'explorer',label:'结构化记忆',icon:'◇'},{id:'temporal',label:'双时间与变化',icon:'◷'},{id:'retrieval',label:'检索实验室',icon:'⌕'},{id:'evaluation',label:'评测运行记录',icon:'▥'}]
 const advancedOpen=ref(advancedNavigation.some(item=>item.id===page.value))
-const pageDescriptions:Record<string,string>={overview:'从对话到长期记忆，查看当前账号的数据与下一步。',conversations:'阅读原始历史；从有效本人原话提出记忆候选。',memories:'查看已批准的长期事实、来源和版本，支持纠正与导出。',reviews:'查看LLM自动决定，人工辅助处理证据、敏感信息与状态冲突。',library:'笔记、文档与任务结果独立入库；结合反馈提炼有来源的有限经验。',pipeline:'区分未提取、明确空结果、等待审核与已入库，并检查模型和索引。',explorer:'管理主体、属性和适用条件，适合回答当前偏好与状态；需先有经核对的来源。',temporal:'区分事实成立时间与系统获知时间；未标注的时间保持未知。',retrieval:'诊断实际召回、过滤、来源和证据预算；不生成聊天答复。',evaluation:'只读已有实验的配置、费用与失败记录，不自动运行全量评测。',accounts:'管理账号元数据；不会因此取得其他用户的私人记忆。'}
+const pageDescriptions:Record<string,string>={overview:'从对话到长期记忆，查看当前账号的数据与下一步。',conversations:'阅读原始历史；从有效本人原话提出记忆候选。',memories:'查看已批准的长期事实、来源和版本，支持纠正与导出。',reviews:'查看LLM自动决定，人工辅助处理证据、敏感信息与状态冲突。',library:'笔记、文档与任务结果独立入库；结合反馈提炼有来源的有限经验。',projects:'按项目组织仓库历史、决策文档与任务结果；任务前召回，任务后记录反馈。',pipeline:'区分未提取、明确空结果、等待审核与已入库，并检查模型和索引。',explorer:'管理主体、属性和适用条件，适合回答当前偏好与状态；需先有经核对的来源。',temporal:'区分事实成立时间与系统获知时间；未标注的时间保持未知。',retrieval:'诊断实际召回、过滤、来源和证据预算；不生成聊天答复。',evaluation:'只读已有实验的配置、费用与失败记录，不自动运行全量评测。',accounts:'管理账号元数据；不会因此取得其他用户的私人记忆。'}
 
 function navigate(id:string){if(id==='conversations'){historySession.value='';historyAnchor.value=''};page.value=id}
 function openConversation(id:string){historySession.value=id;historyAnchor.value='';page.value='conversations'}
@@ -124,6 +125,7 @@ onUnmounted(()=>window.removeEventListener('hashchange',hashChanged))
       <template v-else>
         <ConsoleHome v-if="page==='overview'" :summary="summary" @open="navigate" @conversation="openConversation" />
         <KnowledgeLibrary v-else-if="page==='library'" :key="user.id" :api="api"/>
+        <ProjectMemory v-else-if="page==='projects'" :key="user.id" :api="api"/>
         <MemoryPipeline v-else-if="page==='pipeline'" :key="user.id" :api="api" @open="navigate" @source="inspectEvidence"/>
         <HistoryBrowser v-else-if="page==='conversations'" :key="user.id+historySession" :api="api" :initial-session="historySession" :initial-anchor="historyAnchor" @source="openSource" @changed="refresh" @review="navigate('reviews')" />
         <PendingReviews v-else-if="page==='reviews'" :key="user.id" :api="api" @changed="refresh" @open="navigate" />

@@ -70,6 +70,7 @@ Pop-Location
 | [test_experiment_records.py](test_experiment_records.py) | 角色/账本、SHA、实际阶段及未执行/失败记录 |
 | [test_skills.py](test_skills.py) | 一级技能发现/匹配、API/加载和HTTP初始主机 |
 | [test_mcp_lifecycle.py](test_mcp_lifecycle.py) | stdio分页/ping/超时/清理/命名冲突和服务入口 |
+| [test_project_memory.py](test_project_memory.py) | DevMemory项目工作区：Git只读导出边界、任务反馈闭环、项目间召回过滤、提炼守卫、租户路由、Agent工具与MCP协议帧；业务通过不等于长期使用效果 |
 | [test_round7_akashic.py](test_round7_akashic.py) | 帧、压缩、事件、并行工具、中断和Markdown |
 | [test_round9_setup_markdown.py](test_round9_setup_markdown.py) | 模型设置覆盖、内部Setup和Markdown/SELF |
 | [test_round10_tool_search_mcp.py](test_round10_tool_search_mcp.py) | 按需工具schema与MCP命名 |
